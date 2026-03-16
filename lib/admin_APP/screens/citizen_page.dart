@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_disaster_app/core/models/citizen.dart';
+import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
+
 import 'dashboard_page.dart';
 import 'supply_page.dart';
 import 'emergency_page.dart';
 
 class CitizenPage extends StatelessWidget {
-  const CitizenPage({super.key});
+  CitizenPage({super.key});
+
+  final AdminRepository repo = AdminRepository();
 
   @override
   Widget build(BuildContext context) {
-    final List<Map<String, String>> citizens = [
-      {"name": "王小明", "status": "已安置", "shelter": "台北避难所"},
-      {"name": "陈美华", "status": "待安排", "shelter": "新北避难所"},
-      {"name": "李大同", "status": "处理中", "shelter": "台中避难所"},
-      {"name": "林雅婷", "status": "已安置", "shelter": "高雄避难所"},
-    ];
+    final List<Citizen> citizens = repo.getCitizens();
 
     return Scaffold(
       body: Row(
@@ -25,7 +25,7 @@ class CitizenPage extends StatelessWidget {
               children: [
                 const SizedBox(height: 40),
                 const Text(
-                  '防灾后台系统',
+                  '防災後台系統',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 22,
@@ -44,7 +44,7 @@ class CitizenPage extends StatelessWidget {
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const DashboardPage(),
+                        builder: (context) => DashboardPage(),
                       ),
                     );
                   },
@@ -55,43 +55,43 @@ class CitizenPage extends StatelessWidget {
                   child: ListTile(
                     leading: const Icon(Icons.people, color: Colors.white),
                     title: const Text(
-                      '灾民管理',
+                      '災民管理',
                       style: TextStyle(color: Colors.white),
                     ),
-                    onTap: () {
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(
-      builder: (context) => const SupplyPage(),
-    ),
-  );
-},
+                    onTap: () {},
                   ),
                 ),
 
                 ListTile(
                   leading: const Icon(Icons.inventory, color: Colors.white),
                   title: const Text(
-                    '物资管理',
+                    '物資管理',
                     style: TextStyle(color: Colors.white),
                   ),
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SupplyPage(),
+                      ),
+                    );
+                  },
                 ),
 
                 ListTile(
                   leading: const Icon(Icons.warning, color: Colors.white),
                   title: const Text(
-                    '紧急事件',
+                    '緊急事件',
                     style: TextStyle(color: Colors.white),
                   ),
                   onTap: () {
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(
-      builder: (context) => const EmergencyPage(),
-    ),
-  );
-},
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EmergencyPage(),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -105,7 +105,7 @@ class CitizenPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    '灾民管理',
+                    '災民管理',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -118,7 +118,7 @@ class CitizenPage extends StatelessWidget {
                       Expanded(
                         child: TextField(
                           decoration: InputDecoration(
-                            hintText: '请输入姓名搜索',
+                            hintText: '請輸入姓名搜尋',
                             prefixIcon: const Icon(Icons.search),
                             filled: true,
                             fillColor: Colors.white,
@@ -133,7 +133,7 @@ class CitizenPage extends StatelessWidget {
                       ElevatedButton.icon(
                         onPressed: () {},
                         icon: const Icon(Icons.add),
-                        label: const Text('新增灾民'),
+                        label: const Text('新增災民'),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 20,
@@ -176,14 +176,21 @@ class CitizenPage extends StatelessWidget {
                                 Expanded(
                                   flex: 2,
                                   child: Text(
-                                    '状态',
+                                    'ID',
                                     style: TextStyle(fontWeight: FontWeight.bold),
                                   ),
                                 ),
                                 Expanded(
                                   flex: 3,
                                   child: Text(
-                                    '避难所',
+                                    '座標',
+                                    style: TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 2,
+                                  child: Text(
+                                    '救援狀態',
                                     style: TextStyle(fontWeight: FontWeight.bold),
                                   ),
                                 ),
@@ -204,19 +211,34 @@ class CitizenPage extends StatelessWidget {
                               separatorBuilder: (_, __) => const Divider(),
                               itemBuilder: (context, index) {
                                 final citizen = citizens[index];
+
                                 return Row(
                                   children: [
                                     Expanded(
                                       flex: 2,
-                                      child: Text(citizen["name"]!),
+                                      child: Text(citizen.name),
                                     ),
                                     Expanded(
                                       flex: 2,
-                                      child: Text(citizen["status"]!),
+                                      child: Text(citizen.id),
                                     ),
                                     Expanded(
                                       flex: 3,
-                                      child: Text(citizen["shelter"]!),
+                                      child: Text(
+                                        '${citizen.latitude}, ${citizen.longitude}',
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 2,
+                                      child: Text(
+                                        citizen.isRescued ? '已救援' : '待救援',
+                                        style: TextStyle(
+                                          color: citizen.isRescued
+                                              ? Colors.green
+                                              : Colors.red,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                     ),
                                     Expanded(
                                       flex: 2,

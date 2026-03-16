@@ -1,39 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_disaster_app/core/models/emergency_request.dart';
+import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
+
 import 'dashboard_page.dart';
 import 'citizen_page.dart';
 import 'supply_page.dart';
 
 class EmergencyPage extends StatelessWidget {
-  const EmergencyPage({super.key});
+  EmergencyPage({super.key});
+
+  final AdminRepository repo = AdminRepository();
 
   @override
   Widget build(BuildContext context) {
-    final List<Map<String, String>> emergencies = [
-      {
-        "title": "台风避难通知",
-        "location": "台北市",
-        "status": "处理中",
-        "time": "2026-03-15 09:30"
-      },
-      {
-        "title": "停电通报",
-        "location": "台中市",
-        "status": "已发布",
-        "time": "2026-03-15 10:20"
-      },
-      {
-        "title": "道路封闭警报",
-        "location": "高雄市",
-        "status": "待处理",
-        "time": "2026-03-15 11:10"
-      },
-      {
-        "title": "物资紧缺通知",
-        "location": "新北市",
-        "status": "处理中",
-        "time": "2026-03-15 12:00"
-      },
-    ];
+    final List<EmergencyRequest> emergencies = repo.getEmergencies();
 
     return Scaffold(
       body: Row(
@@ -45,7 +25,7 @@ class EmergencyPage extends StatelessWidget {
               children: [
                 const SizedBox(height: 40),
                 const Text(
-                  '防灾后台系统',
+                  '防災後台系統',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 22,
@@ -64,7 +44,7 @@ class EmergencyPage extends StatelessWidget {
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const DashboardPage(),
+                        builder: (context) => DashboardPage(),
                       ),
                     );
                   },
@@ -73,14 +53,14 @@ class EmergencyPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.people, color: Colors.white),
                   title: const Text(
-                    '灾民管理',
+                    '災民管理',
                     style: TextStyle(color: Colors.white),
                   ),
                   onTap: () {
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const CitizenPage(),
+                        builder: (context) => CitizenPage(),
                       ),
                     );
                   },
@@ -89,14 +69,14 @@ class EmergencyPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.inventory, color: Colors.white),
                   title: const Text(
-                    '物资管理',
+                    '物資管理',
                     style: TextStyle(color: Colors.white),
                   ),
                   onTap: () {
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const SupplyPage(),
+                        builder: (context) => SupplyPage(),
                       ),
                     );
                   },
@@ -107,7 +87,7 @@ class EmergencyPage extends StatelessWidget {
                   child: ListTile(
                     leading: const Icon(Icons.warning, color: Colors.white),
                     title: const Text(
-                      '紧急事件',
+                      '緊急事件',
                       style: TextStyle(color: Colors.white),
                     ),
                     onTap: () {},
@@ -125,7 +105,7 @@ class EmergencyPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    '紧急事件管理',
+                    '緊急事件管理',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -138,7 +118,7 @@ class EmergencyPage extends StatelessWidget {
                       Expanded(
                         child: TextField(
                           decoration: InputDecoration(
-                            hintText: '请输入事件名称搜索',
+                            hintText: '請輸入事件類型搜尋',
                             prefixIcon: const Icon(Icons.search),
                             filled: true,
                             fillColor: Colors.white,
@@ -187,30 +167,37 @@ class EmergencyPage extends StatelessWidget {
                             child: const Row(
                               children: [
                                 Expanded(
-                                  flex: 3,
+                                  flex: 2,
                                   child: Text(
-                                    '事件名称',
+                                    '事件 ID',
                                     style: TextStyle(fontWeight: FontWeight.bold),
                                   ),
                                 ),
                                 Expanded(
                                   flex: 2,
                                   child: Text(
-                                    '地点',
+                                    '災民 ID',
                                     style: TextStyle(fontWeight: FontWeight.bold),
                                   ),
                                 ),
                                 Expanded(
                                   flex: 2,
                                   child: Text(
-                                    '状态',
+                                    '類型',
                                     style: TextStyle(fontWeight: FontWeight.bold),
                                   ),
                                 ),
                                 Expanded(
                                   flex: 3,
                                   child: Text(
-                                    '时间',
+                                    '座標',
+                                    style: TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                Expanded(
+                                  flex: 3,
+                                  child: Text(
+                                    '建立時間',
                                     style: TextStyle(fontWeight: FontWeight.bold),
                                   ),
                                 ),
@@ -231,23 +218,32 @@ class EmergencyPage extends StatelessWidget {
                               separatorBuilder: (_, __) => const Divider(),
                               itemBuilder: (context, index) {
                                 final event = emergencies[index];
+
                                 return Row(
                                   children: [
                                     Expanded(
-                                      flex: 3,
-                                      child: Text(event["title"]!),
+                                      flex: 2,
+                                      child: Text(event.id),
                                     ),
                                     Expanded(
                                       flex: 2,
-                                      child: Text(event["location"]!),
+                                      child: Text(event.citizenId),
                                     ),
                                     Expanded(
                                       flex: 2,
-                                      child: _buildStatusChip(event["status"]!),
+                                      child: _buildTypeChip(event.type),
                                     ),
                                     Expanded(
                                       flex: 3,
-                                      child: Text(event["time"]!),
+                                      child: Text(
+                                        '${event.latitude}, ${event.longitude}',
+                                      ),
+                                    ),
+                                    Expanded(
+                                      flex: 3,
+                                      child: Text(
+                                        event.createdAt.toString(),
+                                      ),
                                     ),
                                     Expanded(
                                       flex: 2,
@@ -286,19 +282,16 @@ class EmergencyPage extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusChip(String status) {
+  Widget _buildTypeChip(String type) {
     Color bgColor;
     Color textColor;
 
-    if (status == "处理中") {
-      bgColor = Colors.orange.shade100;
-      textColor = Colors.orange.shade800;
-    } else if (status == "已发布") {
-      bgColor = Colors.green.shade100;
-      textColor = Colors.green.shade800;
-    } else {
+    if (type.toLowerCase() == 'sos') {
       bgColor = Colors.red.shade100;
       textColor = Colors.red.shade800;
+    } else {
+      bgColor = Colors.blue.shade100;
+      textColor = Colors.blue.shade800;
     }
 
     return Container(
@@ -308,7 +301,7 @@ class EmergencyPage extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
-        status,
+        type,
         style: TextStyle(
           color: textColor,
           fontWeight: FontWeight.w600,

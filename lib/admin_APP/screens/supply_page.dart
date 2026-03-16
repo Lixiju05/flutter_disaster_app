@@ -1,19 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
+import 'package:flutter_disaster_app/core/models/supply.dart';
+import 'package:flutter_disaster_app/core/repositories/admin_extra_repository.dart';
+import 'package:flutter_disaster_app/core/models/prepared_supply.dart';
+
 import 'dashboard_page.dart';
 import 'citizen_page.dart';
 import 'emergency_page.dart';
 
 class SupplyPage extends StatelessWidget {
-  const SupplyPage({super.key});
+  SupplyPage({super.key});
+
+  final AdminRepository repo = AdminRepository();
+  final AdminExtraRepository extraRepo = AdminExtraRepository();
+  
 
   @override
   Widget build(BuildContext context) {
-    final List<Map<String, String>> supplies = [
-      {"name": "饮用水", "type": "食品", "count": "120"},
-      {"name": "泡面", "type": "食品", "count": "80"},
-      {"name": "医疗包", "type": "医疗", "count": "30"},
-      {"name": "毛毯", "type": "生活用品", "count": "50"},
-    ];
+    final List<AdminSupply> adminSupplies = repo.getAdminSupplies();
+    final List<PreparedSupply> preparedSupplies = extraRepo.getPreparedSupplies();
 
     return Scaffold(
       body: Row(
@@ -25,7 +30,7 @@ class SupplyPage extends StatelessWidget {
               children: [
                 const SizedBox(height: 40),
                 const Text(
-                  '防灾后台系统',
+                  '防災後台系統',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 22,
@@ -44,7 +49,7 @@ class SupplyPage extends StatelessWidget {
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const DashboardPage(),
+                        builder: (context) => DashboardPage(),
                       ),
                     );
                   },
@@ -53,14 +58,14 @@ class SupplyPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.people, color: Colors.white),
                   title: const Text(
-                    '灾民管理',
+                    '災民管理',
                     style: TextStyle(color: Colors.white),
                   ),
                   onTap: () {
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const CitizenPage(),
+                        builder: (context) => CitizenPage(),
                       ),
                     );
                   },
@@ -71,7 +76,7 @@ class SupplyPage extends StatelessWidget {
                   child: ListTile(
                     leading: const Icon(Icons.inventory, color: Colors.white),
                     title: const Text(
-                      '物资管理',
+                      '物資管理',
                       style: TextStyle(color: Colors.white),
                     ),
                     onTap: () {},
@@ -81,17 +86,17 @@ class SupplyPage extends StatelessWidget {
                 ListTile(
                   leading: const Icon(Icons.warning, color: Colors.white),
                   title: const Text(
-                    '紧急事件',
+                    '緊急事件',
                     style: TextStyle(color: Colors.white),
                   ),
                   onTap: () {
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(
-      builder: (context) => const EmergencyPage(),
-    ),
-  );
-},
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => EmergencyPage(),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -105,20 +110,24 @@ class SupplyPage extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    '物资管理',
+                    '物資管理',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 20),
+                  Text(
+  '預備物資數量：${preparedSupplies.length}',
+  style: const TextStyle(fontSize: 18),
+),
 
                   Row(
                     children: [
                       Expanded(
                         child: TextField(
                           decoration: InputDecoration(
-                            hintText: '请输入物资名称搜索',
+                            hintText: '請輸入物資名稱搜尋',
                             prefixIcon: const Icon(Icons.search),
                             filled: true,
                             fillColor: Colors.white,
@@ -133,7 +142,7 @@ class SupplyPage extends StatelessWidget {
                       ElevatedButton.icon(
                         onPressed: () {},
                         icon: const Icon(Icons.add),
-                        label: const Text('新增物资'),
+                        label: const Text('新增物資'),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 20,
@@ -167,23 +176,16 @@ class SupplyPage extends StatelessWidget {
                             child: const Row(
                               children: [
                                 Expanded(
-                                  flex: 3,
+                                  flex: 4,
                                   child: Text(
-                                    '物资名称',
+                                    '物資名稱',
                                     style: TextStyle(fontWeight: FontWeight.bold),
                                   ),
                                 ),
                                 Expanded(
                                   flex: 3,
                                   child: Text(
-                                    '类型',
-                                    style: TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 2,
-                                  child: Text(
-                                    '数量',
+                                    '總數量',
                                     style: TextStyle(fontWeight: FontWeight.bold),
                                   ),
                                 ),
@@ -200,23 +202,21 @@ class SupplyPage extends StatelessWidget {
                           const Divider(),
                           Expanded(
                             child: ListView.separated(
-                              itemCount: supplies.length,
+                              itemCount: adminSupplies.length,
                               separatorBuilder: (_, __) => const Divider(),
                               itemBuilder: (context, index) {
-                                final supply = supplies[index];
+                                final supply = adminSupplies[index];
                                 return Row(
                                   children: [
                                     Expanded(
-                                      flex: 3,
-                                      child: Text(supply["name"]!),
+                                      flex: 4,
+                                      child: Text(supply.itemName),
                                     ),
                                     Expanded(
                                       flex: 3,
-                                      child: Text(supply["type"]!),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(supply["count"]!),
+                                      child: Text(
+                                        supply.totalQuantity.toString(),
+                                      ),
                                     ),
                                     Expanded(
                                       flex: 2,
