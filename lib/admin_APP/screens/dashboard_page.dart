@@ -13,24 +13,39 @@ class DashboardPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final citizens = repository.getCitizens();
     final emergencies = repository.getEmergencies();
-final supplies = repository.getAdminSupplies();
+    final supplies = repository.getAdminSupplies();
 
     final rescuedCount = citizens.where((c) => c.needsRescue).length;
-    final waitingRescueCount = citizens.where((c) => !c.needsRescue).length;
+    final waitingRescueCount =
+        citizens.where((c) => !c.needsRescue).length;
     final emergencyCount = emergencies.length;
     final supplyCount = supplies.length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FB),
+      backgroundColor: Colors.white,
+
+      // ✅ AppBar（已加白色返回箭头）
       appBar: AppBar(
         elevation: 0,
         backgroundColor: const Color(0xFF1E3A5F),
+
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () {
+            Navigator.pop(context);
+          },
+        ),
+
         title: const Text(
           '管理員儀表板',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
         ),
         centerTitle: true,
       ),
+
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -62,9 +77,7 @@ final supplies = repository.getAdminSupplies();
                     Colors.orange,
                   ),
                 ),
-
                 const SizedBox(width: 12),
-
                 Expanded(
                   child: _buildStatCard(
                     '已救援',
@@ -88,9 +101,7 @@ final supplies = repository.getAdminSupplies();
                     Colors.redAccent,
                   ),
                 ),
-
                 const SizedBox(width: 12),
-
                 Expanded(
                   child: _buildStatCard(
                     '物資項目',
@@ -121,7 +132,7 @@ final supplies = repository.getAdminSupplies();
               subtitle: '查看民眾位置、狀態與救援資料',
               icon: Icons.people_alt_rounded,
               color: const Color(0xFF4A90E2),
-              page:  CitizenPage(),
+              page: CitizenPage(),
             ),
 
             const SizedBox(height: 12),
@@ -151,6 +162,7 @@ final supplies = repository.getAdminSupplies();
     );
   }
 
+  // ⭐ 欢迎 Banner
   Widget _buildWelcomeBanner() {
     return Container(
       width: double.infinity,
@@ -161,9 +173,7 @@ final supplies = repository.getAdminSupplies();
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-
         borderRadius: BorderRadius.circular(20),
-
         boxShadow: [
           BoxShadow(
             color: Colors.blue.withOpacity(0.18),
@@ -172,11 +182,9 @@ final supplies = repository.getAdminSupplies();
           ),
         ],
       ),
-
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
           Text(
             '歡迎回來，管理員',
             style: TextStyle(
@@ -185,9 +193,7 @@ final supplies = repository.getAdminSupplies();
               fontWeight: FontWeight.bold,
             ),
           ),
-
           SizedBox(height: 8),
-
           Text(
             '這裡可以快速查看災情資訊、救援進度與物資狀況。',
             style: TextStyle(
@@ -200,6 +206,7 @@ final supplies = repository.getAdminSupplies();
     );
   }
 
+  // ⭐ 统计卡片
   Widget _buildStatCard(
     String title,
     String value,
@@ -208,11 +215,9 @@ final supplies = repository.getAdminSupplies();
   ) {
     return Container(
       padding: const EdgeInsets.all(16),
-
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -221,22 +226,17 @@ final supplies = repository.getAdminSupplies();
           ),
         ],
       ),
-
       child: Row(
         children: [
-
           CircleAvatar(
             radius: 24,
             backgroundColor: iconColor.withOpacity(0.12),
             child: Icon(icon, color: iconColor, size: 26),
           ),
-
           const SizedBox(width: 14),
-
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
               Text(
                 title,
                 style: TextStyle(
@@ -244,9 +244,7 @@ final supplies = repository.getAdminSupplies();
                   fontSize: 14,
                 ),
               ),
-
               const SizedBox(height: 6),
-
               Text(
                 value,
                 style: const TextStyle(
@@ -262,6 +260,7 @@ final supplies = repository.getAdminSupplies();
     );
   }
 
+  // ⭐ 功能卡片
   Widget _buildMenuCard(
     BuildContext context, {
     required String title,
@@ -270,24 +269,19 @@ final supplies = repository.getAdminSupplies();
     required Color color,
     required Widget page,
   }) {
-
     return InkWell(
       borderRadius: BorderRadius.circular(18),
-
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => page),
         );
       },
-
       child: Container(
         padding: const EdgeInsets.all(18),
-
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.05),
@@ -296,23 +290,18 @@ final supplies = repository.getAdminSupplies();
             ),
           ],
         ),
-
         child: Row(
           children: [
-
             CircleAvatar(
               radius: 26,
               backgroundColor: color.withOpacity(0.12),
               child: Icon(icon, color: color, size: 28),
             ),
-
             const SizedBox(width: 14),
-
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
                   Text(
                     title,
                     style: const TextStyle(
@@ -321,9 +310,7 @@ final supplies = repository.getAdminSupplies();
                       color: Color(0xFF1E3A5F),
                     ),
                   ),
-
                   const SizedBox(height: 6),
-
                   Text(
                     subtitle,
                     style: TextStyle(
@@ -334,7 +321,6 @@ final supplies = repository.getAdminSupplies();
                 ],
               ),
             ),
-
             const Icon(
               Icons.arrow_forward_ios_rounded,
               size: 18,
