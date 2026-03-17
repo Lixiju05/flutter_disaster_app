@@ -15,8 +15,8 @@ class DashboardPage extends StatelessWidget {
     final emergencies = repository.getEmergencies();
 final supplies = repository.getAdminSupplies();
 
-    final rescuedCount = citizens.where((c) => c.isRescued).length;
-    final waitingRescueCount = citizens.where((c) => !c.isRescued).length;
+    final rescuedCount = citizens.where((c) => c.needsRescue).length;
+    final waitingRescueCount = citizens.where((c) => !c.needsRescue).length;
     final emergencyCount = emergencies.length;
     final supplyCount = supplies.length;
 
@@ -121,7 +121,7 @@ final supplies = repository.getAdminSupplies();
               subtitle: '查看民眾位置、狀態與救援資料',
               icon: Icons.people_alt_rounded,
               color: const Color(0xFF4A90E2),
-              page: const CitizenPage(),
+              page:  CitizenPage(),
             ),
 
             const SizedBox(height: 12),
@@ -132,7 +132,7 @@ final supplies = repository.getAdminSupplies();
               subtitle: '查看目前災情與緊急通報',
               icon: Icons.report_problem_rounded,
               color: const Color(0xFFE76F51),
-              page: const EmergencyPage(),
+              page: EmergencyPage(),
             ),
 
             const SizedBox(height: 12),
@@ -143,7 +143,7 @@ final supplies = repository.getAdminSupplies();
               subtitle: '查看與管理目前救災物資',
               icon: Icons.local_shipping_rounded,
               color: const Color(0xFF2A9D8F),
-              page: const SupplyPage(),
+              page: SupplyPage(),
             ),
           ],
         ),

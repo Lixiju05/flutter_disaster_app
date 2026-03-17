@@ -5,13 +5,13 @@ class Citizen {
   final double latitude;
   final double longitude;
 
-  final bool isRescued;
+   bool needsRescue;
 
   Citizen({
     required this.id,
     required this.name,
     required this.latitude,
     required this.longitude,
-    required this.isRescued,
+    required this.needsRescue,
   });
 }
