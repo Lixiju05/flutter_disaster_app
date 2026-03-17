@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
 import 'package:flutter_disaster_app/core/models/supply.dart';
-import 'package:flutter_disaster_app/core/repositories/admin_extra_repository.dart';
 import 'package:flutter_disaster_app/core/models/prepared_supply.dart';
 
 import 'dashboard_page.dart';
@@ -12,13 +11,13 @@ class SupplyPage extends StatelessWidget {
   SupplyPage({super.key});
 
   final AdminRepository repo = AdminRepository();
-  final AdminExtraRepository extraRepo = AdminExtraRepository();
-  
 
+  
+ 
   @override
   Widget build(BuildContext context) {
     final List<AdminSupply> adminSupplies = repo.getAdminSupplies();
-    final List<PreparedSupply> preparedSupplies = extraRepo.getPreparedSupplies();
+
 
     return Scaffold(
       body: Row(
@@ -118,7 +117,7 @@ class SupplyPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   Text(
-  '預備物資數量：${preparedSupplies.length}',
+  '預備物資數量：${adminSupplies.length}',
   style: const TextStyle(fontSize: 18),
 ),
 
