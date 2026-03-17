@@ -231,7 +231,7 @@ class CitizenPage extends StatelessWidget {
                                     Expanded(
                                       flex: 2,
                                       child: Text(
-                                        citizen.isRescued ? '已救援' : '待救援',
+                                        citizen.needsRescued ? '需要救援' : '不需要救援',
                                         style: TextStyle(
                                           color: citizen.isRescued
                                               ? Colors.green
