@@ -12,8 +12,8 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final citizens = repository.getCitizens();
-    final emergencies = repository.getEmergencyRequests();
-    final supplies = repository.getSupplies();
+    final emergencies = repository.getEmergencies();
+final supplies = repository.getAdminSupplies();
 
     final rescuedCount = citizens.where((c) => c.isRescued).length;
     final waitingRescueCount = citizens.where((c) => !c.isRescued).length;
