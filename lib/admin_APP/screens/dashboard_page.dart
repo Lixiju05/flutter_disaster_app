@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../core/repositories/admin_repository.dart';
+import '../repositories/healthReport_repository.dart';
+
 import 'citizen_page.dart';
 import 'emergency_page.dart';
 import 'supply_page.dart';
+import 'health_report_page.dart';
 
 class DashboardPage extends StatelessWidget {
   DashboardPage({super.key});
@@ -14,28 +17,28 @@ class DashboardPage extends StatelessWidget {
     final citizens = repository.getCitizens();
     final emergencies = repository.getEmergencies();
     final supplies = repository.getAdminSupplies();
+    final healthReports = HealthReportRepository().getReports();
 
+    // 如果你的 Citizen 欄位已經改成 needsRescued，
+    // 就把下面兩行的 needsRescue 全部改成 needsRescued
     final rescuedCount = citizens.where((c) => c.needsRescue).length;
-    final waitingRescueCount =
-        citizens.where((c) => !c.needsRescue).length;
+    final waitingRescueCount = citizens.where((c) => !c.needsRescue).length;
+
     final emergencyCount = emergencies.length;
     final supplyCount = supplies.length;
+    final healthReportCount = healthReports.length;
 
     return Scaffold(
       backgroundColor: Colors.white,
-
-      // ✅ AppBar（已加白色返回箭头）
       appBar: AppBar(
         elevation: 0,
         backgroundColor: const Color(0xFF1E3A5F),
-
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () {
             Navigator.pop(context);
           },
         ),
-
         title: const Text(
           '管理員儀表板',
           style: TextStyle(
@@ -45,15 +48,12 @@ class DashboardPage extends StatelessWidget {
         ),
         centerTitle: true,
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             _buildWelcomeBanner(),
-
             const SizedBox(height: 20),
 
             const Text(
@@ -64,7 +64,6 @@ class DashboardPage extends StatelessWidget {
                 color: Color(0xFF1E3A5F),
               ),
             ),
-
             const SizedBox(height: 12),
 
             Row(
@@ -113,6 +112,25 @@ class DashboardPage extends StatelessWidget {
               ],
             ),
 
+            const SizedBox(height: 12),
+
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    '健康回報',
+                    healthReportCount.toString(),
+                    Icons.health_and_safety,
+                    Colors.teal,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: SizedBox(),
+                ),
+              ],
+            ),
+
             const SizedBox(height: 24),
 
             const Text(
@@ -123,7 +141,6 @@ class DashboardPage extends StatelessWidget {
                 color: Color(0xFF1E3A5F),
               ),
             ),
-
             const SizedBox(height: 12),
 
             _buildMenuCard(
@@ -156,13 +173,23 @@ class DashboardPage extends StatelessWidget {
               color: const Color(0xFF2A9D8F),
               page: SupplyPage(),
             ),
+
+            const SizedBox(height: 12),
+
+            _buildMenuCard(
+              context,
+              title: '健康回報管理',
+              subtitle: '查看民眾健康狀態與回報資料',
+              icon: Icons.health_and_safety,
+              color: Colors.teal,
+              page: HealthReportPage(),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // ⭐ 欢迎 Banner
   Widget _buildWelcomeBanner() {
     return Container(
       width: double.infinity,
@@ -206,7 +233,6 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  // ⭐ 统计卡片
   Widget _buildStatCard(
     String title,
     String value,
@@ -260,7 +286,6 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  // ⭐ 功能卡片
   Widget _buildMenuCard(
     BuildContext context, {
     required String title,

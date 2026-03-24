@@ -5,6 +5,7 @@ import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
 import 'dashboard_page.dart';
 import 'citizen_page.dart';
 import 'supply_page.dart';
+import 'health_report_page.dart'; // ⭐ 加这个
 
 class EmergencyPage extends StatelessWidget {
   EmergencyPage({super.key});
@@ -18,6 +19,7 @@ class EmergencyPage extends StatelessWidget {
     return Scaffold(
       body: Row(
         children: [
+          // 🔵 左侧菜单
           Container(
             width: 220,
             color: const Color(0xFF1E3A5F),
@@ -34,69 +36,74 @@ class EmergencyPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 40),
 
+                // Dashboard
                 ListTile(
                   leading: const Icon(Icons.dashboard, color: Colors.white),
-                  title: const Text(
-                    'Dashboard',
-                    style: TextStyle(color: Colors.white),
-                  ),
+                  title: const Text('Dashboard',
+                      style: TextStyle(color: Colors.white)),
                   onTap: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(
-                        builder: (context) => DashboardPage(),
-                      ),
+                      MaterialPageRoute(builder: (_) => DashboardPage()),
                     );
                   },
                 ),
 
+                // 災民管理
                 ListTile(
                   leading: const Icon(Icons.people, color: Colors.white),
-                  title: const Text(
-                    '災民管理',
-                    style: TextStyle(color: Colors.white),
-                  ),
+                  title: const Text('災民管理',
+                      style: TextStyle(color: Colors.white)),
                   onTap: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(
-                        builder: (context) => CitizenPage(),
-                      ),
+                      MaterialPageRoute(builder: (_) => CitizenPage()),
                     );
                   },
                 ),
 
+                // 物資管理
                 ListTile(
                   leading: const Icon(Icons.inventory, color: Colors.white),
-                  title: const Text(
-                    '物資管理',
-                    style: TextStyle(color: Colors.white),
-                  ),
+                  title: const Text('物資管理',
+                      style: TextStyle(color: Colors.white)),
                   onTap: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(
-                        builder: (context) => SupplyPage(),
-                      ),
+                      MaterialPageRoute(builder: (_) => SupplyPage()),
                     );
                   },
                 ),
 
+                // ⭐ 当前页（高亮）
                 Container(
                   color: Colors.white24,
-                  child: ListTile(
-                    leading: const Icon(Icons.warning, color: Colors.white),
-                    title: const Text(
-                      '緊急事件',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                    onTap: () {},
+                  child: const ListTile(
+                    leading: Icon(Icons.warning, color: Colors.white),
+                    title: Text('緊急事件',
+                        style: TextStyle(color: Colors.white)),
                   ),
+                ),
+
+                // ✅ 健康回報（你缺的就是这个）
+                ListTile(
+                  leading: const Icon(Icons.health_and_safety,
+                      color: Colors.white),
+                  title: const Text('健康回報',
+                      style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => HealthReportPage()),
+                    );
+                  },
                 ),
               ],
             ),
           ),
 
+          // 🔵 右侧内容
           Expanded(
             child: Container(
               color: const Color(0xFFF5F7FA),
@@ -106,10 +113,8 @@ class EmergencyPage extends StatelessWidget {
                 children: [
                   const Text(
                     '緊急事件管理',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style:
+                        TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 20),
 
@@ -134,12 +139,6 @@ class EmergencyPage extends StatelessWidget {
                         onPressed: () {},
                         icon: const Icon(Icons.add_alert),
                         label: const Text('新增事件'),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 18,
-                          ),
-                        ),
                       ),
                     ],
                   ),
@@ -160,116 +159,43 @@ class EmergencyPage extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: Column(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            child: const Row(
-                              children: [
-                                Expanded(
-                                  flex: 2,
-                                  child: Text(
-                                    '事件 ID',
-                                    style: TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 2,
-                                  child: Text(
-                                    '災民 ID',
-                                    style: TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 2,
-                                  child: Text(
-                                    '類型',
-                                    style: TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 3,
-                                  child: Text(
-                                    '座標',
-                                    style: TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 3,
-                                  child: Text(
-                                    '建立時間',
-                                    style: TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                Expanded(
-                                  flex: 2,
-                                  child: Text(
-                                    '操作',
-                                    style: TextStyle(fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Divider(),
-                          Expanded(
-                            child: ListView.separated(
-                              itemCount: emergencies.length,
-                              separatorBuilder: (_, __) => const Divider(),
-                              itemBuilder: (context, index) {
-                                final event = emergencies[index];
+                      child: ListView.separated(
+                        itemCount: emergencies.length,
+                        separatorBuilder: (_, __) => const Divider(),
+                        itemBuilder: (context, index) {
+                          final event = emergencies[index];
 
-                                return Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(event.id),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Text(event.citizenId),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: _buildTypeChip(event.type),
-                                    ),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Text(
-                                        '${event.latitude}, ${event.longitude}',
-                                      ),
-                                    ),
-                                    Expanded(
-                                      flex: 3,
-                                      child: Text(
-                                        event.createdAt.toString(),
-                                      ),
-                                    ),
-                                    Expanded(
-                                      flex: 2,
-                                      child: Row(
-                                        children: [
-                                          IconButton(
-                                            onPressed: () {},
-                                            icon: const Icon(Icons.visibility),
-                                          ),
-                                          IconButton(
-                                            onPressed: () {},
-                                            icon: const Icon(Icons.edit),
-                                          ),
-                                          IconButton(
-                                            onPressed: () {},
-                                            icon: const Icon(Icons.delete),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
+                          return Row(
+                            children: [
+                              Expanded(flex: 2, child: Text(event.id)),
+                              Expanded(flex: 2, child: Text(event.citizenId)),
+                              Expanded(
+                                  flex: 2,
+                                  child: _buildTypeChip(event.type)),
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                    '${event.latitude}, ${event.longitude}'),
+                              ),
+                              Expanded(
+                                flex: 3,
+                                child: Text(event.createdAt.toString()),
+                              ),
+                              Expanded(
+                                flex: 2,
+                                child: Row(
+                                  children: const [
+                                    Icon(Icons.visibility),
+                                    SizedBox(width: 8),
+                                    Icon(Icons.edit),
+                                    SizedBox(width: 8),
+                                    Icon(Icons.delete),
                                   ],
-                                );
-                              },
-                            ),
-                          ),
-                        ],
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ),

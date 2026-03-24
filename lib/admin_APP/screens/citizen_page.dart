@@ -5,6 +5,7 @@ import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
 import 'dashboard_page.dart';
 import 'supply_page.dart';
 import 'emergency_page.dart';
+import 'health_report_page.dart';
 
 class CitizenPage extends StatelessWidget {
   CitizenPage({super.key});
@@ -93,6 +94,23 @@ class CitizenPage extends StatelessWidget {
                     );
                   },
                 ),
+              
+                ListTile(
+  leading: const Icon(Icons.health_and_safety, color: Colors.white),
+  title: const Text(
+    '健康回報',
+    style: TextStyle(color: Colors.white),
+  ),
+  onTap: () {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => HealthReportPage(),
+      ),
+    );
+  },
+),
+
               ],
             ),
           ),
