@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'admin_APP/screens/dashboard_page.dart';
+import 'admin_APP/screens/login_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -14,9 +14,13 @@ class MyApp extends StatelessWidget {
       title: 'Flutter Disaster App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        scaffoldBackgroundColor: const Color(0xFFF4F7FB),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF1E3A5F),
+        ),
+        useMaterial3: true,
       ),
-      home: DashboardPage(),
+      home: const LoginPage(),
     );
   }
 }

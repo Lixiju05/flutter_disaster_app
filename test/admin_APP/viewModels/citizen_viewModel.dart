@@ -6,8 +6,8 @@ class CitizenViewmodel extends ChangeNotifier{
   List<Citizen> _citizens=[];
   List<Citizen> get Citizen => _citizens;
 
-  bool _isLodding=false;  //是否載入資料 UI根據狀態顯示loading spinner
-  bool get isLodding => _isLodding; 
+  bool _isLoading=false;  //是否載入資料 UI根據狀態顯示loading spinner
+  bool get isLoading => _isLoading; 
 
   CitizenViewmodel(){
     loadCitizens();
