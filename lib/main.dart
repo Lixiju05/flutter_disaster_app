@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
+import 'admin_APP/screens/dashboard_page.dart';
+import 'admin_APP/server/http_server.dart';
 import 'admin_APP/screens/login_page.dart';
 
-void main() {
+void main() async {
+  // Flutter 初始化
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 啟動 HTTP Server
+  HttpServerService.start(); 
+  
   runApp(const MyApp());
 }
 
