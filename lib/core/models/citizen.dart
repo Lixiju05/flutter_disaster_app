@@ -5,7 +5,7 @@ class Citizen {
   final double latitude;
   final double longitude;
 
-   bool needsRescue;
+  bool needsRescue;
 
   Citizen({
     required this.id,

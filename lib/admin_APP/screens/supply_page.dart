@@ -186,7 +186,7 @@ class _SupplyPageState extends State<SupplyPage> {
             onTap: () {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => const HealthReportPage()),
+                MaterialPageRoute(builder: (_) => HealthReportPage()),
               );
             },
           ),

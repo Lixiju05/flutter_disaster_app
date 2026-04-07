@@ -1,15 +1,20 @@
+import 'package:flutter/material.dart';
 import '../../core/models/healthReport.dart';
 
-class HealthReportRepository {
+class HealthReportRepository extends ChangeNotifier {
+
   final List<HealthReport> _reports = [];
 
-  
   HealthReportRepository() {
     _loadFakeData();
   }
+
+  /// UI 讀取資料
   List<HealthReport> getReports() {
     return _reports;
   }
+
+  /// 假資料（UI 測試用）
   void _loadFakeData() {
     _reports.addAll([
       HealthReport(
@@ -33,24 +38,16 @@ class HealthReportRepository {
         description: '昏迷中，急需救援。',
         reportTime: DateTime.now().subtract(const Duration(hours: 1)),
       ),
-      HealthReport(
-        reporterId: 'H004',
-        name: '林美玲',
-        status: 'safe',
-        description: '已與家人會合。',
-        reportTime: DateTime.now().subtract(const Duration(hours: 2)),
-      ),
-      HealthReport(
-        reporterId: 'H005',
-        name: '張志強',
-        status: 'injured',
-        description: '手部流血，等待包紮。',
-        reportTime: DateTime.now().subtract(const Duration(hours: 3)),
-      ),
     ]);
   }
+
+  /// ⭐ 接收「真實 JSON 資料」
   void addReportFromJson(Map<String, dynamic> json) {
     final report = HealthReport.fromJson(json);
+
     _reports.insert(0, report);
+
+    /// ⭐ 通知 UI 更新
+    notifyListeners();
   }
 }

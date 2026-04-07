@@ -33,7 +33,7 @@ void testCitizen() {
     name: "王小明",
     latitude: 24.15,
     longitude: 120.67,
-    isRescued: false,
+    needsRescue: false,
   );
 
   print("Citizen test: ${citizen.name}");

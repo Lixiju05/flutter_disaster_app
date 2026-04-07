@@ -15,6 +15,8 @@ class EmergencyRequest {
 
   final DateTime createdAt;
 
+  bool handled;
+
   EmergencyRequest({
     required this.id,
     required this.citizenId,
@@ -24,5 +26,6 @@ class EmergencyRequest {
     this.description,
     this.neededSupplies,
     required this.createdAt,
+    this.handled=false,
   });
 }
