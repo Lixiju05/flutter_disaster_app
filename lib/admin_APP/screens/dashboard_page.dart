@@ -1,24 +1,64 @@
 import 'package:flutter/material.dart';
 import '../../core/repositories/admin_repository.dart';
 import '../repositories/healthReport_repository.dart';
-
 import 'citizen_page.dart';
 import 'emergency_page.dart';
 import 'supply_page.dart';
 import 'health_report_page.dart';
+import 'login_page.dart';
 
 class DashboardPage extends StatelessWidget {
   DashboardPage({super.key});
 
   final AdminRepository repository = AdminRepository();
 
-  static const Color primaryBlue = Color(0xFF16324F);
-  static const Color accentBlue = Color(0xFF4A90E2);
+  static const Color primaryBlue = Color(0xFF183B6B);
+  static const Color sidebarBlue = Color(0xFF163A63);
   static const Color pageBg = Color(0xFFF3F6FB);
   static const Color cardBg = Colors.white;
-  static const Color titleColor = Color(0xFF1C2E45);
-  static const Color textSoft = Color(0xFF708198);
-  static const Color borderColor = Color(0xFFE4EBF3);
+  static const Color textDark = Color(0xFF1F2937);
+  static const Color textSoft = Color(0xFF6B7280);
+  static const Color borderColor = Color(0xFFE5E7EB);
+
+  void _logout(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text('確認登出'),
+          content: const Text('確定要登出系統嗎？'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const LoginPage(),
+                  ),
+                  (route) => false,
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('登出'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +68,8 @@ class DashboardPage extends StatelessWidget {
     final healthReports = HealthReportRepository().getReports();
 
     final rescuedCount = citizens.where((c) => c.needsRescue).length;
-    final waitingRescueCount = citizens.where((c) => !c.needsRescue).length;
+    final waitingRescueCount =
+        citizens.where((c) => !c.needsRescue).length;
     final emergencyCount = emergencies.length;
     final supplyCount = supplies.length;
     final healthReportCount = healthReports.length;
@@ -41,131 +82,62 @@ class DashboardPage extends StatelessWidget {
           Expanded(
             child: SafeArea(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+                padding: const EdgeInsets.fromLTRB(28, 24, 28, 28),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildTopBar(context),
-                    const SizedBox(height: 20),
-                    _buildHeroBanner(),
-                    const SizedBox(height: 20),
-
-                    _buildSectionHeader(
+                    _buildTopBar(),
+                    const SizedBox(height: 24),
+                    _buildHeroSection(),
+                    const SizedBox(height: 28),
+                    _buildSectionTitle(
                       title: '系統總覽',
-                      subtitle: '快速查看目前災情、救援、物資與健康回報狀況',
+                      subtitle: '即時查看目前後台的重要統計資訊',
                     ),
-                    const SizedBox(height: 14),
-
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        int crossAxisCount = 4;
-                        double ratio = 1.75;
-
-                        if (constraints.maxWidth < 1200) {
-                          crossAxisCount = 2;
-                          ratio = 2.0;
-                        }
-                        if (constraints.maxWidth < 760) {
-                          crossAxisCount = 1;
-                          ratio = 2.4;
-                        }
-
-                        return GridView.count(
-                          crossAxisCount: crossAxisCount,
-                          crossAxisSpacing: 14,
-                          mainAxisSpacing: 14,
-                          childAspectRatio: ratio,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          children: [
-                            _buildStatCard(
-                              title: '等待救援',
-                              value: waitingRescueCount.toString(),
-                              icon: Icons.warning_amber_rounded,
-                              iconColor: const Color(0xFFF59E0B),
-                              iconBgColor: const Color(0xFFFFF4E4),
-                              note: '需優先處理',
-                            ),
-                            _buildStatCard(
-                              title: '已救援',
-                              value: rescuedCount.toString(),
-                              icon: Icons.check_circle_rounded,
-                              iconColor: const Color(0xFF2E9B57),
-                              iconBgColor: const Color(0xFFEAF7EE),
-                              note: '已完成支援',
-                            ),
-                            _buildStatCard(
-                              title: '緊急事件',
-                              value: emergencyCount.toString(),
-                              icon: Icons.notifications_active_rounded,
-                              iconColor: const Color(0xFFE25B52),
-                              iconBgColor: const Color(0xFFFFECE9),
-                              note: '持續監控中',
-                            ),
-                            _buildStatCard(
-                              title: '物資項目',
-                              value: supplyCount.toString(),
-                              icon: Icons.inventory_2_rounded,
-                              iconColor: const Color(0xFF3483FA),
-                              iconBgColor: const Color(0xFFEAF2FF),
-                              note: '可盤點管理',
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-
                     const SizedBox(height: 18),
-
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        if (constraints.maxWidth < 980) {
-                          return Column(
-                            children: [
-                              _buildInfoCard(
-                                icon: Icons.health_and_safety_rounded,
-                                iconBg: const Color(0xFFE7F7F3),
-                                iconColor: const Color(0xFF009688),
-                                title: '健康回報概況',
-                                content: '目前共收到 $healthReportCount 筆健康回報',
-                              ),
-                              const SizedBox(height: 14),
-                              _buildInfoCard(
-                                icon: Icons.wifi_off_rounded,
-                                iconBg: const Color(0xFFEFF4FF),
-                                iconColor: const Color(0xFF355C9A),
-                                title: '離線支援模式',
-                                content: '系統支援離線情況下的資料同步',
-                              ),
-                            ],
-                          );
-                        }
-
-                        return Row(
-                          children: [
-                            Expanded(
-                              child: _buildInfoCard(
-                                icon: Icons.health_and_safety_rounded,
-                                iconBg: const Color(0xFFE7F7F3),
-                                iconColor: const Color(0xFF009688),
-                                title: '健康回報概況',
-                                content: '目前共收到 $healthReportCount 筆健康回報',
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: _buildInfoCard(
-                                icon: Icons.wifi_off_rounded,
-                                iconBg: const Color(0xFFEFF4FF),
-                                iconColor: const Color(0xFF355C9A),
-                                title: '離線支援模式',
-                                content: '系統支援離線情況下的資料同步',
-                              ),
-                            ),
-                          ],
-                        );
-                      },
+                    Wrap(
+                      spacing: 18,
+                      runSpacing: 18,
+                      children: [
+                        _buildStatCard(
+                          title: '待救援人數',
+                          value: '$waitingRescueCount',
+                          icon: Icons.person_search_rounded,
+                          iconBg: const Color(0xFFE0F2FE),
+                          iconColor: const Color(0xFF0284C7),
+                        ),
+                        _buildStatCard(
+                          title: '已救援人數',
+                          value: '$rescuedCount',
+                          icon: Icons.verified_rounded,
+                          iconBg: const Color(0xFFDCFCE7),
+                          iconColor: const Color(0xFF16A34A),
+                        ),
+                        _buildStatCard(
+                          title: '緊急事件',
+                          value: '$emergencyCount',
+                          icon: Icons.warning_amber_rounded,
+                          iconBg: const Color(0xFFFEF3C7),
+                          iconColor: const Color(0xFFD97706),
+                        ),
+                        _buildStatCard(
+                          title: '物資項目',
+                          value: '$supplyCount',
+                          icon: Icons.inventory_2_rounded,
+                          iconBg: const Color(0xFFEDE9FE),
+                          iconColor: const Color(0xFF7C3AED),
+                        ),
+                        _buildStatCard(
+                          title: '健康回報',
+                          value: '$healthReportCount',
+                          icon: Icons.favorite_rounded,
+                          iconBg: const Color(0xFFFCE7F3),
+                          iconColor: const Color(0xFFDB2777),
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 30),
+                    _buildSystemStatusOnly(),
                   ],
                 ),
               ),
@@ -178,72 +150,40 @@ class DashboardPage extends StatelessWidget {
 
   Widget _buildSidebar(BuildContext context) {
     return Container(
-      width: 248,
-      decoration: BoxDecoration(
-        color: primaryBlue,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(4, 0),
-          ),
-        ],
-      ),
+      width: 250,
+      color: sidebarBlue,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(20, 26, 20, 22),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Colors.white.withOpacity(0.08),
-                ),
-              ),
-            ),
+          const SizedBox(height: 30),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 22),
             child: Row(
               children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Icon(
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: Colors.white24,
+                  child: Icon(
                     Icons.admin_panel_settings_rounded,
                     color: Colors.white,
-                    size: 28,
+                    size: 24,
                   ),
                 ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Disaster Admin',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        '管理控制中心',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12.5,
-                        ),
-                      ),
-                    ],
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '災難管理系統',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 34),
           _buildSidebarItem(
             icon: Icons.dashboard_rounded,
             title: '儀表板',
@@ -252,7 +192,7 @@ class DashboardPage extends StatelessWidget {
           ),
           _buildSidebarItem(
             icon: Icons.people_alt_rounded,
-            title: '民眾管理',
+            title: '災民管理',
             onTap: () {
               Navigator.push(
                 context,
@@ -261,7 +201,7 @@ class DashboardPage extends StatelessWidget {
             },
           ),
           _buildSidebarItem(
-            icon: Icons.report_problem_rounded,
+            icon: Icons.warning_amber_rounded,
             title: '緊急事件',
             onTap: () {
               Navigator.push(
@@ -271,7 +211,7 @@ class DashboardPage extends StatelessWidget {
             },
           ),
           _buildSidebarItem(
-            icon: Icons.local_shipping_rounded,
+            icon: Icons.inventory_2_rounded,
             title: '物資管理',
             onTap: () {
               Navigator.push(
@@ -281,7 +221,7 @@ class DashboardPage extends StatelessWidget {
             },
           ),
           _buildSidebarItem(
-            icon: Icons.health_and_safety_rounded,
+            icon: Icons.favorite_rounded,
             title: '健康回報',
             onTap: () {
               Navigator.push(
@@ -292,36 +232,73 @@ class DashboardPage extends StatelessWidget {
           ),
           const Spacer(),
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.08),
-                ),
-              ),
-              child: const Row(
-                children: [
-                  Icon(
-                    Icons.security_rounded,
-                    color: Colors.white70,
-                    size: 20,
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 24),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white24),
                   ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '系統穩定運行中',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12.5,
-                        height: 1.4,
+                  child: const Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Colors.white24,
+                        child: Icon(Icons.person, color: Colors.white),
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          '管理員模式',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: () {
+                    _logout(context);
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.redAccent.withOpacity(0.3),
                       ),
                     ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.logout, color: Colors.redAccent),
+                        SizedBox(width: 10),
+                        Text(
+                          '登出系統',
+                          style: TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
@@ -332,44 +309,33 @@ class DashboardPage extends StatelessWidget {
   Widget _buildSidebarItem({
     required IconData icon,
     required String title,
-    bool selected = false,
     required VoidCallback onTap,
+    bool selected = false,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
       child: Material(
-        color: Colors.transparent,
+        color: selected ? Colors.white.withOpacity(0.14) : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           onTap: onTap,
-          child: Ink(
+          child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            decoration: BoxDecoration(
-              color: selected
-                  ? Colors.white.withOpacity(0.12)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-              border: selected
-                  ? Border.all(color: Colors.white.withOpacity(0.08))
-                  : null,
-            ),
             child: Row(
               children: [
                 Icon(
                   icon,
                   color: Colors.white,
-                  size: 22,
+                  size: 24,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.96),
-                      fontSize: 14.5,
-                      fontWeight:
-                          selected ? FontWeight.bold : FontWeight.w500,
-                    ),
+                const SizedBox(width: 14),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -380,119 +346,86 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _buildTopBar(BuildContext context) {
-    return Container(
-      height: 74,
-      padding: const EdgeInsets.symmetric(horizontal: 18),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            icon: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: titleColor,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 4),
-          const Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '管理員儀表板',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: titleColor,
-                  ),
+  Widget _buildTopBar() {
+    return Row(
+      children: [
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '管理員儀表板',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                  color: textDark,
                 ),
-                SizedBox(height: 4),
-                Text(
-                  'Disaster Management Control Center',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: textSoft,
-                  ),
+              ),
+              SizedBox(height: 6),
+              Text(
+                '歡迎回來，這裡可以快速查看整體災難系統的營運狀態。',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: textSoft,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAF2FF),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Row(
-              children: [
-                Icon(
-                  Icons.verified_user_rounded,
-                  size: 18,
-                  color: accentBlue,
-                ),
-                SizedBox(width: 8),
-                Text(
-                  'Admin',
-                  style: TextStyle(
-                    color: accentBlue,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
+        ),
+        Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            border: Border.all(color: borderColor),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 10,
+                offset: Offset(0, 3),
+              ),
+            ],
           ),
-        ],
-      ),
+          child: const Icon(
+            Icons.person,
+            color: primaryBlue,
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildHeroBanner() {
+  Widget _buildHeroSection() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [
-            Color(0xFF16324F),
-            Color(0xFF224B78),
-            Color(0xFF4A90E2),
+            Color(0xFF183B6B),
+            Color(0xFF28599A),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(26),
-        boxShadow: [
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
           BoxShadow(
-            color: primaryBlue.withOpacity(0.18),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
+            color: Colors.black12,
+            blurRadius: 16,
+            offset: Offset(0, 8),
           ),
         ],
       ),
-      child: Row(
+      child: const Row(
         children: [
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '災害管理控制中心',
+                  '災難管理總覽中心',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 28,
@@ -501,28 +434,24 @@ class DashboardPage extends StatelessWidget {
                 ),
                 SizedBox(height: 10),
                 Text(
-                  '集中掌握災情通報、救援進度、物資配置與健康回報，讓管理流程更即時、更清楚。',
+                  '集中掌握災民、緊急事件、物資與健康回報資訊，提升管理效率與決策速度。',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 15,
-                    height: 1.7,
+                    height: 1.5,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 20),
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.14),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: const Icon(
-              Icons.dashboard_customize_rounded,
+          SizedBox(width: 20),
+          CircleAvatar(
+            radius: 36,
+            backgroundColor: Colors.white24,
+            child: Icon(
+              Icons.analytics_rounded,
+              size: 34,
               color: Colors.white,
-              size: 42,
             ),
           ),
         ],
@@ -530,7 +459,7 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionHeader({
+  Widget _buildSectionTitle({
     required String title,
     required String subtitle,
   }) {
@@ -542,14 +471,14 @@ class DashboardPage extends StatelessWidget {
           style: const TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
-            color: titleColor,
+            color: textDark,
           ),
         ),
         const SizedBox(height: 6),
         Text(
           subtitle,
           style: const TextStyle(
-            fontSize: 13.5,
+            fontSize: 14,
             color: textSoft,
           ),
         ),
@@ -561,71 +490,48 @@ class DashboardPage extends StatelessWidget {
     required String title,
     required String value,
     required IconData icon,
+    required Color iconBg,
     required Color iconColor,
-    required Color iconBgColor,
-    required String note,
   }) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      width: 220,
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: borderColor),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 4),
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: iconBgColor,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(
-              icon,
-              color: iconColor,
-              size: 28,
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: iconBg,
+            child: Icon(icon, color: iconColor, size: 24),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 15,
+              color: textSoft,
+              fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: textSoft,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: titleColor,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  note,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    color: textSoft,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 10),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: textDark,
             ),
           ),
         ],
@@ -633,68 +539,62 @@ class DashboardPage extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoCard({
-    required IconData icon,
-    required Color iconBg,
-    required Color iconColor,
-    required String title,
-    required String content,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(18),
+  Widget _buildSystemStatusOnly() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        width: 420,
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 10,
+              offset: Offset(0, 4),
             ),
-            child: Icon(
-              icon,
-              color: iconColor,
-              size: 30,
+          ],
+        ),
+        child: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '系統狀態',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            SizedBox(height: 14),
+            Text(
+              '目前後台系統運作正常，各模組可持續進行查看與管理。',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+                height: 1.6,
+              ),
+            ),
+            SizedBox(height: 22),
+            Row(
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: titleColor,
-                  ),
+                CircleAvatar(
+                  radius: 7,
+                  backgroundColor: Colors.greenAccent,
                 ),
-                const SizedBox(height: 8),
+                SizedBox(width: 10),
                 Text(
-                  content,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: textSoft,
-                    height: 1.6,
+                  '系統連線正常',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
                   ),
                 ),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
