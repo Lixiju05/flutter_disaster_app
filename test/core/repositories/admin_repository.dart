@@ -12,14 +12,14 @@ class AdminRepository { //先放假訊息
     name: "王小明",
     latitude: 24.15,
     longitude: 120.67,
-    isRescued: false,
+    needsRescue: false,
   ),
   Citizen(
     id: "C002",
     name: "李小龍",
     latitude: 24.16,
     longitude: 120.66,
-    isRescued: false,
+    needsRescue: false,
     ),
   ];
 //假求救訊息

@@ -28,7 +28,7 @@ class NostrService {
       request: request,
     );
 
-    // 注意這裡，要用 stream.listen
+    // 這裡要用 stream.listen
     _subscription = eventsStream.stream.listen((event) {
       print('收到健康回報: ${event.content}');
       // 你可以在這裡再加通知 ViewModel 或其他處理
