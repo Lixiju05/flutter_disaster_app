@@ -6,6 +6,7 @@ import 'package:admin_server/core/models/healthReport.dart';
 
 Future<void> main() async {
   await DatabaseService.init();
+  DatabaseService.seedTestData();
 
   var securityContext = SecurityContext()
     ..useCertificateChain('certs/server.crt')
@@ -22,6 +23,7 @@ Future<void> main() async {
   await for (HttpRequest request in server) {
     await handleRequest(request); // 
   }
+  print(DatabaseService.getAllUsers());
 }
 
 Future<void> handleRequest(HttpRequest request) async {
@@ -50,6 +52,15 @@ Future<void> handleRequest(HttpRequest request) async {
     } 
     else if (jsonData['type'] == 'login') {
       await handleLogin(jsonData, request);
+    }
+    else if (jsonData['type'] == 'getReports') {
+      await handleGetReports(request);
+    }
+    else if (jsonData['type'] == 'getUser') {
+      await handleGetUser(jsonData, request);
+    }
+    else if (jsonData['type'] == 'getAllUsers') {
+      await handleGetAllUsers(request);
     }
     else {
       request.response
@@ -109,6 +120,66 @@ Future<void> handleLogin(
     request.response
       ..statusCode = HttpStatus.forbidden
       ..write(jsonEncode({"success": false}))
+      ..close();
+  }
+}
+Future<void> handleGetReports(HttpRequest request) async {
+  final reports = DatabaseService.getAllReports();
+
+  request.response
+    ..statusCode = HttpStatus.ok
+    ..write(jsonEncode({
+      "success": true,
+      "data": reports,
+    }))
+    ..close();
+}
+//取得單一user
+Future<void> handleGetUser(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  final id = jsonData['id'];
+
+  final user = DatabaseService.getUser(id);
+
+  if (user == null) {
+    request.response
+      ..statusCode = HttpStatus.notFound
+      ..write(jsonEncode({
+        "success": false,
+        "message": "user not found"
+      }))
+      ..close();
+    return;
+  }
+
+  request.response
+    ..statusCode = HttpStatus.ok
+    ..write(jsonEncode({
+      "success": true,
+      "data": user.toMap(), // 如果你有 toMap()
+    }))
+    ..close();
+}
+//取得全部user
+Future<void> handleGetAllUsers(HttpRequest request) async {
+  try {
+    final users = DatabaseService.getAllUsers();
+
+    request.response
+      ..statusCode = HttpStatus.ok
+      ..write(jsonEncode({
+        "success": true,
+        "data": users.map((u) => u.toMap()).toList(),
+      }))
+      ..close();
+  } catch (e) {
+    print("SERVER ERROR: $e");
+
+    request.response
+      ..statusCode = HttpStatus.internalServerError
+      ..write("server error")
       ..close();
   }
 }
