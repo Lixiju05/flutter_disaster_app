@@ -1,4 +1,5 @@
 class HealthReport {
+  final String uuid;
   final String reporterId;   // 回報者 ID
   final String name;         // 回報者姓名
   final String phone;        // 聯絡電話
@@ -10,6 +11,7 @@ class HealthReport {
   final DateTime reportTime; // 回報時間
 
   HealthReport({
+    required this.uuid,
     required this.reporterId,
     required this.name,
     required this.phone,
@@ -34,6 +36,7 @@ class HealthReport {
       };
 
   factory HealthReport.fromJson(Map<String, dynamic> json) => HealthReport(
+        uuid: json['uuid'] as String,
         reporterId: json['reporterId'] as String,
         name: json['name'] as String,
         phone: json['phone'] as String,
