@@ -8,14 +8,10 @@ Future<void> main() async {
   await DatabaseService.init();
   DatabaseService.seedTestData();
 
-  var securityContext = SecurityContext()
-    ..useCertificateChain('certs/server.crt')
-    ..usePrivateKey('certs/server.key');
 
-  var server = await HttpServer.bindSecure(
+  var server = await HttpServer.bind(
     InternetAddress.anyIPv4,
-    8443,
-    securityContext,
+    8080,
   );
 
   print('HTTPS Server running at https://${server.address.address}:${server.port}');
@@ -23,10 +19,22 @@ Future<void> main() async {
   await for (HttpRequest request in server) {
     await handleRequest(request); // 
   }
-  print(DatabaseService.getAllUsers());
+  print("Server started");
 }
 
 Future<void> handleRequest(HttpRequest request) async {
+    request.response.headers
+    ..add("Access-Control-Allow-Origin", "*")
+    ..add("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+    ..add("Access-Control-Allow-Headers", "Content-Type");
+
+  // 處理 OPTIONS
+  if (request.method == 'OPTIONS') {
+    request.response
+      ..statusCode = HttpStatus.ok
+      ..close();
+    return;
+  }
   if (request.method != 'POST') {
     request.response
       ..statusCode = HttpStatus.methodNotAllowed
