@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../services/api_service.dart';
 import 'dashboard_page.dart';
 import 'register_page.dart';
 
@@ -27,7 +27,12 @@ class _LoginPageState extends State<LoginPage> {
     final username = _usernameController.text.trim();
     final password = _passwordController.text.trim();
 
+    print("按下登入按鈕了");
+    print("輸入的帳號: $username");
+    print("輸入的密碼: $password");
+
     if (username.isEmpty || password.isEmpty) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('請輸入帳號與密碼'),
@@ -37,22 +42,20 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    final prefs = await SharedPreferences.getInstance();
+    final success = await ApiService.login(username, password);
 
-    final savedUsername = prefs.getString('username');
-    final savedPassword = prefs.getString('password');
+    print("login result: $success");
 
-    if (savedUsername == null || savedPassword == null) {
+    if (!mounted) return;
+
+    if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('尚未註冊帳號，請先註冊'),
-          backgroundColor: Colors.redAccent,
+          content: Text('登入成功'),
+          backgroundColor: Colors.green,
         ),
       );
-      return;
-    }
 
-    if (username == savedUsername && password == savedPassword) {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => DashboardPage()),
@@ -161,7 +164,6 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
-
           Positioned(
             top: -150,
             left: -120,
@@ -174,7 +176,6 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
-
           Positioned(
             bottom: -180,
             right: -120,
@@ -187,7 +188,6 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
-
           Positioned(
             top: 110,
             right: 500,
@@ -200,7 +200,6 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
-
           SafeArea(
             child: isNarrow
                 ? Center(
@@ -391,7 +390,6 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
           const SizedBox(height: 30),
-
           TextField(
             controller: _usernameController,
             decoration: _inputDecoration(
@@ -399,9 +397,7 @@ class _LoginPageState extends State<LoginPage> {
               icon: Icons.person_rounded,
             ),
           ),
-
           const SizedBox(height: 18),
-
           TextField(
             controller: _passwordController,
             obscureText: _obscurePassword,
@@ -423,9 +419,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
-
           const SizedBox(height: 26),
-
           SizedBox(
             width: double.infinity,
             height: 58,
@@ -449,9 +443,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
-
           const SizedBox(height: 14),
-
           TextButton(
             onPressed: () {
               Navigator.push(
@@ -468,9 +460,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
           ),
-
           const SizedBox(height: 18),
-
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(
@@ -490,11 +480,14 @@ class _LoginPageState extends State<LoginPage> {
                   color: Colors.black54,
                 ),
                 SizedBox(width: 8),
-                Text(
-                  '請使用註冊的帳號與密碼登入',
-                  style: TextStyle(
-                    color: Colors.black54,
-                    fontSize: 14,
+                Expanded(
+                  child: Text(
+                    '目前為本地假登入測試，請使用 admin / 1234',
+                    style: TextStyle(
+                      color: Colors.black54,
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ],
