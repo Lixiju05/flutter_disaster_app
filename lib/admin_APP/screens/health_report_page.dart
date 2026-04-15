@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../repositories/healthReport_repository.dart';
 import '../../core/models/healthReport.dart';
+import 'full_map_page.dart';
 
 class HealthReportPage extends StatefulWidget {
   const HealthReportPage({super.key});
@@ -17,6 +18,15 @@ class _HealthReportPageState extends State<HealthReportPage> {
   String selectedFilter = 'all';
   String searchKeyword = '';
 
+  static const Color _bg = Color(0xFFF4F7FB);
+  static const Color _navy = Color(0xFF163A63);
+  static const Color _navy2 = Color(0xFF244E7A);
+  static const Color _card = Colors.white;
+  static const Color _border = Color(0xFFE2E8F0);
+  static const Color _textMain = Color(0xFF0F172A);
+  static const Color _textSub = Color(0xFF64748B);
+  static const Color _blue = Color(0xFF2563EB);
+
   @override
   void initState() {
     super.initState();
@@ -31,6 +41,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
 
   @override
   Widget build(BuildContext context) {
+    final filteredReports = _getFilteredReports(_reports);
     final safeCount =
         _reports.where((r) => r.status == 'safe' || r.status == '安全').length;
     final injuredCount = _reports
@@ -40,585 +51,232 @@ class _HealthReportPageState extends State<HealthReportPage> {
         .where((r) => r.status == 'critical' || r.status == '重傷')
         .length;
 
-    final filteredReports = _getFilteredReports(_reports);
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F7FB),
+      backgroundColor: _bg,
       appBar: AppBar(
         elevation: 0,
-        centerTitle: false,
-        backgroundColor: const Color(0xFF1E3A5F),
+        backgroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: _textMain),
         title: const Text(
-          "健康回報管理",
+          '健康回報管理',
           style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.3,
+            color: _textMain,
+            fontWeight: FontWeight.w800,
+            fontSize: 22,
           ),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 16, top: 10, bottom: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _border),
+            ),
+            child: const Center(
+              child: Text(
+                '只讀模式',
+                style: TextStyle(
+                  color: _textSub,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: _reports.isEmpty
           ? const Center(
               child: Text(
-                "目前沒有健康回報資料",
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
+                '目前沒有健康回報資料',
+                style: TextStyle(color: _textSub),
               ),
             )
-          : Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [
-                          Color(0xFF1E3A5F),
-                          Color(0xFF2C5282),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF1E3A5F).withOpacity(0.18),
-                          blurRadius: 16,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.16),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              child: const Icon(
-                                Icons.health_and_safety,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            const Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "回報列表",
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    "即時查看災民健康與安全狀況",
-                                    style: TextStyle(
-                                      color: Color(0xFFD6E4F0),
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.14),
-                                borderRadius: BorderRadius.circular(22),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.18),
-                                ),
-                              ),
-                              child: Text(
-                                "共 ${_reports.length} 筆",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildFilterCard(
-                                title: "全部",
-                                count: _reports.length.toString(),
-                                icon: Icons.list_alt,
-                                color: Colors.white,
-                                filterValue: 'all',
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _buildFilterCard(
-                                title: "安全",
-                                count: safeCount.toString(),
-                                icon: Icons.verified_user,
-                                color: Colors.green,
-                                filterValue: 'safe',
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _buildFilterCard(
-                                title: "輕傷",
-                                count: injuredCount.toString(),
-                                icon: Icons.healing,
-                                color: Colors.orange,
-                                filterValue: 'injured',
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _buildFilterCard(
-                                title: "重傷",
-                                count: criticalCount.toString(),
-                                icon: Icons.warning_rounded,
-                                color: Colors.red,
-                                filterValue: 'critical',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  _buildHeroHeader(),
+                  const SizedBox(height: 18),
+                  _buildStatsRow(
+                    total: _reports.length,
+                    safe: safeCount,
+                    injured: injuredCount,
+                    critical: criticalCount,
                   ),
-                ),
-
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                  child: Row(
-                    children: [
-                      const Text(
-                        "目前篩選：",
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF64748B),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E3A5F).withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          _getFilterLabel(selectedFilter),
-                          style: const TextStyle(
-                            color: Color(0xFF1E3A5F),
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const Spacer(),
-                      SizedBox(
-                        width: 260,
-                        child: TextField(
-                          controller: _searchController,
-                          onChanged: (value) {
-                            setState(() {
-                              searchKeyword = value.trim().toLowerCase();
-                            });
-                          },
-                          decoration: InputDecoration(
-                            hintText: "搜尋姓名 / ID",
-                            prefixIcon: const Icon(Icons.search),
-                            filled: true,
-                            fillColor: Colors.white,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Expanded(
-                  child: filteredReports.isEmpty
-                      ? const Center(
-                          child: Text(
-                            "此分類目前沒有資料",
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                          itemCount: filteredReports.length,
-                          itemBuilder: (context, index) {
-                            final report = filteredReports[index];
-                            final statusColor = _getStatusColor(report.status);
-
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 16),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 14,
-                                    offset: const Offset(0, 5),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 6,
-                                    height: 285,
-                                    decoration: BoxDecoration(
-                                      color: statusColor,
-                                      borderRadius: const BorderRadius.only(
-                                        topLeft: Radius.circular(20),
-                                        bottomLeft: Radius.circular(20),
-                                      ),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Container(
-                                      decoration: const BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.only(
-                                          topRight: Radius.circular(20),
-                                          bottomRight: Radius.circular(20),
-                                        ),
-                                      ),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(16),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Container(
-                                                  padding:
-                                                      const EdgeInsets.all(12),
-                                                  decoration: BoxDecoration(
-                                                    color: statusColor
-                                                        .withOpacity(0.10),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            16),
-                                                  ),
-                                                  child: Icon(
-                                                    _getStatusIcon(report.status),
-                                                    color: statusColor,
-                                                    size: 28,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 12),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment.start,
-                                                    children: [
-                                                      Text(
-                                                        report.name,
-                                                        style: const TextStyle(
-                                                          fontSize: 20,
-                                                          fontWeight:
-                                                              FontWeight.w700,
-                                                          letterSpacing: 0.3,
-                                                          color:
-                                                              Color(0xFF0F172A),
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 4),
-                                                      Text(
-                                                        "回報者 ID：${report.reporterId}",
-                                                        style: const TextStyle(
-                                                          fontSize: 13,
-                                                          color:
-                                                              Color(0xFF94A3B8),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                                _buildStatusChip(report.status),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 18),
-                                            _buildInfoRow(
-                                              Icons.phone,
-                                              "聯絡電話",
-                                              report.phone,
-                                            ),
-                                            _buildInfoRow(
-                                              Icons.bloodtype,
-                                              "血型",
-                                              report.bloodType ?? "未填寫",
-                                            ),
-                                            _buildInfoRow(
-                                              Icons.access_time,
-                                              "回報時間",
-                                              _formatTime(report.reportTime),
-                                            ),
-                                            _buildInfoRow(
-                                              Icons.location_on,
-                                              "位置",
-                                              (report.lat != null &&
-                                                      report.lng != null)
-                                                  ? "${report.lat}, ${report.lng}"
-                                                  : "未提供位置",
-                                            ),
-                                            const SizedBox(height: 12),
-                                            const Text(
-                                              "補充說明",
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.bold,
-                                                color: Color(0xFF334155),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Container(
-                                              width: double.infinity,
-                                              padding: const EdgeInsets.all(14),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFF8FAFC),
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
-                                                border: Border.all(
-                                                  color: Colors.grey
-                                                      .withOpacity(0.12),
-                                                ),
-                                              ),
-                                              child: Text(
-                                                (report.description != null &&
-                                                        report.description!
-                                                            .trim()
-                                                            .isNotEmpty)
-                                                    ? report.description!
-                                                    : "無補充說明",
-                                                style: const TextStyle(
-                                                  fontSize: 14,
-                                                  color: Color(0xFF475569),
-                                                  height: 1.6,
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 14),
-                                            Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment.end,
-                                              children: [
-                                                OutlinedButton.icon(
-                                                  onPressed: () {
-                                                    _showEditDialog(report);
-                                                  },
-                                                  icon: const Icon(
-                                                    Icons.edit_outlined,
-                                                    size: 18,
-                                                  ),
-                                                  label: const Text("編輯"),
-                                                  style:
-                                                      OutlinedButton.styleFrom(
-                                                    foregroundColor:
-                                                        const Color(0xFF1E3A5F),
-                                                    side: const BorderSide(
-                                                      color: Color(0xFF1E3A5F),
-                                                    ),
-                                                    shape:
-                                                        RoundedRectangleBorder(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              12),
-                                                    ),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 10),
-                                                OutlinedButton.icon(
-                                                  onPressed: () {
-                                                    _showDeleteDialog(report);
-                                                  },
-                                                  icon: const Icon(
-                                                    Icons.delete_outline,
-                                                    size: 18,
-                                                  ),
-                                                  label: const Text("刪除"),
-                                                  style:
-                                                      OutlinedButton.styleFrom(
-                                                    foregroundColor: Colors.red,
-                                                    side: const BorderSide(
-                                                      color: Colors.red,
-                                                    ),
-                                                    shape:
-                                                        RoundedRectangleBorder(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              12),
-                                                    ),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: 10),
-                                                ElevatedButton.icon(
-                                                  onPressed: () {
-                                                    _showDetailDialog(
-                                                        context, report);
-                                                  },
-                                                  icon: const Icon(
-                                                    Icons.visibility_outlined,
-                                                    size: 18,
-                                                  ),
-                                                  label: const Text("查看詳情"),
-                                                  style: ElevatedButton.styleFrom(
-                                                    elevation: 0,
-                                                    backgroundColor:
-                                                        const Color(0xFF1E3A5F),
-                                                    foregroundColor: Colors.white,
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 10,
-                                                    ),
-                                                    shape: RoundedRectangleBorder(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              12),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
-                ),
-              ],
+                  const SizedBox(height: 18),
+                  _buildSearchBar(),
+                  const SizedBox(height: 18),
+                  _buildFilterRow(),
+                  const SizedBox(height: 18),
+                  if (filteredReports.isEmpty)
+                    _buildEmptyState()
+                  else
+                    ...filteredReports.map(_buildPremiumCard),
+                ],
+              ),
             ),
     );
   }
 
-  List<HealthReport> _getFilteredReports(List<HealthReport> reports) {
-    List<HealthReport> result;
-
-    switch (selectedFilter) {
-      case 'safe':
-        result = reports
-            .where((r) => r.status == 'safe' || r.status == '安全')
-            .toList();
-        break;
-      case 'injured':
-        result = reports
-            .where((r) => r.status == 'injured' || r.status == '輕傷')
-            .toList();
-        break;
-      case 'critical':
-        result = reports
-            .where((r) => r.status == 'critical' || r.status == '重傷')
-            .toList();
-        break;
-      case 'all':
-      default:
-        result = reports;
-    }
-
-    if (searchKeyword.isEmpty) return result;
-
-    return result.where((r) {
-      final name = r.name.toLowerCase();
-      final id = r.reporterId.toLowerCase();
-      return name.contains(searchKeyword) || id.contains(searchKeyword);
-    }).toList();
+  Widget _buildHeroHeader() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [_navy, _navy2],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: _navy.withOpacity(0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Icon(
+              Icons.health_and_safety,
+              color: Colors.white,
+              size: 30,
+            ),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '健康回報監控中心',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  '即時掌握災民健康狀況、位置與回報資訊',
+                  style: TextStyle(
+                    color: Color(0xFFDCE6F2),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  String _getFilterLabel(String filter) {
-    switch (filter) {
-      case 'safe':
-        return '安全';
-      case 'injured':
-        return '輕傷';
-      case 'critical':
-        return '重傷';
-      case 'all':
-      default:
-        return '全部';
-    }
-  }
-
-  Widget _buildFilterCard({
-    required String title,
-    required String count,
-    required IconData icon,
-    required Color color,
-    required String filterValue,
+  Widget _buildStatsRow({
+    required int total,
+    required int safe,
+    required int injured,
+    required int critical,
   }) {
-    final bool isSelected = selectedFilter == filterValue;
-
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          selectedFilter = filterValue;
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.white.withOpacity(0.18)
-              : Colors.white.withOpacity(0.10),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected
-                ? Colors.white.withOpacity(0.45)
-                : Colors.white.withOpacity(0.10),
-            width: isSelected ? 1.5 : 1,
+    return Row(
+      children: [
+        Expanded(
+          child: _buildStatCard(
+            title: '全部回報',
+            value: total.toString(),
+            icon: Icons.apps_rounded,
+            color: _blue,
+            filter: 'all',
           ),
         ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: _buildStatCard(
+            title: '安全',
+            value: safe.toString(),
+            icon: Icons.verified_user,
+            color: const Color(0xFF22C55E),
+            filter: 'safe',
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: _buildStatCard(
+            title: '輕傷',
+            value: injured.toString(),
+            icon: Icons.healing,
+            color: const Color(0xFFF59E0B),
+            filter: 'injured',
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: _buildStatCard(
+            title: '重傷',
+            value: critical.toString(),
+            icon: Icons.warning_amber_rounded,
+            color: const Color(0xFFEF4444),
+            filter: 'critical',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatCard({
+    required String title,
+    required String value,
+    required IconData icon,
+    required Color color,
+    required String filter,
+  }) {
+    final isSelected = selectedFilter == filter;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => setState(() => selectedFilter = filter),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: _card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? color.withOpacity(0.7) : _border,
+            width: isSelected ? 1.6 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isSelected
+                  ? color.withOpacity(0.14)
+                  : Colors.black.withOpacity(0.04),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(icon, color: color, size: 22),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Text(
-              count,
+              value,
               style: const TextStyle(
-                color: Colors.white,
-                fontSize: 20,
+                color: _textMain,
+                fontSize: 30,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -626,8 +284,9 @@ class _HealthReportPageState extends State<HealthReportPage> {
             Text(
               title,
               style: const TextStyle(
-                color: Color(0xFFD6E4F0),
-                fontSize: 12,
+                color: _textSub,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -636,17 +295,314 @@ class _HealthReportPageState extends State<HealthReportPage> {
     );
   }
 
+  Widget _buildSearchBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        onChanged: (v) => setState(() => searchKeyword = v.trim().toLowerCase()),
+        decoration: const InputDecoration(
+          hintText: '搜尋姓名 / ID...',
+          hintStyle: TextStyle(color: _textSub),
+          prefixIcon: Icon(Icons.search, color: _textSub),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterRow() {
+    return Row(
+      children: [
+        _buildFilterChip('全部', 'all'),
+        const SizedBox(width: 10),
+        _buildFilterChip('安全', 'safe'),
+        const SizedBox(width: 10),
+        _buildFilterChip('輕傷', 'injured'),
+        const SizedBox(width: 10),
+        _buildFilterChip('重傷', 'critical'),
+      ],
+    );
+  }
+  Widget _buildFilterChip(String label, String filter) {
+  final isSelected = selectedFilter == filter;
+
+  return InkWell(
+    borderRadius: BorderRadius.circular(28),
+    onTap: () => setState(() => selectedFilter = filter),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: isSelected ? _blue : Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: isSelected ? _blue : _border,
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.white : _textSub,
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+        ),
+      ),
+    ),
+  );
+}
+
+ 
+  Widget _buildPremiumCard(HealthReport report) {
+    final statusColor = _getStatusColor(report.status);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 6,
+              height: 132,
+              decoration: BoxDecoration(
+                color: statusColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                _getStatusIcon(report.status),
+                color: statusColor,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 6,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        report.name,
+                        style: const TextStyle(
+                          color: _textMain,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      _buildStatusBadge(report.status),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'ID: ${report.reporterId}',
+                    style: const TextStyle(
+                      color: _textSub,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      _buildInfoPill(Icons.phone_outlined, report.phone),
+                      _buildInfoPill(Icons.access_time, _formatTime(report.reportTime)),
+                      _buildInfoPill(Icons.location_on_outlined, _getLocationName(report)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      _getShortDescription(report.description),
+                      style: const TextStyle(
+                        color: _textSub,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 2,
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        if (report.lat != null && report.lng != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => FullMapPage(
+                                lat: report.lat!,
+                                lng: report.lng!,
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.map_outlined, size: 18),
+                      label: const Text('地圖'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor:_blue,
+                        side: const BorderSide(color: _border),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _showDetailDialog(context, report),
+                      icon: const Icon(Icons.visibility_outlined, size: 18),
+                      label: const Text('詳情'),
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: _blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoPill(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: _blue),
+          const SizedBox(width: 6),
+          Text(
+            text,
+            style: const TextStyle(
+              color: _textSub,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(String status) {
+    final color = _getStatusColor(status);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        _translateStatus(status),
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(40),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _border),
+      ),
+      child: const Column(
+        children: [
+          Icon(Icons.inbox_outlined, size: 44, color: _textSub),
+          SizedBox(height: 12),
+          Text(
+            '沒有符合條件的資料',
+            style: TextStyle(color: _textSub),
+          ),
+        ],
+      ),
+    );
+  }
+
   Color _getStatusColor(String status) {
     switch (status) {
       case '安全':
       case 'safe':
-        return Colors.green;
+        return const Color(0xFF22C55E);
       case '輕傷':
       case 'injured':
-        return Colors.orange;
+        return const Color(0xFFF59E0B);
       case '重傷':
       case 'critical':
-        return Colors.red;
+        return const Color(0xFFEF4444);
       default:
         return Colors.grey;
     }
@@ -662,345 +618,208 @@ class _HealthReportPageState extends State<HealthReportPage> {
         return Icons.healing;
       case '重傷':
       case 'critical':
-        return Icons.warning_rounded;
+        return Icons.warning_amber_rounded;
       default:
         return Icons.info_outline;
     }
   }
 
-  Widget _buildStatusChip(String status) {
-    final color = _getStatusColor(status);
-
-    String text;
-    switch (status) {
-      case 'safe':
-        text = '安全';
-        break;
-      case 'injured':
-        text = '輕傷';
-        break;
-      case 'critical':
-        text = '重傷';
-        break;
-      default:
-        text = status;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(
-          color: color.withOpacity(0.22),
-        ),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.bold,
-          fontSize: 13,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 11),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 28,
-            child: Icon(
-              icon,
-              size: 18,
-              color: const Color(0xFF1E3A5F),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            "$label：",
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF334155),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF475569),
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  String _translateStatus(String status) {
+    if (status == 'safe') return '安全';
+    if (status == 'injured') return '輕傷';
+    if (status == 'critical') return '重傷';
+    return status;
   }
 
   String _formatTime(DateTime time) {
-    return "${time.year}/"
-        "${time.month.toString().padLeft(2, '0')}/"
-        "${time.day.toString().padLeft(2, '0')} "
+    return "${time.month}/${time.day} "
         "${time.hour.toString().padLeft(2, '0')}:"
         "${time.minute.toString().padLeft(2, '0')}";
   }
 
-  void _showDeleteDialog(HealthReport report) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: const Text("確認刪除"),
-        content: Text("確定要刪除 ${report.name} 的健康回報資料嗎？"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("取消"),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _reports.remove(report);
-              });
-              Navigator.pop(context);
-
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("資料已刪除"),
-                  backgroundColor: Colors.redAccent,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text("刪除"),
-          ),
-        ],
-      ),
-    );
+  String _getShortDescription(String? text) {
+    if (text == null || text.trim().isEmpty) return '無補充說明';
+    if (text.length <= 42) return text;
+    return '${text.substring(0, 42)}...';
   }
 
-  void _showEditDialog(HealthReport report) {
-    final nameController = TextEditingController(text: report.name);
-    final phoneController = TextEditingController(text: report.phone);
-    final bloodTypeController =
-        TextEditingController(text: report.bloodType ?? '');
-    final descriptionController =
-        TextEditingController(text: report.description ?? '');
+  String _getLocationName(HealthReport report) {
+    if (report.lat == null || report.lng == null) return '未知地點';
 
-    String selectedStatus = report.status;
+    final lat = report.lat!;
+    final lng = report.lng!;
 
-    showDialog(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text("編輯健康回報"),
-          content: SingleChildScrollView(
-            child: SizedBox(
-              width: 420,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: const InputDecoration(labelText: "姓名"),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: phoneController,
-                    decoration: const InputDecoration(labelText: "聯絡電話"),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: bloodTypeController,
-                    decoration: const InputDecoration(labelText: "血型"),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    value: selectedStatus,
-                    decoration: const InputDecoration(labelText: "狀態"),
-                    items: const [
-                      DropdownMenuItem(value: 'safe', child: Text('安全')),
-                      DropdownMenuItem(value: 'injured', child: Text('輕傷')),
-                      DropdownMenuItem(value: 'critical', child: Text('重傷')),
-                      DropdownMenuItem(value: '安全', child: Text('安全（中文）')),
-                      DropdownMenuItem(value: '輕傷', child: Text('輕傷（中文）')),
-                      DropdownMenuItem(value: '重傷', child: Text('重傷（中文）')),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setDialogState(() {
-                        selectedStatus = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: descriptionController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(labelText: "補充說明"),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("取消"),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  final index = _reports.indexOf(report);
-                  if (index != -1) {
-                    _reports[index] = HealthReport(
-                      reporterId: report.reporterId,
-                      name: nameController.text.trim().isEmpty
-                          ? report.name
-                          : nameController.text.trim(),
-                      status: selectedStatus,
-                      description: descriptionController.text.trim(),
-                      reportTime: report.reportTime,
-                      phone: phoneController.text.trim().isEmpty
-                          ? report.phone
-                          : phoneController.text.trim(),
-                      bloodType: bloodTypeController.text.trim().isEmpty
-                          ? null
-                          : bloodTypeController.text.trim(),
-                      lat: report.lat,
-                      lng: report.lng,
-                    );
-                  }
-                });
+    if ((lat - 23.951178).abs() < 0.01 && (lng - 120.930978).abs() < 0.01) {
+      return '暨大';
+    }
+    if ((lat - 23.966667).abs() < 0.01 && (lng - 120.966667).abs() < 0.01) {
+      return '埔里';
+    }
+    if ((lat - 23.866664).abs() < 0.02 && (lng - 120.916664).abs() < 0.02) {
+      return '日月潭';
+    }
 
-                Navigator.pop(context);
+    return '其他地點';
+  }
 
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("資料已更新"),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E3A5F),
-                foregroundColor: Colors.white,
-              ),
-              child: const Text("保存"),
-            ),
-          ],
-        ),
-      ),
-    );
+  List<HealthReport> _getFilteredReports(List<HealthReport> reports) {
+    List<HealthReport> result = reports;
+
+    switch (selectedFilter) {
+      case 'safe':
+        result = result.where((r) => r.status == 'safe' || r.status == '安全').toList();
+        break;
+      case 'injured':
+        result = result.where((r) => r.status == 'injured' || r.status == '輕傷').toList();
+        break;
+      case 'critical':
+        result = result.where((r) => r.status == 'critical' || r.status == '重傷').toList();
+        break;
+      case 'all':
+      default:
+        break;
+    }
+
+    if (searchKeyword.isNotEmpty) {
+      result = result.where((r) {
+        final name = r.name.toLowerCase();
+        final id = r.reporterId.toLowerCase();
+        return name.contains(searchKeyword) || id.contains(searchKeyword);
+      }).toList();
+    }
+
+    return result;
   }
 
   void _showDetailDialog(BuildContext context, HealthReport report) {
-    String statusText;
-    switch (report.status) {
-      case 'safe':
-        statusText = '安全';
-        break;
-      case 'injured':
-        statusText = '輕傷';
-        break;
-      case 'critical':
-        statusText = '重傷';
-        break;
-      default:
-        statusText = report.status;
-    }
-
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: _getStatusColor(report.status).withOpacity(0.12),
-              child: Icon(
-                _getStatusIcon(report.status),
-                color: _getStatusColor(report.status),
-              ),
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: 540,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: _card,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  report.name,
+                  style: const TextStyle(
+                    color: _textMain,
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '回報者 ID：${report.reporterId}',
+                  style: const TextStyle(
+                    color: _textSub,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _buildDialogItem('聯絡電話', report.phone),
+                _buildDialogItem('血型', report.bloodType ?? '未填寫'),
+                _buildDialogItem('狀態', _translateStatus(report.status)),
+                _buildDialogItem('回報時間', _formatTime(report.reportTime)),
+                _buildDialogItem('地點', _getLocationName(report)),
+                _buildDialogItem(
+                  '位置座標',
+                  (report.lat != null && report.lng != null)
+                      ? '${report.lat}, ${report.lng}'
+                      : '未提供位置',
+                ),
+                _buildDialogItem(
+                  '補充說明',
+                  (report.description != null && report.description!.trim().isNotEmpty)
+                      ? report.description!
+                      : '無',
+                ),
+                const SizedBox(height: 10),
+                if (report.lat != null && report.lng != null)
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FullMapPage(
+                              lat: report.lat!,
+                              lng: report.lng!,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.map_outlined),
+                      label: const Text('打開全屏地圖'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      '關閉',
+                      style: TextStyle(
+                        color: _blue,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                report.name,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildDialogText("回報者 ID", report.reporterId),
-              _buildDialogText("聯絡電話", report.phone),
-              _buildDialogText("血型", report.bloodType ?? '未填寫'),
-              _buildDialogText("狀態", statusText),
-              _buildDialogText("時間", _formatTime(report.reportTime)),
-              _buildDialogText(
-                "位置",
-                (report.lat != null && report.lng != null)
-                    ? "${report.lat}, ${report.lng}"
-                    : "未提供位置",
-              ),
-              _buildDialogText(
-                "備註",
-                (report.description != null &&
-                        report.description!.trim().isNotEmpty)
-                    ? report.description!
-                    : "無",
-              ),
-            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("關閉"),
-          ),
-        ],
       ),
     );
   }
 
-  Widget _buildDialogText(String title, String value) {
+  Widget _buildDialogItem(String label, String value) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(
-            fontSize: 14,
-            color: Color(0xFF334155),
-            height: 1.5,
-          ),
-          children: [
-            TextSpan(
-              text: "$title：",
-              style: const TextStyle(fontWeight: FontWeight.bold),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: RichText(
+          text: TextSpan(
+            style: const TextStyle(
+              fontSize: 14,
+              color: _textMain,
+              height: 1.5,
             ),
-            TextSpan(text: value),
-          ],
+            children: [
+              TextSpan(
+                text: '$label：',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              TextSpan(
+                text: value,
+                style: const TextStyle(color: _textSub),
+              ),
+            ],
+          ),
         ),
       ),
     );

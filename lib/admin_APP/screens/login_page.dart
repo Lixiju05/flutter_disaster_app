@@ -1,5 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
+import 'package:http/http.dart' as http;
 import 'dashboard_page.dart';
 import 'register_page.dart';
 
@@ -27,12 +28,7 @@ class _LoginPageState extends State<LoginPage> {
     final username = _usernameController.text.trim();
     final password = _passwordController.text.trim();
 
-    print("按下登入按鈕了");
-    print("輸入的帳號: $username");
-    print("輸入的密碼: $password");
-
     if (username.isEmpty || password.isEmpty) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('請輸入帳號與密碼'),
@@ -42,28 +38,49 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    final success = await ApiService.login(username, password);
-
-    print("login result: $success");
-
-    if (!mounted) return;
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('登入成功'),
-          backgroundColor: Colors.green,
-        ),
+    try {
+      final response = await http.post(
+        Uri.parse('https://delphine-eisteddfodic-afflictively.ngrok-free.dev'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'type': 'login',
+          'username': username,
+          'password': password,
+        }),
       );
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => DashboardPage()),
-      );
-    } else {
+      final data = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if (data['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('登入成功'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => DashboardPage()),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? '登入失敗'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('帳號或密碼錯誤'),
+          content: Text('連線失敗（可能後端未開啟）'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -482,7 +499,7 @@ class _LoginPageState extends State<LoginPage> {
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '目前為本地假登入測試，請使用 admin / 1234',
+                    '目前登入使用後端 API 驗證，請使用後端提供的帳號密碼登入',
                     style: TextStyle(
                       color: Colors.black54,
                       fontSize: 14,
