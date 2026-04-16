@@ -53,13 +53,13 @@ class HealthReportRepository extends ChangeNotifier {
     ]);
   }
 
-  /// ⭐ 接收「真實 JSON 資料」
+  ///  接收「真實 JSON 資料」
   void addReportFromJson(Map<String, dynamic> json) {
     final report = HealthReport.fromJson(json);
 
     _reports.insert(0, report);
 
-    /// ⭐ 通知 UI 更新
+    ///  通知 UI 更新
     notifyListeners();
   }
 }

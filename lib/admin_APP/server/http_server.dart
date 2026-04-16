@@ -10,7 +10,7 @@ class HttpServerService {
 
     await for (HttpRequest request in server) {
       if (request.method == 'POST' &&
-          request.uri.path == '/health-report') {
+          request.uri.path == '/') {
         await _handleHealthReport(request);
       }
     }

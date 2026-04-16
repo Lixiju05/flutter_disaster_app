@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:admin_server/database/database_service.dart';
 import 'package:admin_server/core/models/healthReport.dart';
@@ -8,38 +9,66 @@ Future<void> main() async {
   await DatabaseService.init();
   DatabaseService.seedTestData();
 
-
   var server = await HttpServer.bind(
     InternetAddress.anyIPv4,
     8080,
   );
 
-  print('HTTPS Server running at https://${server.address.address}:${server.port}');
+  print('HTTP Server running at http://${server.address.address}:${server.port}');
 
   await for (HttpRequest request in server) {
-    await handleRequest(request); // 
+    await handleRequest(request);
   }
-  print("Server started");
 }
 
-Future<void> handleRequest(HttpRequest request) async {
-    request.response.headers
+/// =====================
+/// ✅ 共用：CORS Header
+/// =====================
+void setCorsHeaders(HttpRequest request) {
+  request.response.headers
     ..add("Access-Control-Allow-Origin", "*")
     ..add("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-    ..add("Access-Control-Allow-Headers", "Content-Type");
+    ..add("Access-Control-Allow-Headers", "Content-Type, Authorization");
+}
 
-  // 處理 OPTIONS
+/// =====================
+/// ✅ 共用：JSON 回應
+/// =====================
+void sendJson(HttpRequest request, int status, Map<String, dynamic> data) {
+  request.response.headers.contentType = ContentType.json;
+  request.response
+    ..statusCode = status
+    ..write(jsonEncode(data))
+    ..close();
+}
+
+/// =====================
+/// ✅ 共用：產生 Token（簡易版）
+/// =====================
+String generateToken() {
+  final rand = Random();
+  return List.generate(32, (_) => rand.nextInt(16).toRadixString(16)).join();
+}
+
+/// =====================
+/// 主請求入口
+/// =====================
+Future<void> handleRequest(HttpRequest request) async {
+  setCorsHeaders(request);
+
+  // ✅ 處理 preflight
   if (request.method == 'OPTIONS') {
     request.response
       ..statusCode = HttpStatus.ok
       ..close();
     return;
   }
+
   if (request.method != 'POST') {
-    request.response
-      ..statusCode = HttpStatus.methodNotAllowed
-      ..write('Only POST supported')
-      ..close();
+    sendJson(request, HttpStatus.methodNotAllowed, {
+      "success": false,
+      "message": "Only POST supported"
+    });
     return;
   }
 
@@ -49,43 +78,53 @@ Future<void> handleRequest(HttpRequest request) async {
       (prev, element) => prev..addAll(element),
     );
 
-    print('Received bytes: ${data.length}');
-
     var body = utf8.decode(data);
+    print("BODY: $body");
     var jsonData = jsonDecode(body);
 
-    ///分流
-    if (jsonData['type'] == 'healthReport') {
-    await handleHealthReport(jsonData, request);
-    } 
-    else if (jsonData['type'] == 'login') {
-      await handleLogin(jsonData, request);
-    }
-    else if (jsonData['type'] == 'getReports') {
-      await handleGetReports(request);
-    }
-    else if (jsonData['type'] == 'getUser') {
-      await handleGetUser(jsonData, request);
-    }
-    else if (jsonData['type'] == 'getAllUsers') {
-      await handleGetAllUsers(request);
-    }
-    else {
-      request.response
-        ..statusCode = HttpStatus.badRequest
-        ..write('Unknown type')
-        ..close();
+    final type = jsonData['type'];
+
+    /// 🔀 API 分流
+    switch (type) {
+      case 'healthReport':
+        await handleHealthReport(jsonData, request);
+        break;
+
+      case 'login':
+        await handleLogin(jsonData, request);
+        break;
+
+      case 'getReports':
+        await handleGetReports(request);
+        break;
+
+      case 'getUser':
+        await handleGetUser(jsonData, request);
+        break;
+
+      case 'getAllUsers':
+        await handleGetAllUsers(request);
+        break;
+
+      default:
+        sendJson(request, HttpStatus.badRequest, {
+          "success": false,
+          "message": "Unknown type"
+        });
     }
   } catch (e) {
-    print('Error: $e');
-    request.response
-      ..statusCode = HttpStatus.badRequest
-      ..write('Invalid request')
-      ..close();
+    print("SERVER ERROR: $e");
+
+    sendJson(request, HttpStatus.badRequest, {
+      "success": false,
+      "message": "Invalid request"
+    });
   }
 }
 
-///處理災情
+/// =====================
+/// 災情回報
+/// =====================
 Future<void> handleHealthReport(
   Map<String, dynamic> jsonData,
   HttpRequest request,
@@ -105,11 +144,15 @@ Future<void> handleHealthReport(
 
   DatabaseService.insertHealthReport(report);
 
-  request.response
-    ..statusCode = HttpStatus.ok
-    ..write('Saved to Database')
-    ..close();
+  sendJson(request, HttpStatus.ok, {
+    "success": true,
+    "message": "Saved to Database"
+  });
 }
+
+/// =====================
+/// 登入（含 Token）
+/// =====================
 Future<void> handleLogin(
   Map<String, dynamic> jsonData,
   HttpRequest request,
@@ -120,29 +163,35 @@ Future<void> handleLogin(
   final success = DatabaseService.checkLogin(username, password);
 
   if (success) {
-    request.response
-      ..statusCode = HttpStatus.ok
-      ..write(jsonEncode({"success": true}))
-      ..close();
+    final token = generateToken();
+
+    sendJson(request, HttpStatus.ok, {
+      "success": true,
+      "token": token
+    });
   } else {
-    request.response
-      ..statusCode = HttpStatus.forbidden
-      ..write(jsonEncode({"success": false}))
-      ..close();
+    sendJson(request, HttpStatus.forbidden, {
+      "success": false,
+      "message": "Invalid username or password"
+    });
   }
 }
+
+/// =====================
+/// 取得所有回報
+/// =====================
 Future<void> handleGetReports(HttpRequest request) async {
   final reports = DatabaseService.getAllReports();
 
-  request.response
-    ..statusCode = HttpStatus.ok
-    ..write(jsonEncode({
-      "success": true,
-      "data": reports,
-    }))
-    ..close();
+  sendJson(request, HttpStatus.ok, {
+    "success": true,
+    "data": reports,
+  });
 }
-//取得單一user
+
+/// =====================
+/// 取得單一使用者
+/// =====================
 Future<void> handleGetUser(
   Map<String, dynamic> jsonData,
   HttpRequest request,
@@ -152,42 +201,36 @@ Future<void> handleGetUser(
   final user = DatabaseService.getUser(id);
 
   if (user == null) {
-    request.response
-      ..statusCode = HttpStatus.notFound
-      ..write(jsonEncode({
-        "success": false,
-        "message": "user not found"
-      }))
-      ..close();
+    sendJson(request, HttpStatus.notFound, {
+      "success": false,
+      "message": "User not found"
+    });
     return;
   }
 
-  request.response
-    ..statusCode = HttpStatus.ok
-    ..write(jsonEncode({
-      "success": true,
-      "data": user.toMap(), // 如果你有 toMap()
-    }))
-    ..close();
+  sendJson(request, HttpStatus.ok, {
+    "success": true,
+    "data": user.toMap(),
+  });
 }
-//取得全部user
+
+/// =====================
+/// 取得全部使用者
+/// =====================
 Future<void> handleGetAllUsers(HttpRequest request) async {
   try {
     final users = DatabaseService.getAllUsers();
 
-    request.response
-      ..statusCode = HttpStatus.ok
-      ..write(jsonEncode({
-        "success": true,
-        "data": users.map((u) => u.toMap()).toList(),
-      }))
-      ..close();
+    sendJson(request, HttpStatus.ok, {
+      "success": true,
+      "data": users.map((u) => u.toMap()).toList(),
+    });
   } catch (e) {
     print("SERVER ERROR: $e");
 
-    request.response
-      ..statusCode = HttpStatus.internalServerError
-      ..write("server error")
-      ..close();
+    sendJson(request, HttpStatus.internalServerError, {
+      "success": false,
+      "message": "Server error"
+    });
   }
 }
