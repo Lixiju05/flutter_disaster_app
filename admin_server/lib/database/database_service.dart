@@ -71,11 +71,14 @@ class DatabaseService {
     ''');
 
     initDefaultAdmin();
-    seedTestData();
+    seedAll();
 
     print('Database ready');
   }
+
+  // =====================
   // ADMIN
+  // =====================
   static void insertAdmin(Admin admin) {
     db.execute(
       '''
@@ -111,7 +114,10 @@ class DatabaseService {
       print("Default admin created");
     }
   }
+
+  // =====================
   // USER
+  // =====================
   static void insertUser(AppUser user) {
     db.execute(
       '''
@@ -162,7 +168,7 @@ class DatabaseService {
       medicalInfo: row['medicalInfo']?.toString(),
       registeredAt: DateTime.parse(
         row['registeredAt']?.toString() ??
-        DateTime.now().toIso8601String(),
+            DateTime.now().toIso8601String(),
       ),
     );
   }
@@ -183,12 +189,15 @@ class DatabaseService {
         medicalInfo: row['medicalInfo']?.toString(),
         registeredAt: DateTime.parse(
           row['registeredAt']?.toString() ??
-          DateTime.now().toIso8601String(),
+              DateTime.now().toIso8601String(),
         ),
       );
     }).toList();
   }
+
+  // =====================
   // HEALTH REPORT
+  // =====================
   static void insertHealthReport(HealthReport report) {
     db.execute(
       '''
@@ -219,35 +228,158 @@ class DatabaseService {
 
     return result.toList();
   }
+
+  // =====================
   // TEST DATA
-  static void seedTestData() {
-    final result = db.select("SELECT * FROM users");
+  // =====================
+  static void seedUsers() {
+  final result = db.select("SELECT * FROM users");
+  if (result.isNotEmpty) return;
 
-    if (result.isNotEmpty) return;
+  db.execute('''
+    INSERT INTO users (
+      id, name, phone, area,
+      emergencyContactName,
+      emergencyContactPhone,
+      emergencyContactRelation,
+      bloodType,
+      medicalInfo,
+      registeredAt
+    ) VALUES (
+      'U001',
+      '王小明',
+      '0912345678',
+      '台中',
+      '王爸爸',
+      '0987654321',
+      '父親',
+      'A',
+      '無',
+      ?
+    )
+  ''', [DateTime.now().toIso8601String()]);
 
-    db.execute('''
-      INSERT INTO users (
-        id, name, phone, area,
-        emergencyContactName,
-        emergencyContactPhone,
-        emergencyContactRelation,
-        bloodType,
-        medicalInfo,
-        registeredAt
-      ) VALUES (
-        'U001',
-        '王小明',
-        '0912345678',
-        '台中',
-        '王爸爸',
-        '0987654321',
-        '父親',
-        'A',
-        '無',
-        ?
-      )
-    ''', [DateTime.now().toIso8601String()]);
+  db.execute('''
+    INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ''', [
+    'U002',
+    '李小華',
+    '0911111111',
+    '台北',
+    '李媽媽',
+    '0922222222',
+    '母親',
+    'B',
+    '氣喘',
+    DateTime.now().toIso8601String(),
+  ]);
 
-    print("Seed test user created");
+  db.execute('''
+    INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ''', [
+    'U003',
+    '陳大明',
+    '0933333333',
+    '高雄',
+    '陳爸爸',
+    '0944444444',
+    '父親',
+    'O',
+    '糖尿病',
+    DateTime.now().toIso8601String(),
+  ]);
+
+  print("Seed users created");
+}
+
+static void seedHealthReports() {
+  db.execute("DELETE FROM health_reports"); // 強制清空（開發用）
+  
+  db.execute('''
+    INSERT INTO health_reports VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ''', [
+    null,
+    'R002',
+    'U002',
+    '李小華',
+    '0911111111',
+    'B',
+    'safe',
+    '狀況良好',
+    25.0330,
+    121.5654,
+    DateTime.now().toIso8601String(),
+  ]);
+
+  db.execute('''
+    INSERT INTO health_reports VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ''', [
+    null,
+    'R003',
+    'U003',
+    '陳大明',
+    '0933333333',
+    'O',
+    'critical',
+    '需要醫療協助',
+    22.6273,
+    120.3014,
+    DateTime.now().toIso8601String(),
+  ]);
+
+  print("Seed health reports created");
+}
+//總控
+static void seedAll() {
+  seedUsers();
+  seedHealthReports();
+}
+
+  // =====================
+  // SEARCH
+  // =====================
+  static List<Map<String, Object?>> searchReports(String keyword) {
+    final result = db.select(
+      '''
+      SELECT * FROM health_reports
+      WHERE name LIKE ?
+        OR status LIKE ?
+        OR description LIKE ?
+      ORDER BY reportTime DESC
+      ''',
+      ['%$keyword%', '%$keyword%', '%$keyword%'],
+    );
+
+    return result.toList();
+  }
+
+  static List<AppUser> searchUsers(String keyword) {
+    final result = db.select(
+      '''
+      SELECT * FROM users
+      WHERE name LIKE ?
+        OR phone LIKE ?
+        OR area LIKE ?
+      ''',
+      ['%$keyword%', '%$keyword%', '%$keyword%'],
+    );
+
+    return result.map((row) {
+      return AppUser(
+        id: row['id']?.toString() ?? '',
+        name: row['name']?.toString() ?? '',
+        phone: row['phone']?.toString() ?? '',
+        area: row['area']?.toString() ?? '',
+        emergencyContactName: row['emergencyContactName']?.toString() ?? '',
+        emergencyContactPhone: row['emergencyContactPhone']?.toString() ?? '',
+        emergencyContactRelation: row['emergencyContactRelation']?.toString() ?? '',
+        bloodType: row['bloodType']?.toString(),
+        medicalInfo: row['medicalInfo']?.toString(),
+        registeredAt: DateTime.parse(
+          row['registeredAt']?.toString() ??
+              DateTime.now().toIso8601String(),
+        ),
+      );
+    }).toList();
   }
 }

@@ -7,7 +7,7 @@ import 'package:admin_server/core/models/healthReport.dart';
 
 Future<void> main() async {
   await DatabaseService.init();
-  DatabaseService.seedTestData();
+  DatabaseService.seedAll();
 
   var server = await HttpServer.bind(
     InternetAddress.anyIPv4,
@@ -21,9 +21,7 @@ Future<void> main() async {
   }
 }
 
-/// =====================
-/// ✅ 共用：CORS Header
-/// =====================
+///共用：CORS Header
 void setCorsHeaders(HttpRequest request) {
   request.response.headers
     ..add("Access-Control-Allow-Origin", "*")
@@ -31,9 +29,7 @@ void setCorsHeaders(HttpRequest request) {
     ..add("Access-Control-Allow-Headers", "Content-Type, Authorization");
 }
 
-/// =====================
-/// ✅ 共用：JSON 回應
-/// =====================
+/// 共用：JSON 回應
 void sendJson(HttpRequest request, int status, Map<String, dynamic> data) {
   request.response.headers.contentType = ContentType.json;
   request.response
@@ -42,21 +38,17 @@ void sendJson(HttpRequest request, int status, Map<String, dynamic> data) {
     ..close();
 }
 
-/// =====================
-/// ✅ 共用：產生 Token（簡易版）
-/// =====================
+///共用：產生 Token
 String generateToken() {
   final rand = Random();
   return List.generate(32, (_) => rand.nextInt(16).toRadixString(16)).join();
 }
 
-/// =====================
 /// 主請求入口
-/// =====================
 Future<void> handleRequest(HttpRequest request) async {
   setCorsHeaders(request);
 
-  // ✅ 處理 preflight
+  //  處理 preflight
   if (request.method == 'OPTIONS') {
     request.response
       ..statusCode = HttpStatus.ok
@@ -84,7 +76,7 @@ Future<void> handleRequest(HttpRequest request) async {
 
     final type = jsonData['type'];
 
-    /// 🔀 API 分流
+    /// API 分流
     switch (type) {
       case 'healthReport':
         await handleHealthReport(jsonData, request);
@@ -106,6 +98,14 @@ Future<void> handleRequest(HttpRequest request) async {
         await handleGetAllUsers(request);
         break;
 
+      case 'searchUsers':
+        await handleSearchUsers(jsonData, request);
+        break;
+
+      case 'searchReports':
+        await handleSearchReports(jsonData, request);
+        break;
+
       default:
         sendJson(request, HttpStatus.badRequest, {
           "success": false,
@@ -122,9 +122,8 @@ Future<void> handleRequest(HttpRequest request) async {
   }
 }
 
-/// =====================
+
 /// 災情回報
-/// =====================
 Future<void> handleHealthReport(
   Map<String, dynamic> jsonData,
   HttpRequest request,
@@ -137,9 +136,9 @@ Future<void> handleHealthReport(
     bloodType: jsonData['bloodType'],
     status: jsonData['status'],
     description: jsonData['description'],
-    lat: jsonData['lat']?.toDouble(),
-    lng: jsonData['lng']?.toDouble(),
-    reportTime: DateTime.parse(jsonData['reportTime']),
+    lat: (jsonData['lat'] as num?)?.toDouble(),
+    lng: (jsonData['lng'] as num?)?.toDouble(),
+    reportTime: DateTime.tryParse(jsonData['reportTime'] ?? '') ?? DateTime.now(),
   );
 
   DatabaseService.insertHealthReport(report);
@@ -150,9 +149,7 @@ Future<void> handleHealthReport(
   });
 }
 
-/// =====================
 /// 登入（含 Token）
-/// =====================
 Future<void> handleLogin(
   Map<String, dynamic> jsonData,
   HttpRequest request,
@@ -167,7 +164,8 @@ Future<void> handleLogin(
 
     sendJson(request, HttpStatus.ok, {
       "success": true,
-      "token": token
+      "token": token,
+      "adminId": username,
     });
   } else {
     sendJson(request, HttpStatus.forbidden, {
@@ -177,9 +175,7 @@ Future<void> handleLogin(
   }
 }
 
-/// =====================
 /// 取得所有回報
-/// =====================
 Future<void> handleGetReports(HttpRequest request) async {
   final reports = DatabaseService.getAllReports();
 
@@ -189,9 +185,7 @@ Future<void> handleGetReports(HttpRequest request) async {
   });
 }
 
-/// =====================
 /// 取得單一使用者
-/// =====================
 Future<void> handleGetUser(
   Map<String, dynamic> jsonData,
   HttpRequest request,
@@ -214,9 +208,7 @@ Future<void> handleGetUser(
   });
 }
 
-/// =====================
 /// 取得全部使用者
-/// =====================
 Future<void> handleGetAllUsers(HttpRequest request) async {
   try {
     final users = DatabaseService.getAllUsers();
@@ -233,4 +225,30 @@ Future<void> handleGetAllUsers(HttpRequest request) async {
       "message": "Server error"
     });
   }
+}
+Future<void> handleSearchReports(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  final keyword = jsonData['keyword'] ?? '';
+
+  final results = DatabaseService.searchReports(keyword);
+
+  sendJson(request, HttpStatus.ok, {
+    "success": true,
+    "data": results,
+  });
+}
+Future<void> handleSearchUsers(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  final keyword = jsonData['keyword'] ?? '';
+
+  final results = DatabaseService.searchUsers(keyword);
+
+  sendJson(request, HttpStatus.ok, {
+    "success": true,
+    "data": results,
+  });
 }

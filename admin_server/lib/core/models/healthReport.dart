@@ -24,6 +24,7 @@ class HealthReport {
   });
 
   Map<String, dynamic> toJson() => {
+        'uuid': uuid,
         'reporterId': reporterId,
         'name': name,
         'phone': phone,
