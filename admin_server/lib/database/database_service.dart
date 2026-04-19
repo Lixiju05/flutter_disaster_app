@@ -195,9 +195,7 @@ class DatabaseService {
     }).toList();
   }
 
-  // =====================
   // HEALTH REPORT
-  // =====================
   static void insertHealthReport(HealthReport report) {
     db.execute(
       '''
@@ -221,17 +219,31 @@ class DatabaseService {
     );
   }
 
-  static List<Map<String, Object?>> getAllReports() {
+  static List<HealthReport> getAllReports() {
     final result = db.select(
-      'SELECT * FROM health_reports ORDER BY reportTime DESC'
+      'SELECT * FROM health_reports ORDER BY reportTime DESC',
     );
 
-    return result.toList();
+    return result.map((row) {
+      return HealthReport(
+        uuid: row['uuid']?.toString() ?? '',
+        reporterId: row['reporterId']?.toString() ?? '',
+        name: row['name']?.toString() ?? '',
+        phone: row['phone']?.toString() ?? '',
+        bloodType: row['bloodType']?.toString(),
+        status: row['status']?.toString() ?? '',
+        description: row['description']?.toString() ?? '',
+        lat: (row['lat'] as num?)?.toDouble(),
+        lng: (row['lng'] as num?)?.toDouble(),
+        reportTime: DateTime.tryParse(
+              row['reportTime']?.toString() ?? '',
+            ) ??
+            DateTime.now(),
+      );
+    }).toList();
   }
 
-  // =====================
   // TEST DATA
-  // =====================
   static void seedUsers() {
   final result = db.select("SELECT * FROM users");
   if (result.isNotEmpty) return;
@@ -294,11 +306,21 @@ class DatabaseService {
 
 static void seedHealthReports() {
   db.execute("DELETE FROM health_reports"); // 強制清空（開發用）
-  
+
   db.execute('''
-    INSERT INTO health_reports VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO health_reports (
+    uuid,
+    reporterId,
+    name,
+    phone,
+    bloodType,
+    status,
+    description,
+    lat,
+    lng,
+    reportTime
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ''', [
-    null,
     'R002',
     'U002',
     '李小華',
@@ -312,9 +334,19 @@ static void seedHealthReports() {
   ]);
 
   db.execute('''
-    INSERT INTO health_reports VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO health_reports (
+    uuid,
+    reporterId,
+    name,
+    phone,
+    bloodType,
+    status,
+    description,
+    lat,
+    lng,
+    reportTime
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ''', [
-    null,
     'R003',
     'U003',
     '陳大明',
@@ -335,9 +367,7 @@ static void seedAll() {
   seedHealthReports();
 }
 
-  // =====================
   // SEARCH
-  // =====================
   static List<Map<String, Object?>> searchReports(String keyword) {
     final result = db.select(
       '''

@@ -85,7 +85,9 @@ Future<void> handleRequest(HttpRequest request) async {
       case 'login':
         await handleLogin(jsonData, request);
         break;
-
+      case 'getAllReports':
+        await handleGetAllReports(request);
+        break;
       case 'getReports':
         await handleGetReports(request);
         break;
@@ -225,6 +227,14 @@ Future<void> handleGetAllUsers(HttpRequest request) async {
       "message": "Server error"
     });
   }
+}
+Future<void> handleGetAllReports(HttpRequest request) async {
+  final reports = DatabaseService.getAllReports();
+
+  sendJson(request, HttpStatus.ok, {
+    "success": true,
+    "data": reports.map((r) => r.toJson()).toList(),
+  });
 }
 Future<void> handleSearchReports(
   Map<String, dynamic> jsonData,
