@@ -3,7 +3,7 @@ import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
 import 'package:flutter_disaster_app/core/models/supply.dart';
 
 import 'dashboard_page.dart';
-import 'citizen_page.dart';
+import 'user_management_page.dart';
 import 'emergency_page.dart';
 import 'health_report_page.dart';
 
@@ -29,19 +29,40 @@ class _SupplyPageState extends State<SupplyPage> {
   late List<AdminSupply> _allSupplies;
   late List<AdminSupply> _filteredSupplies;
 
+  String _selectedCategory = '全部';
+
   @override
   void initState() {
     super.initState();
-    _allSupplies = repo.getAdminSupplies();
+    _allSupplies = List.from(repo.getAdminSupplies());
     _filteredSupplies = List.from(_allSupplies);
   }
 
-  void _searchSupply(String keyword) {
+  List<String> get categories {
+    final names = _allSupplies.map((e) => e.itemName).toSet().toList();
+    names.sort();
+    return ['全部', ...names];
+  }
+
+  void _applyFilters() {
+    final keyword = _searchController.text.trim().toLowerCase();
+
     setState(() {
       _filteredSupplies = _allSupplies.where((supply) {
-        return supply.itemName.toLowerCase().contains(keyword.toLowerCase());
+        final matchKeyword =
+            supply.itemName.toLowerCase().contains(keyword);
+
+        final matchCategory = _selectedCategory == '全部'
+            ? true
+            : supply.itemName == _selectedCategory;
+
+        return matchKeyword && matchCategory;
       }).toList();
     });
+  }
+
+  void _searchSupply(String keyword) {
+    _applyFilters();
   }
 
   int get totalItemKinds => _allSupplies.length;
@@ -53,6 +74,203 @@ class _SupplyPageState extends State<SupplyPage> {
 
   int get lowStockCount =>
       _allSupplies.where((item) => item.totalQuantity <= 10).length;
+
+  void _addSupply(String name, int quantity) {
+    setState(() {
+      _allSupplies.add(
+        AdminSupply(
+          itemName: name,
+          totalQuantity: quantity,
+        ),
+      );
+    });
+    _applyFilters();
+  }
+
+  void _editSupply(AdminSupply oldSupply, String newName, int newQuantity) {
+    final index = _allSupplies.indexOf(oldSupply);
+    if (index == -1) return;
+
+    setState(() {
+      _allSupplies[index] = AdminSupply(
+        itemName: newName,
+        totalQuantity: newQuantity,
+      );
+    });
+
+    if (_selectedCategory != '全部' &&
+        !categories.contains(_selectedCategory)) {
+      _selectedCategory = '全部';
+    }
+
+    _applyFilters();
+  }
+
+  void _deleteSupply(AdminSupply supply) {
+    setState(() {
+      _allSupplies.remove(supply);
+    });
+
+    if (_selectedCategory != '全部' &&
+        !categories.contains(_selectedCategory)) {
+      _selectedCategory = '全部';
+    }
+
+    _applyFilters();
+  }
+
+  Future<void> _showAddDialog() async {
+    final nameController = TextEditingController();
+    final quantityController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text('新增物資'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: '物資名稱',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: quantityController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: '數量',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                final quantity =
+                    int.tryParse(quantityController.text.trim()) ?? 0;
+
+                if (name.isEmpty) return;
+
+                _addSupply(name, quantity);
+                Navigator.pop(context);
+              },
+              child: const Text('新增'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showEditDialog(AdminSupply supply) async {
+    final nameController = TextEditingController(text: supply.itemName);
+    final quantityController =
+        TextEditingController(text: supply.totalQuantity.toString());
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text('編輯物資'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: '物資名稱',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: quantityController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: '數量',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                final quantity =
+                    int.tryParse(quantityController.text.trim()) ?? 0;
+
+                if (name.isEmpty) return;
+
+                _editSupply(supply, name, quantity);
+                Navigator.pop(context);
+              },
+              child: const Text('儲存'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showDeleteDialog(AdminSupply supply) async {
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text('刪除物資'),
+          content: Text('確定要刪除「${supply.itemName}」嗎？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                _deleteSupply(supply);
+                Navigator.pop(context);
+              },
+              child: const Text('刪除'),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,6 +293,8 @@ class _SupplyPageState extends State<SupplyPage> {
                     _buildSummaryCards(),
                     const SizedBox(height: 20),
                     _buildSearchAndActionBar(),
+                    const SizedBox(height: 16),
+                    _buildCategoryChips(),
                     const SizedBox(height: 20),
                     Expanded(
                       child: _buildSupplyTableCard(),
@@ -150,17 +370,19 @@ class _SupplyPageState extends State<SupplyPage> {
             onTap: () {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => DashboardPage()),
+                MaterialPageRoute(builder: (_) => const DashboardPage()),
               );
             },
           ),
           _buildSidebarItem(
             icon: Icons.people_alt_rounded,
-            title: '災民管理',
+            title: '用戶管理',
             onTap: () {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => const CitizenPage()),
+                MaterialPageRoute(
+                  builder: (_) => const UserManagementPage(),
+                ),
               );
             },
           ),
@@ -186,7 +408,7 @@ class _SupplyPageState extends State<SupplyPage> {
             onTap: () {
               Navigator.pushReplacement(
                 context,
-                MaterialPageRoute(builder: (_) => HealthReportPage()),
+                MaterialPageRoute(builder: (_) => const HealthReportPage()),
               );
             },
           ),
@@ -393,12 +615,20 @@ class _SupplyPageState extends State<SupplyPage> {
     return Row(
       children: [
         Expanded(
-          child: _buildMiniStatCard(
-            title: '物資種類',
-            value: totalItemKinds.toString(),
-            icon: Icons.category_rounded,
-            iconColor: const Color(0xFF4A90E2),
-            iconBg: const Color(0xFFEAF2FF),
+          child: GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedCategory = '全部';
+              });
+              _applyFilters();
+            },
+            child: _buildMiniStatCard(
+              title: '物資種類',
+              value: totalItemKinds.toString(),
+              icon: Icons.category_rounded,
+              iconColor: const Color(0xFF4A90E2),
+              iconBg: const Color(0xFFEAF2FF),
+            ),
           ),
         ),
         const SizedBox(width: 16),
@@ -536,7 +766,7 @@ class _SupplyPageState extends State<SupplyPage> {
             ],
           ),
           child: ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: _showAddDialog,
             icon: const Icon(Icons.add_box_rounded, color: Colors.white),
             label: const Text(
               '新增物資',
@@ -557,6 +787,45 @@ class _SupplyPageState extends State<SupplyPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCategoryChips() {
+    final chips = categories;
+
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: chips.map((category) {
+        final isSelected = _selectedCategory == category;
+
+        return InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: () {
+            setState(() {
+              _selectedCategory = category;
+            });
+            _applyFilters();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: isSelected ? accentBlue : Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: isSelected ? accentBlue : borderColor,
+              ),
+            ),
+            child: Text(
+              category,
+              style: TextStyle(
+                color: isSelected ? Colors.white : titleColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -694,14 +963,14 @@ class _SupplyPageState extends State<SupplyPage> {
                                     icon: Icons.edit_rounded,
                                     color: const Color(0xFF4A90E2),
                                     bgColor: const Color(0xFFEAF2FF),
-                                    onTap: () {},
+                                    onTap: () => _showEditDialog(supply),
                                   ),
                                   const SizedBox(width: 10),
                                   _buildActionButton(
                                     icon: Icons.delete_rounded,
                                     color: const Color(0xFFE53935),
                                     bgColor: const Color(0xFFFFEBEE),
-                                    onTap: () {},
+                                    onTap: () => _showDeleteDialog(supply),
                                   ),
                                 ],
                               ),

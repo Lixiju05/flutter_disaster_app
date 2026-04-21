@@ -1,5 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import '../repositories/healthReport_repository.dart';
+import 'package:http/http.dart' as http;
+
 import '../../core/models/healthReport.dart';
 import 'full_map_page.dart';
 
@@ -11,12 +14,19 @@ class HealthReportPage extends StatefulWidget {
 }
 
 class _HealthReportPageState extends State<HealthReportPage> {
-  final HealthReportRepository repo = HealthReportRepository();
   final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
 
+  List<HealthReport> _allReports = [];
   List<HealthReport> _reports = [];
+
+  bool _isLoading = false;
+  String _errorMessage = '';
+
   String selectedFilter = 'all';
   String searchKeyword = '';
+
+  static const String _baseUrl = 'http://localhost:8080';
 
   static const Color _bg = Color(0xFFF4F7FB);
   static const Color _navy = Color(0xFF163A63);
@@ -30,25 +40,143 @@ class _HealthReportPageState extends State<HealthReportPage> {
   @override
   void initState() {
     super.initState();
-    _reports = List<HealthReport>.from(repo.getReports());
+    loadReports();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _debounce?.cancel();
     super.dispose();
+  }
+
+  Future<void> loadReports() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse(_baseUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': 'getAllReports',
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        final loadedReports = (data['data'] as List)
+            .map((e) => HealthReport.fromJson(e))
+            .toList();
+
+        setState(() {
+          _allReports = loadedReports;
+          _reports = List.from(loadedReports);
+        });
+
+        _applyFilters();
+      } else {
+        setState(() {
+          _errorMessage = data['message'] ?? '取得健康回報資料失敗';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = '連線錯誤：$e';
+      });
+    }
+
+    setState(() {
+      _isLoading = false;
+    });
+  }
+
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      setState(() {
+        searchKeyword = value.trim().toLowerCase();
+      });
+      _applyFilters();
+    });
+  }
+
+  void _applyFilters() {
+    List<HealthReport> result = List.from(_allReports);
+
+    // 1. 先做狀態篩選
+    switch (selectedFilter) {
+      case 'safe':
+        result = result
+            .where((r) => _normalizeStatus(r.status) == 'safe')
+            .toList();
+        break;
+      case 'injured':
+        result = result
+            .where((r) => _normalizeStatus(r.status) == 'injured')
+            .toList();
+        break;
+      case 'critical':
+        result = result
+            .where((r) => _normalizeStatus(r.status) == 'critical')
+            .toList();
+        break;
+      case 'all':
+      default:
+        break;
+    }
+
+    // 2. 再做關鍵字搜尋
+    if (searchKeyword.isNotEmpty) {
+      result = result.where((r) {
+        final normalizedStatus = _normalizeStatus(r.status);
+        final statusZh = _translateStatus(normalizedStatus).toLowerCase();
+        final statusEn = normalizedStatus.toLowerCase();
+
+        final name = r.name.toLowerCase();
+        final id = r.reporterId.toLowerCase();
+        final phone = r.phone.toLowerCase();
+        final desc = (r.description ?? '').toLowerCase();
+        final location = _getLocationName(r).toLowerCase();
+
+        return name.contains(searchKeyword) ||
+            id.contains(searchKeyword) ||
+            phone.contains(searchKeyword) ||
+            desc.contains(searchKeyword) ||
+            statusZh.contains(searchKeyword) ||
+            statusEn.contains(searchKeyword) ||
+            location.contains(searchKeyword);
+      }).toList();
+    }
+
+    setState(() {
+      _reports = result;
+    });
+  }
+
+  String _normalizeStatus(String status) {
+    final s = status.trim().toLowerCase();
+
+    if (s == 'safe' || s == '安全') return 'safe';
+    if (s == 'injured' || s == '輕傷' || s == '轻伤') return 'injured';
+    if (s == 'critical' || s == '重傷' || s == '重伤') return 'critical';
+
+    return s;
   }
 
   @override
   Widget build(BuildContext context) {
-    final filteredReports = _getFilteredReports(_reports);
-    final safeCount =
-        _reports.where((r) => r.status == 'safe' || r.status == '安全').length;
-    final injuredCount = _reports
-        .where((r) => r.status == 'injured' || r.status == '輕傷')
+    final safeCount = _allReports
+        .where((r) => _normalizeStatus(r.status) == 'safe')
         .length;
-    final criticalCount = _reports
-        .where((r) => r.status == 'critical' || r.status == '重傷')
+    final injuredCount = _allReports
+        .where((r) => _normalizeStatus(r.status) == 'injured')
+        .length;
+    final criticalCount = _allReports
+        .where((r) => _normalizeStatus(r.status) == 'critical')
         .length;
 
     return Scaffold(
@@ -87,37 +215,46 @@ class _HealthReportPageState extends State<HealthReportPage> {
           ),
         ],
       ),
-      body: _reports.isEmpty
-          ? const Center(
-              child: Text(
-                '目前沒有健康回報資料',
-                style: TextStyle(color: _textSub),
-              ),
-            )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  _buildHeroHeader(),
-                  const SizedBox(height: 18),
-                  _buildStatsRow(
-                    total: _reports.length,
-                    safe: safeCount,
-                    injured: injuredCount,
-                    critical: criticalCount,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _errorMessage.isNotEmpty
+              ? Center(
+                  child: Text(
+                    _errorMessage,
+                    style: const TextStyle(color: Colors.red),
                   ),
-                  const SizedBox(height: 18),
-                  _buildSearchBar(),
-                  const SizedBox(height: 18),
-                  _buildFilterRow(),
-                  const SizedBox(height: 18),
-                  if (filteredReports.isEmpty)
-                    _buildEmptyState()
-                  else
-                    ...filteredReports.map(_buildPremiumCard),
-                ],
-              ),
-            ),
+                )
+              : _allReports.isEmpty
+                  ? const Center(
+                      child: Text(
+                        '目前沒有健康回報資料',
+                        style: TextStyle(color: _textSub),
+                      ),
+                    )
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          _buildHeroHeader(),
+                          const SizedBox(height: 18),
+                          _buildStatsRow(
+                            total: _allReports.length,
+                            safe: safeCount,
+                            injured: injuredCount,
+                            critical: criticalCount,
+                          ),
+                          const SizedBox(height: 18),
+                          _buildSearchBar(),
+                          const SizedBox(height: 18),
+                          _buildFilterRow(),
+                          const SizedBox(height: 18),
+                          if (_reports.isEmpty)
+                            _buildEmptyState()
+                          else
+                            ..._reports.map(_buildPremiumCard),
+                        ],
+                      ),
+                    ),
     );
   }
 
@@ -246,7 +383,12 @@ class _HealthReportPageState extends State<HealthReportPage> {
 
     return InkWell(
       borderRadius: BorderRadius.circular(20),
-      onTap: () => setState(() => selectedFilter = filter),
+      onTap: () {
+        setState(() {
+          selectedFilter = filter;
+        });
+        _applyFilters();
+      },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(18),
@@ -311,13 +453,24 @@ class _HealthReportPageState extends State<HealthReportPage> {
       ),
       child: TextField(
         controller: _searchController,
-        onChanged: (v) => setState(() => searchKeyword = v.trim().toLowerCase()),
-        decoration: const InputDecoration(
-          hintText: '搜尋姓名 / ID...',
-          hintStyle: TextStyle(color: _textSub),
-          prefixIcon: Icon(Icons.search, color: _textSub),
+        onChanged: _onSearchChanged,
+        decoration: InputDecoration(
+          hintText: '搜尋姓名 / 狀態 / 內容 / 電話 / ID / 地點...',
+          hintStyle: const TextStyle(color: _textSub),
+          prefixIcon: const Icon(Icons.search, color: _textSub),
+          suffixIcon: searchKeyword.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, color: _textSub),
+                  onPressed: () {
+                    _searchController.clear();
+                    searchKeyword = '';
+                    _applyFilters();
+                  },
+                )
+              : null,
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
       ),
     );
@@ -336,34 +489,39 @@ class _HealthReportPageState extends State<HealthReportPage> {
       ],
     );
   }
+
   Widget _buildFilterChip(String label, String filter) {
-  final isSelected = selectedFilter == filter;
+    final isSelected = selectedFilter == filter;
 
-  return InkWell(
-    borderRadius: BorderRadius.circular(28),
-    onTap: () => setState(() => selectedFilter = filter),
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: isSelected ? _blue : Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: isSelected ? _blue : _border,
+    return InkWell(
+      borderRadius: BorderRadius.circular(28),
+      onTap: () {
+        setState(() {
+          selectedFilter = filter;
+        });
+        _applyFilters();
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? _blue : Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(
+            color: isSelected ? _blue : _border,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : _textSub,
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+          ),
         ),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: isSelected ? Colors.white : _textSub,
-          fontWeight: FontWeight.w700,
-          fontSize: 13,
-        ),
-      ),
-    ),
-  );
-}
+    );
+  }
 
- 
   Widget _buildPremiumCard(HealthReport report) {
     final statusColor = _getStatusColor(report.status);
 
@@ -443,14 +601,23 @@ class _HealthReportPageState extends State<HealthReportPage> {
                     runSpacing: 10,
                     children: [
                       _buildInfoPill(Icons.phone_outlined, report.phone),
-                      _buildInfoPill(Icons.access_time, _formatTime(report.reportTime)),
-                      _buildInfoPill(Icons.location_on_outlined, _getLocationName(report)),
+                      _buildInfoPill(
+                        Icons.access_time,
+                        _formatTime(report.reportTime),
+                      ),
+                      _buildInfoPill(
+                        Icons.location_on_outlined,
+                        _getLocationName(report),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 14),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFF8FAFC),
                       borderRadius: BorderRadius.circular(14),
@@ -490,7 +657,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
                       icon: const Icon(Icons.map_outlined, size: 18),
                       label: const Text('地圖'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor:_blue,
+                        foregroundColor: _blue,
                         side: const BorderSide(color: _border),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -593,14 +760,11 @@ class _HealthReportPageState extends State<HealthReportPage> {
   }
 
   Color _getStatusColor(String status) {
-    switch (status) {
-      case '安全':
+    switch (_normalizeStatus(status)) {
       case 'safe':
         return const Color(0xFF22C55E);
-      case '輕傷':
       case 'injured':
         return const Color(0xFFF59E0B);
-      case '重傷':
       case 'critical':
         return const Color(0xFFEF4444);
       default:
@@ -609,14 +773,11 @@ class _HealthReportPageState extends State<HealthReportPage> {
   }
 
   IconData _getStatusIcon(String status) {
-    switch (status) {
-      case '安全':
+    switch (_normalizeStatus(status)) {
       case 'safe':
         return Icons.verified_user;
-      case '輕傷':
       case 'injured':
         return Icons.healing;
-      case '重傷':
       case 'critical':
         return Icons.warning_amber_rounded;
       default:
@@ -625,10 +786,16 @@ class _HealthReportPageState extends State<HealthReportPage> {
   }
 
   String _translateStatus(String status) {
-    if (status == 'safe') return '安全';
-    if (status == 'injured') return '輕傷';
-    if (status == 'critical') return '重傷';
-    return status;
+    switch (_normalizeStatus(status)) {
+      case 'safe':
+        return '安全';
+      case 'injured':
+        return '輕傷';
+      case 'critical':
+        return '重傷';
+      default:
+        return status;
+    }
   }
 
   String _formatTime(DateTime time) {
@@ -660,35 +827,6 @@ class _HealthReportPageState extends State<HealthReportPage> {
     }
 
     return '其他地點';
-  }
-
-  List<HealthReport> _getFilteredReports(List<HealthReport> reports) {
-    List<HealthReport> result = reports;
-
-    switch (selectedFilter) {
-      case 'safe':
-        result = result.where((r) => r.status == 'safe' || r.status == '安全').toList();
-        break;
-      case 'injured':
-        result = result.where((r) => r.status == 'injured' || r.status == '輕傷').toList();
-        break;
-      case 'critical':
-        result = result.where((r) => r.status == 'critical' || r.status == '重傷').toList();
-        break;
-      case 'all':
-      default:
-        break;
-    }
-
-    if (searchKeyword.isNotEmpty) {
-      result = result.where((r) {
-        final name = r.name.toLowerCase();
-        final id = r.reporterId.toLowerCase();
-        return name.contains(searchKeyword) || id.contains(searchKeyword);
-      }).toList();
-    }
-
-    return result;
   }
 
   void _showDetailDialog(BuildContext context, HealthReport report) {
@@ -737,7 +875,8 @@ class _HealthReportPageState extends State<HealthReportPage> {
                 ),
                 _buildDialogItem(
                   '補充說明',
-                  (report.description != null && report.description!.trim().isNotEmpty)
+                  (report.description != null &&
+                          report.description!.trim().isNotEmpty)
                       ? report.description!
                       : '無',
                 ),

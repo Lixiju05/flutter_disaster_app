@@ -1,16 +1,25 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+
 import '../../core/repositories/admin_repository.dart';
-import '../repositories/healthReport_repository.dart';
-import 'citizen_page.dart';
 import 'emergency_page.dart';
 import 'supply_page.dart';
 import 'health_report_page.dart';
 import 'login_page.dart';
+import 'user_management_page.dart';
 
-class DashboardPage extends StatelessWidget {
-  DashboardPage({super.key});
+class DashboardPage extends StatefulWidget {
+  const DashboardPage({super.key});
 
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
   final AdminRepository repository = AdminRepository();
+
+  static const String _baseUrl = 'http://localhost:8080';
 
   static const Color primaryBlue = Color(0xFF183B6B);
   static const Color sidebarBlue = Color(0xFF163A63);
@@ -19,6 +28,58 @@ class DashboardPage extends StatelessWidget {
   static const Color textDark = Color(0xFF1F2937);
   static const Color textSoft = Color(0xFF6B7280);
   static const Color borderColor = Color(0xFFE5E7EB);
+
+  int userCount = 0;
+  int healthReportCount = 0;
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboardCounts();
+  }
+
+  Future<void> _loadDashboardCounts() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      final usersResponse = await http.post(
+        Uri.parse(_baseUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': 'getAllUsers',
+        }),
+      );
+
+      final reportsResponse = await http.post(
+        Uri.parse(_baseUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'type': 'getAllReports',
+        }),
+      );
+
+      final usersData = jsonDecode(usersResponse.body);
+      final reportsData = jsonDecode(reportsResponse.body);
+
+      setState(() {
+        userCount = (usersData['success'] == true)
+            ? (usersData['data'] as List).length
+            : 0;
+        healthReportCount = (reportsData['success'] == true)
+            ? (reportsData['data'] as List).length
+            : 0;
+      });
+    } catch (e) {
+      debugPrint('Dashboard load error: $e');
+    }
+
+    setState(() {
+      isLoading = false;
+    });
+  }
 
   void _logout(BuildContext context) {
     showDialog(
@@ -62,17 +123,11 @@ class DashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final citizens = repository.getCitizens();
     final emergencies = repository.getEmergencies();
     final supplies = repository.getAdminSupplies();
-    final healthReports = HealthReportRepository().getReports();
 
-    final rescuedCount = citizens.where((c) => c.needsRescue).length;
-    final waitingRescueCount =
-        citizens.where((c) => !c.needsRescue).length;
     final emergencyCount = emergencies.length;
     final supplyCount = supplies.length;
-    final healthReportCount = healthReports.length;
 
     return Scaffold(
       backgroundColor: pageBg,
@@ -95,47 +150,50 @@ class DashboardPage extends StatelessWidget {
                       subtitle: '即時查看目前後台的重要統計資訊',
                     ),
                     const SizedBox(height: 18),
-                    Wrap(
-                      spacing: 18,
-                      runSpacing: 18,
-                      children: [
-                        _buildStatCard(
-                          title: '待救援人數',
-                          value: '$waitingRescueCount',
-                          icon: Icons.person_search_rounded,
-                          iconBg: const Color(0xFFE0F2FE),
-                          iconColor: const Color(0xFF0284C7),
+                    if (isLoading)
+                      const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: CircularProgressIndicator(),
                         ),
-                        _buildStatCard(
-                          title: '已救援人數',
-                          value: '$rescuedCount',
-                          icon: Icons.verified_rounded,
-                          iconBg: const Color(0xFFDCFCE7),
-                          iconColor: const Color(0xFF16A34A),
-                        ),
-                        _buildStatCard(
-                          title: '緊急事件',
-                          value: '$emergencyCount',
-                          icon: Icons.warning_amber_rounded,
-                          iconBg: const Color(0xFFFEF3C7),
-                          iconColor: const Color(0xFFD97706),
-                        ),
-                        _buildStatCard(
-                          title: '物資項目',
-                          value: '$supplyCount',
-                          icon: Icons.inventory_2_rounded,
-                          iconBg: const Color(0xFFEDE9FE),
-                          iconColor: const Color(0xFF7C3AED),
-                        ),
-                        _buildStatCard(
-                          title: '健康回報',
-                          value: '$healthReportCount',
-                          icon: Icons.favorite_rounded,
-                          iconBg: const Color(0xFFFCE7F3),
-                          iconColor: const Color(0xFFDB2777),
-                        ),
-                      ],
-                    ),
+                      )
+                    else
+                      Wrap(
+                        spacing: 18,
+                        runSpacing: 18,
+                        children: [
+                          _buildStatCard(
+                            title: '用戶總數',
+                            value: '$userCount',
+                            icon: Icons.people_alt_rounded,
+                            iconBg: const Color(0xFFE0F2FE),
+                            iconColor: const Color(0xFF0284C7),
+                          ),
+                          _buildStatCard(
+                            title: '緊急事件',
+                            value: '$emergencyCount',
+                            icon: Icons.warning_amber_rounded,
+                            iconBg: const Color(0xFFFEF3C7),
+                            iconColor: const Color(0xFFD97706),
+                          ),
+                          _buildStatCard(
+                            title: '物資項目',
+                            value: '$supplyCount',
+                            icon: Icons.inventory_2_rounded,
+                            iconBg: const Color(0xFFEDE9FE),
+                            iconColor: const Color(0xFF7C3AED),
+                          ),
+                          _buildStatCard(
+                            title: '健康回報',
+                            value: '$healthReportCount',
+                            icon: Icons.favorite_rounded,
+                            iconBg: const Color(0xFFFCE7F3),
+                            iconColor: const Color(0xFFDB2777),
+                          ),
+                        ],
+                      ),
+                    const SizedBox(height: 30),
+                    _buildQuickAccess(context),
                     const SizedBox(height: 30),
                     _buildSystemStatusOnly(),
                   ],
@@ -192,11 +250,13 @@ class DashboardPage extends StatelessWidget {
           ),
           _buildSidebarItem(
             icon: Icons.people_alt_rounded,
-            title: '災民管理',
+            title: '用戶管理',
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => CitizenPage()),
+                MaterialPageRoute(
+                  builder: (_) => const UserManagementPage(),
+                ),
               );
             },
           ),
@@ -226,7 +286,9 @@ class DashboardPage extends StatelessWidget {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => HealthReportPage()),
+                MaterialPageRoute(
+                  builder: (_) => const HealthReportPage(),
+                ),
               );
             },
           ),
@@ -434,7 +496,7 @@ class DashboardPage extends StatelessWidget {
                 ),
                 SizedBox(height: 10),
                 Text(
-                  '集中掌握災民、緊急事件、物資與健康回報資訊，提升管理效率與決策速度。',
+                  '集中掌握用戶、緊急事件、物資與健康回報資訊，提升管理效率與決策速度。',
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 15,
@@ -535,6 +597,141 @@ class DashboardPage extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildQuickAccess(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle(
+          title: '快速入口',
+          subtitle: '快速前往主要管理模組',
+        ),
+        const SizedBox(height: 18),
+        Wrap(
+          spacing: 18,
+          runSpacing: 18,
+          children: [
+            _buildQuickCard(
+              title: '用戶管理',
+              subtitle: '查詢姓名、電話、區域與詳細資料',
+              icon: Icons.people_alt_rounded,
+              color: const Color(0xFF0284C7),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const UserManagementPage(),
+                  ),
+                );
+              },
+            ),
+            _buildQuickCard(
+              title: '健康回報',
+              subtitle: '查看健康狀況、內容與地圖位置',
+              icon: Icons.favorite_rounded,
+              color: const Color(0xFFDB2777),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const HealthReportPage(),
+                  ),
+                );
+              },
+            ),
+            _buildQuickCard(
+              title: '物資管理',
+              subtitle: '查看並管理目前物資項目',
+              icon: Icons.inventory_2_rounded,
+              color: const Color(0xFF7C3AED),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => SupplyPage()),
+                );
+              },
+            ),
+            _buildQuickCard(
+              title: '緊急事件',
+              subtitle: '查看系統中的緊急事件清單',
+              icon: Icons.warning_amber_rounded,
+              color: const Color(0xFFD97706),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => EmergencyPage()),
+                );
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQuickCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Container(
+        width: 280,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: borderColor),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 10,
+              offset: Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: color.withOpacity(0.12),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: textSoft,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
