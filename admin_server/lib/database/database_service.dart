@@ -300,6 +300,20 @@ class DatabaseService {
     '糖尿病',
     DateTime.now().toIso8601String(),
   ]);
+  db.execute('''
+    INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ''', [
+    'U004',
+    '黃阿西',
+    '0925869345',
+    '新竹',
+    '鄭媽媽',
+    '0911547852',
+    '母親',
+    'AB',
+    '心悸',
+    DateTime.now().toIso8601String(),
+  ]);
 
   print("Seed users created");
 }
