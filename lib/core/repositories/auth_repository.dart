@@ -1,19 +1,21 @@
-import '../models/user.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../models/login_response.dart';
 
 class AuthRepository {
-  final List<User> _users = [];
-
-  bool register(String phone, String password) {
-    final exists = _users.any((u) => u.phone == phone);
-    if (exists) return false;
-
-    _users.add(User(phone: phone, password: password));
-    return true;
-  }
-
-  bool login(String phone, String password) {
-    return _users.any(
-      (u) => u.phone == phone && u.password == password,
+  Future<LoginResponse> login(String username, String password) async {
+    final response = await http.post(
+      Uri.parse("http:// https://delphine-eisteddfodic-afflictively.ngrok-free.dev/"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "type": "login",
+        "username": username,
+        "password": password,
+      }),
     );
+
+    final data = jsonDecode(response.body);
+
+    return LoginResponse.fromJson(data);
   }
 }
