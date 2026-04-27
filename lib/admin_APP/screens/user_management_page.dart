@@ -7,12 +7,14 @@ class UserManagementPage extends StatefulWidget {
   const UserManagementPage({super.key});
 
   @override
- State<UserManagementPage> createState() => _UserManagementPageState();
+  State<UserManagementPage> createState() => _UserManagementPageState();
 }
 
 class _UserManagementPageState extends State<UserManagementPage> {
   final TextEditingController _searchController = TextEditingController();
+
   Timer? _debounce;
+  Timer? _refreshTimer;
 
   List<dynamic> _allUsers = [];
   List<dynamic> _users = [];
@@ -40,21 +42,32 @@ class _UserManagementPageState extends State<UserManagementPage> {
   @override
   void initState() {
     super.initState();
+
     loadUsers();
+
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) {
+        loadUsers(showLoading: false);
+      },
+    );
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
+    _refreshTimer?.cancel();
     _debounce?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> loadUsers() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-    });
+  Future<void> loadUsers({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = '';
+      });
+    }
 
     try {
       final response = await http.post(
@@ -70,26 +83,33 @@ class _UserManagementPageState extends State<UserManagementPage> {
       if (response.statusCode == 200 && data['success'] == true) {
         final users = List<Map<String, dynamic>>.from(data['data']);
 
+        if (!mounted) return;
+
         setState(() {
           _allUsers = users;
-          _users = List.from(users);
         });
 
         _applyFilters();
       } else {
+        if (!mounted) return;
+
         setState(() {
           _errorMessage = data['message'] ?? '取得用戶資料失敗';
         });
       }
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         _errorMessage = '連線錯誤：$e';
       });
     }
 
-    setState(() {
-      _isLoading = false;
-    });
+    if (mounted && showLoading) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   void _onSearchChanged(String value) {
@@ -123,6 +143,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
             area.contains(_searchKeyword);
       }).toList();
     }
+
+    if (!mounted) return;
 
     setState(() {
       _users = result;

@@ -15,7 +15,8 @@ class HealthReportPage extends StatefulWidget {
 
 class _HealthReportPageState extends State<HealthReportPage> {
   final TextEditingController _searchController = TextEditingController();
-  Timer? _debounce;
+  Timer? _refreshTimer;
+  Timer? _searchTimer;
 
   List<HealthReport> _allReports = [];
   List<HealthReport> _reports = [];
@@ -38,19 +39,27 @@ class _HealthReportPageState extends State<HealthReportPage> {
   static const Color _blue = Color(0xFF2563EB);
 
   @override
-  void initState() {
-    super.initState();
-    loadReports();
-  }
+void initState() {
+  super.initState();
+  loadReports();
+
+  _refreshTimer = Timer.periodic(
+    const Duration(seconds: 5),
+    (_) => loadReports(),
+  );
+}
 
   @override
-  void dispose() {
-    _searchController.dispose();
-    _debounce?.cancel();
-    super.dispose();
-  }
+void dispose() {
+  _refreshTimer?.cancel();
+  _searchTimer?.cancel(); 
+  _searchController.dispose();
+  super.dispose();
+}
 
   Future<void> loadReports() async {
+    print('loadReports called at ${DateTime.now()}');
+
     setState(() {
       _isLoading = true;
       _errorMessage = '';
@@ -95,15 +104,15 @@ class _HealthReportPageState extends State<HealthReportPage> {
   }
 
   void _onSearchChanged(String value) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () {
-      setState(() {
-        searchKeyword = value.trim().toLowerCase();
-      });
-      _applyFilters();
-    });
-  }
+  _searchTimer?.cancel();
 
+  _searchTimer = Timer(const Duration(milliseconds: 300), () {
+    setState(() {
+      searchKeyword = value.trim().toLowerCase();
+    });
+    _applyFilters();
+  });
+}
   void _applyFilters() {
     List<HealthReport> result = List.from(_allReports);
 

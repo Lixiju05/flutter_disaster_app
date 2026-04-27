@@ -49,12 +49,10 @@ class _SupplyPageState extends State<SupplyPage> {
 
     setState(() {
       _filteredSupplies = _allSupplies.where((supply) {
-        final matchKeyword =
-            supply.itemName.toLowerCase().contains(keyword);
+        final matchKeyword = supply.itemName.toLowerCase().contains(keyword);
 
-        final matchCategory = _selectedCategory == '全部'
-            ? true
-            : supply.itemName == _selectedCategory;
+        final matchCategory =
+            _selectedCategory == '全部' ? true : supply.itemName == _selectedCategory;
 
         return matchKeyword && matchCategory;
       }).toList();
@@ -98,8 +96,7 @@ class _SupplyPageState extends State<SupplyPage> {
       );
     });
 
-    if (_selectedCategory != '全部' &&
-        !categories.contains(_selectedCategory)) {
+    if (_selectedCategory != '全部' && !categories.contains(_selectedCategory)) {
       _selectedCategory = '全部';
     }
 
@@ -111,8 +108,7 @@ class _SupplyPageState extends State<SupplyPage> {
       _allSupplies.remove(supply);
     });
 
-    if (_selectedCategory != '全部' &&
-        !categories.contains(_selectedCategory)) {
+    if (_selectedCategory != '全部' && !categories.contains(_selectedCategory)) {
       _selectedCategory = '全部';
     }
 
@@ -311,7 +307,7 @@ class _SupplyPageState extends State<SupplyPage> {
 
   Widget _buildSidebar(BuildContext context) {
     return Container(
-      width: 248,
+      width: 280,
       decoration: BoxDecoration(
         color: primaryBlue,
         boxShadow: [
@@ -352,10 +348,12 @@ class _SupplyPageState extends State<SupplyPage> {
                 const SizedBox(width: 12),
                 const Expanded(
                   child: Text(
-                    '防災後台系統',
+                    '災難管理系統',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 20,
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -364,9 +362,10 @@ class _SupplyPageState extends State<SupplyPage> {
             ),
           ),
           const SizedBox(height: 14),
+
           _buildSidebarItem(
             icon: Icons.dashboard_rounded,
-            title: 'Dashboard',
+            title: '儀表板',
             onTap: () {
               Navigator.pushReplacement(
                 context,
@@ -374,6 +373,7 @@ class _SupplyPageState extends State<SupplyPage> {
               );
             },
           ),
+
           _buildSidebarItem(
             icon: Icons.people_alt_rounded,
             title: '用戶管理',
@@ -386,12 +386,7 @@ class _SupplyPageState extends State<SupplyPage> {
               );
             },
           ),
-          _buildSidebarItem(
-            icon: Icons.inventory_2_rounded,
-            title: '物資管理',
-            selected: true,
-            onTap: () {},
-          ),
+
           _buildSidebarItem(
             icon: Icons.warning_amber_rounded,
             title: '緊急事件',
@@ -402,8 +397,16 @@ class _SupplyPageState extends State<SupplyPage> {
               );
             },
           ),
+
           _buildSidebarItem(
-            icon: Icons.health_and_safety_rounded,
+            icon: Icons.inventory_2_rounded,
+            title: '物資管理',
+            selected: true,
+            onTap: () {},
+          ),
+
+          _buildSidebarItem(
+            icon: Icons.favorite_rounded,
             title: '健康回報',
             onTap: () {
               Navigator.pushReplacement(
@@ -412,7 +415,9 @@ class _SupplyPageState extends State<SupplyPage> {
               );
             },
           ),
+
           const Spacer(),
+
           Padding(
             padding: const EdgeInsets.all(16),
             child: Container(
@@ -455,32 +460,45 @@ class _SupplyPageState extends State<SupplyPage> {
     bool selected = false,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: onTap,
           child: Ink(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            height: 64,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
             decoration: BoxDecoration(
-              color: selected ? Colors.white.withOpacity(0.12) : Colors.transparent,
+              color: selected
+                  ? Colors.white.withOpacity(0.14)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(16),
               border: selected
-                  ? Border.all(color: Colors.white.withOpacity(0.08))
+                  ? Border.all(color: Colors.white.withOpacity(0.10))
                   : null,
             ),
             child: Row(
               children: [
-                Icon(icon, color: Colors.white, size: 22),
-                const SizedBox(width: 12),
+                SizedBox(
+                  width: 30,
+                  child: Icon(
+                    icon,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Text(
                     title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.96),
-                      fontSize: 14.5,
-                      fontWeight: selected ? FontWeight.bold : FontWeight.w500,
+                      fontSize: 18,
+                      fontWeight:
+                          selected ? FontWeight.bold : FontWeight.w600,
                     ),
                   ),
                 ),

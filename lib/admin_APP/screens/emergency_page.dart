@@ -93,7 +93,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
 
   Widget _buildSidebar(BuildContext context) {
     return Container(
-      width: 248,
+      width: 280,
       decoration: BoxDecoration(
         color: primaryBlue,
         boxShadow: [
@@ -131,7 +131,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
                     size: 26,
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 14),
                 const Expanded(
                   child: Text(
                     '防災後台系統',
@@ -167,21 +167,21 @@ class _EmergencyPageState extends State<EmergencyPage> {
             },
           ),
           _buildSidebarItem(
-            icon: Icons.inventory_2_rounded,
-            title: '物資管理',
-            onTap: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => SupplyPage()),
-              );
-            },
-          ),
-          _buildSidebarItem(
-            icon: Icons.warning_amber_rounded,
-            title: '緊急事件',
-            selected: true,
-            onTap: () {},
-          ),
+  icon: Icons.warning_amber_rounded,
+  title: '緊急事件',
+  selected: true,
+  onTap: () {},
+),
+_buildSidebarItem(
+  icon: Icons.inventory_2_rounded,
+  title: '物資管理',
+  onTap: () {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const SupplyPage()),
+    );
+  },
+),
           _buildSidebarItem(
             icon: Icons.health_and_safety_rounded,
             title: '健康回報',
@@ -259,7 +259,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
                     title,
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.96),
-                      fontSize: 14.5,
+                      fontSize: 16.5,
                       fontWeight: selected ? FontWeight.bold : FontWeight.w500,
                     ),
                   ),

@@ -1,4 +1,5 @@
 import 'dart:convert';
+<<<<<<< Updated upstream
 import 'dart:io';
 import 'package:http/io_client.dart';
 
@@ -73,11 +74,50 @@ class ApiService {
       body: jsonEncode({
         "type": "searchUsers",
         "keyword": keyword,
+=======
+import 'package:http/http.dart' as http;
+
+class ApiServices {
+  static const String baseUrl = 'http://localhost:8080';
+
+  static Future<List<dynamic>> getAllUsers() async {
+    final response = await http.post(
+      Uri.parse(baseUrl),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'type': 'getAllUsers',
+>>>>>>> Stashed changes
       }),
     );
 
     final data = jsonDecode(response.body);
 
+<<<<<<< Updated upstream
     return data["data"] ?? [];
+=======
+    if (data['success'] == true) {
+      return data['data'];
+    } else {
+      return [];
+    }
+  }
+
+  static Future<List<dynamic>> getAllReports() async {
+    final response = await http.post(
+      Uri.parse(baseUrl),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({
+        'type': 'getAllReports',
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (data['success'] == true) {
+      return data['data'];
+    } else {
+      return [];
+    }
+>>>>>>> Stashed changes
   }
 }
