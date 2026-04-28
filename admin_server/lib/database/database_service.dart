@@ -196,7 +196,8 @@ class DatabaseService {
   }
 
   // HEALTH REPORT
-  static void insertHealthReport(HealthReport report) {
+  static Future<void> insertHealthReport(HealthReport report) async{
+    print("🔥 NEW DB METHOD CALLED");
     db.execute(
       '''
       INSERT OR IGNORE INTO health_reports (
@@ -304,7 +305,7 @@ class DatabaseService {
     INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   ''', [
     'U004',
-    '黃阿西',
+    '黃嘻嘻',
     '0925869345',
     '新竹',
     '鄭媽媽',

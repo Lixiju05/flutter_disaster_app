@@ -23,19 +23,32 @@ Future<void> main() async {
 
 ///共用：CORS Header
 void setCorsHeaders(HttpRequest request) {
-  request.response.headers
-    ..add("Access-Control-Allow-Origin", "*")
-    ..add("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-    ..add("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  request.response.headers.set('Access-Control-Allow-Origin', '*');
+  request.response.headers.set(
+    'Access-Control-Allow-Methods',
+    'GET, POST, OPTIONS',
+  );
+  request.response.headers.set(
+    'Access-Control-Allow-Headers',
+    'Origin, Content-Type, Accept, ngrok-skip-browser-warning',
+  );
+  request.response.headers.set('Access-Control-Max-Age', '86400');
 }
 
 /// 共用：JSON 回應
-void sendJson(HttpRequest request, int status, Map<String, dynamic> data) {
-  request.response.headers.contentType = ContentType.json;
+Future<void> sendJson(
+  HttpRequest request,
+  int statusCode,
+  Map<String, dynamic> data,
+) async {
+  setCorsHeaders(request);
+
   request.response
-    ..statusCode = status
-    ..write(jsonEncode(data))
-    ..close();
+    ..statusCode = statusCode
+    ..headers.contentType = ContentType.json
+    ..write(jsonEncode(data));
+
+  await request.response.close();
 }
 
 ///共用：產生 Token
@@ -46,35 +59,39 @@ String generateToken() {
 
 /// 主請求入口
 Future<void> handleRequest(HttpRequest request) async {
+  print("INCOMING REQUEST: ${request.method} ${request.uri}");
+
   setCorsHeaders(request);
 
-  //  處理 preflight
   if (request.method == 'OPTIONS') {
-    request.response
-      ..statusCode = HttpStatus.ok
-      ..close();
+    request.response.statusCode = HttpStatus.noContent;
+    await request.response.close();
     return;
   }
 
   if (request.method != 'POST') {
     sendJson(request, HttpStatus.methodNotAllowed, {
       "success": false,
-      "message": "Only POST supported"
+      "message": "Only POST supported",
     });
     return;
   }
 
   try {
-    var data = await request.fold<List<int>>(
-      [],
-      (prev, element) => prev..addAll(element),
-    );
+    final body = await utf8.decoder.bind(request).join();
+    print("BODY RAW: $body");
 
-    var body = utf8.decode(data);
-    print("BODY: $body");
-    var jsonData = jsonDecode(body);
+    if (body.trim().isEmpty) {
+      sendJson(request, HttpStatus.badRequest, {
+        "success": false,
+        "message": "Empty body",
+      });
+      return;
+    }
 
+    final jsonData = jsonDecode(body);
     final type = jsonData['type'];
+    print("TYPE: $type");
 
     /// API 分流
     switch (type) {
@@ -125,54 +142,92 @@ Future<void> handleRequest(HttpRequest request) async {
 }
 
 
-/// 災情回報
 Future<void> handleHealthReport(
   Map<String, dynamic> jsonData,
   HttpRequest request,
 ) async {
-  var report = HealthReport(
-    uuid: jsonData['uuid'],
-    reporterId: jsonData['reporterId'],
-    name: jsonData['name'],
-    phone: jsonData['phone'],
-    bloodType: jsonData['bloodType'],
-    status: jsonData['status'],
-    description: jsonData['description'],
-    lat: (jsonData['lat'] as num?)?.toDouble(),
-    lng: (jsonData['lng'] as num?)?.toDouble(),
-    reportTime: DateTime.tryParse(jsonData['reportTime'] ?? '') ?? DateTime.now(),
-  );
+  try {
+    print("1. ENTER handler");
 
-  DatabaseService.insertHealthReport(report);
+    final report = HealthReport(
+      uuid: jsonData['uuid'],
+      reporterId: jsonData['reporterId'],
+      name: jsonData['name'],
+      phone: jsonData['phone'],
+      bloodType: jsonData['bloodType'],
+      status: jsonData['status'],
+      description: jsonData['description'],
+      lat: (jsonData['lat'] as num?)?.toDouble(),
+      lng: (jsonData['lng'] as num?)?.toDouble(),
+      reportTime: DateTime.tryParse(jsonData['reportTime'] ?? '') ?? DateTime.now(),
+    );
 
-  sendJson(request, HttpStatus.ok, {
-    "success": true,
-    "message": "Saved to Database"
-  });
+    print("2. BEFORE DB");
+
+    await DatabaseService.insertHealthReport(report);
+
+    print("3. AFTER DB");
+
+    sendJson(request, 200, {
+      "success": true,
+      "message": "Saved"
+    });
+
+    print("4. AFTER RESPONSE");
+  } catch (e, stack) {
+    print("❌ ERROR: $e");
+    print(stack);
+
+    try {
+      sendJson(request, 500, {
+        "success": false,
+        "message": e.toString()
+      });
+    } catch (err) {
+      print("❌ FAILED TO SEND ERROR RESPONSE: $err");
+    }
+  }
 }
-
 /// 登入（含 Token）
 Future<void> handleLogin(
   Map<String, dynamic> jsonData,
   HttpRequest request,
 ) async {
-  final username = jsonData['username'];
-  final password = jsonData['password'];
+  try {
+    print("LOGIN ENTER");
 
-  final success = DatabaseService.checkLogin(username, password);
+    final username = jsonData['username'];
+    final password = jsonData['password'];
 
-  if (success) {
-    final token = generateToken();
+    if (username == null || password == null) {
+      sendJson(request, 400, {
+        "success": false,
+        "message": "Missing username or password"
+      });
+      return;
+    }
 
-    sendJson(request, HttpStatus.ok, {
-      "success": true,
-      "token": token,
-      "adminId": username,
-    });
-  } else {
-    sendJson(request, HttpStatus.forbidden, {
+    final success = DatabaseService.checkLogin(username, password);
+
+    if (success) {
+      sendJson(request, 200, {
+        "success": true,
+        "token": generateToken(),
+        "adminId": username,
+      });
+    } else {
+      sendJson(request, 403, {
+        "success": false,
+        "message": "Invalid credentials"
+      });
+    }
+  } catch (e, stack) {
+    print("LOGIN ERROR: $e");
+    print(stack);
+
+    sendJson(request, 500, {
       "success": false,
-      "message": "Invalid username or password"
+      "message": "Server error"
     });
   }
 }
