@@ -1,8 +1,14 @@
 import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
-void testRepository() {
+
+Future<void> testRepository() async {
   final repo = AdminRepository();
 
-  print(repo.getCitizens().length);
-  print(repo.getEmergencies().length);
-  print(repo.getAdminSupplies().length);
+  final citizens = await repo.getCitizens();
+  print('Citizens count: ${citizens.length}');
+
+  final emergencies = await repo.getEmergencies();
+  print('Emergencies count: ${emergencies.length}');
+
+  final supplies = await repo.getAdminSupplies();
+  print('Supplies count: ${supplies.length}');
 }

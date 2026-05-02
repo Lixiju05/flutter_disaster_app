@@ -17,15 +17,22 @@ class CitizenViewmodel extends ChangeNotifier{
     _isLoading=true;
     notifyListeners();
 
-    _citizens=_repository.getCitizens();
+    _citizens=await _repository.getCitizens();
 
     _isLoading=false;
     notifyListeners();
   }
   //搜尋民眾
-  void search(String keyword){
-    _citizens=_repository.getCitizens()
-    .where((c) => c.name.toLowerCase().contains(keyword.toLowerCase())).toList();
+  void search(String keyword) async {
+    // 如果你要重新從伺服器搜尋，要加上 await
+    // 如果只是在本地篩選，請確保 _citizens 已經被 await 過了
+    if (keyword.isEmpty) {
+      await loadCitizens();
+      return;
+    }
+    _citizens = _citizens
+        .where((c) => c.name.toLowerCase().contains(keyword.toLowerCase()))
+        .toList();
     notifyListeners();
   }
   //更新民眾是否需要救援

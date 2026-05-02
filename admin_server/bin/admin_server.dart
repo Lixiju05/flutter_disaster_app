@@ -7,7 +7,7 @@ import 'package:admin_server/core/models/healthReport.dart';
 
 Future<void> main() async {
   await DatabaseService.init();
-  DatabaseService.seedAll();
+  DatabaseService.instance.seedAll();
 
   var server = await HttpServer.bind(
     InternetAddress.anyIPv4,
@@ -125,6 +125,38 @@ Future<void> handleRequest(HttpRequest request) async {
         await handleSearchReports(jsonData, request);
         break;
 
+      case 'getInventory':
+        await handleGetInventory(request);
+        break;
+
+      case 'addInventory':
+        await handleAddInventory(jsonData, request);
+        break;
+
+      case 'updateStock':
+        await handleUpdateStock(jsonData, request);
+        break;
+
+      case 'updateNeeded':
+        await handleUpdateNeeded(jsonData, request);
+        break;
+
+      case 'allocate':
+        await handleAllocate(jsonData, request);
+        break;
+
+      case 'getAllocations':
+        await handleGetAllocations(request);
+        break;
+
+      case 'dispatch':
+        await handleDispatch(jsonData, request);
+        break;
+
+      case 'getDispatches':
+        await handleGetDispatches(request);
+        break;
+
       default:
         sendJson(request, HttpStatus.badRequest, {
           "success": false,
@@ -164,7 +196,7 @@ Future<void> handleHealthReport(
 
     print("2. BEFORE DB");
 
-    await DatabaseService.insertHealthReport(report);
+    await DatabaseService.instance.insertHealthReport(report);
 
     print("3. AFTER DB");
 
@@ -175,7 +207,7 @@ Future<void> handleHealthReport(
 
     print("4. AFTER RESPONSE");
   } catch (e, stack) {
-    print("❌ ERROR: $e");
+    print("ERROR: $e");
     print(stack);
 
     try {
@@ -184,7 +216,7 @@ Future<void> handleHealthReport(
         "message": e.toString()
       });
     } catch (err) {
-      print("❌ FAILED TO SEND ERROR RESPONSE: $err");
+      print(" FAILED TO SEND ERROR RESPONSE: $err");
     }
   }
 }
@@ -207,9 +239,9 @@ Future<void> handleLogin(
       return;
     }
 
-    final success = DatabaseService.checkLogin(username, password);
+    final success = DatabaseService.instance.checkLogin(username, password);
 
-    if (success) {
+    if (await success) {
       sendJson(request, 200, {
         "success": true,
         "token": generateToken(),
@@ -234,11 +266,11 @@ Future<void> handleLogin(
 
 /// 取得所有回報
 Future<void> handleGetReports(HttpRequest request) async {
-  final reports = DatabaseService.getAllReports();
+  final reports =await DatabaseService.instance.getAllReports();
 
   sendJson(request, HttpStatus.ok, {
     "success": true,
-    "data": reports,
+    "data":reports.map((r) => r.toJson()).toList(),
   });
 }
 
@@ -249,7 +281,7 @@ Future<void> handleGetUser(
 ) async {
   final id = jsonData['id'];
 
-  final user = DatabaseService.getUser(id);
+  final user =await DatabaseService.instance.getUser(id);
 
   if (user == null) {
     sendJson(request, HttpStatus.notFound, {
@@ -268,7 +300,7 @@ Future<void> handleGetUser(
 /// 取得全部使用者
 Future<void> handleGetAllUsers(HttpRequest request) async {
   try {
-    final users = DatabaseService.getAllUsers();
+    final users =await DatabaseService.instance.getAllUsers();
 
     sendJson(request, HttpStatus.ok, {
       "success": true,
@@ -284,7 +316,7 @@ Future<void> handleGetAllUsers(HttpRequest request) async {
   }
 }
 Future<void> handleGetAllReports(HttpRequest request) async {
-  final reports = DatabaseService.getAllReports();
+  final reports =await DatabaseService.instance.getAllReports();
 
   sendJson(request, HttpStatus.ok, {
     "success": true,
@@ -297,7 +329,7 @@ Future<void> handleSearchReports(
 ) async {
   final keyword = jsonData['keyword'] ?? '';
 
-  final results = DatabaseService.searchReports(keyword);
+  final results = DatabaseService.instance.searchReports(keyword);
 
   sendJson(request, HttpStatus.ok, {
     "success": true,
@@ -310,10 +342,115 @@ Future<void> handleSearchUsers(
 ) async {
   final keyword = jsonData['keyword'] ?? '';
 
-  final results = DatabaseService.searchUsers(keyword);
+  final results = DatabaseService.instance.searchUsers(keyword);
 
   sendJson(request, HttpStatus.ok, {
     "success": true,
     "data": results,
+  });
+}
+//查inventory
+Future<void> handleGetInventory(HttpRequest request) async {
+  final items = DatabaseService.instance.getAllInventory();
+
+  sendJson(request, 200, {
+    "success": true,
+    "data": items,
+  });
+}
+//新增物資
+Future<void> handleAddInventory(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  DatabaseService.instance.addInventory(
+    name: jsonData['name'],
+    category: jsonData['category'],
+    unit: jsonData['unit'],
+    stockQty: jsonData['stockQty'],
+    neededQty: jsonData['neededQty'] ?? 0,
+  );
+
+  sendJson(request, 200, {
+    "success": true,
+    "message": "Inventory added",
+  });
+}
+//補貨
+Future<void> handleUpdateStock(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  DatabaseService.instance.addStock(
+    jsonData['itemId'],
+    jsonData['qty'],
+  );
+
+  sendJson(request, 200, {
+    "success": true,
+    "message": "Stock updated",
+  });
+}
+//更新需求量
+Future<void> handleUpdateNeeded(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  DatabaseService.instance.updateNeeded(
+    jsonData['itemId'],
+    jsonData['neededQty'],
+  );
+
+  sendJson(request, 200, {
+    "success": true,
+    "message": "Needed updated",
+  });
+}
+//分配物資
+Future<void> handleAllocate(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  await DatabaseService.instance.allocate(
+    itemId: jsonData['itemId'],
+    zoneId: jsonData['zoneId'],
+    qty: jsonData['qty'],
+  );
+
+  sendJson(request, 200, {
+    "success": true,
+    "message": "Allocated",
+  });
+}
+//查allocation
+Future<void> handleGetAllocations(HttpRequest request) async {
+  final data = DatabaseService.instance.getAllocations();
+
+  sendJson(request, 200, {
+    "success": true,
+    "data": data,
+  });
+}
+//出貨
+Future<void> handleDispatch(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  await DatabaseService.instance.dispatch(
+    allocationId: jsonData['allocationId'],
+  );
+
+  sendJson(request, 200, {
+    "success": true,
+    "message": "Dispatched",
+  });
+}
+//查出貨紀錄
+Future<void> handleGetDispatches(HttpRequest request) async {
+  final data = DatabaseService.instance.getDispatches();
+
+  sendJson(request, 200, {
+    "success": true,
+    "data": data,
   });
 }

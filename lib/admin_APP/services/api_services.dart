@@ -1,12 +1,13 @@
 import 'dart:convert';
-<<<<<<< Updated upstream
 import 'dart:io';
 import 'package:http/io_client.dart';
 
 class ApiService {
+  // 使用 ngrok 網址，這樣手機實機與模擬器都能通
   static const String baseUrl =
       "https://delphine-eisteddfodic-afflictively.ngrok-free.dev";
 
+  /// 建立支持開發環境 (如 SSL 憑證跳過) 的 HttpClient
   static IOClient createHttpClient() {
     HttpClient client = HttpClient()
       ..badCertificateCallback =
@@ -15,11 +16,10 @@ class ApiService {
     return IOClient(client);
   }
 
-  /// LOGIN
+  /// 1. 登入功能
   static Future<bool> login(String username, String password) async {
     try {
       final client = createHttpClient();
-
       final response = await client.post(
         Uri.parse(baseUrl),
         headers: {"Content-Type": "application/json"},
@@ -33,16 +33,51 @@ class ApiService {
       final data = jsonDecode(response.body);
       return data["success"] == true;
     } catch (e) {
-      print("API error: $e");
+      print("LOGIN error: $e");
       return false;
     }
   }
 
-  /// SEARCH REPORTS
+  /// 2. 取得所有民眾
+  static Future<List<dynamic>> getAllUsers() async {
+    try {
+      final client = createHttpClient();
+      final response = await client.post(
+        Uri.parse(baseUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'type': 'getAllUsers'}),
+      );
+
+      final data = jsonDecode(response.body);
+      return (data['success'] == true) ? data['data'] : [];
+    } catch (e) {
+      print("GET ALL USERS error: $e");
+      return [];
+    }
+  }
+
+  /// 3. 取得所有回報
+  static Future<List<dynamic>> getAllReports() async {
+    try {
+      final client = createHttpClient();
+      final response = await client.post(
+        Uri.parse(baseUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'type': 'getAllReports'}),
+      );
+
+      final data = jsonDecode(response.body);
+      return (data['success'] == true) ? data['data'] : [];
+    } catch (e) {
+      print("GET ALL REPORTS error: $e");
+      return [];
+    }
+  }
+
+  /// 4. 搜尋回報
   static Future<List<dynamic>> searchReports(String keyword) async {
     try {
       final client = createHttpClient();
-
       final response = await client.post(
         Uri.parse(baseUrl),
         headers: {"Content-Type": "application/json"},
@@ -53,71 +88,31 @@ class ApiService {
       );
 
       final data = jsonDecode(response.body);
-
-      if (data["success"] == true) {
-        return data["data"];
-      } else {
-        return [];
-      }
+      return (data["success"] == true) ? data["data"] : [];
     } catch (e) {
-      print("SEARCH API error: $e");
+      print("SEARCH REPORTS error: $e");
       return [];
     }
   }
-  //SEARCH USERS
+
+  /// 5. 搜尋使用者
   static Future<List<dynamic>> searchUsers(String keyword) async {
-    final client = createHttpClient();
+    try {
+      final client = createHttpClient();
+      final response = await client.post(
+        Uri.parse(baseUrl),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "type": "searchUsers",
+          "keyword": keyword,
+        }),
+      );
 
-    final response = await client.post(
-      Uri.parse(baseUrl),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "type": "searchUsers",
-        "keyword": keyword,
-=======
-import 'package:http/http.dart' as http;
-
-class ApiServices {
-  static const String baseUrl = 'http://localhost:8080';
-
-  static Future<List<dynamic>> getAllUsers() async {
-    final response = await http.post(
-      Uri.parse(baseUrl),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'type': 'getAllUsers',
->>>>>>> Stashed changes
-      }),
-    );
-
-    final data = jsonDecode(response.body);
-
-<<<<<<< Updated upstream
-    return data["data"] ?? [];
-=======
-    if (data['success'] == true) {
-      return data['data'];
-    } else {
+      final data = jsonDecode(response.body);
+      return data["data"] ?? [];
+    } catch (e) {
+      print("SEARCH USERS error: $e");
       return [];
     }
-  }
-
-  static Future<List<dynamic>> getAllReports() async {
-    final response = await http.post(
-      Uri.parse(baseUrl),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'type': 'getAllReports',
-      }),
-    );
-
-    final data = jsonDecode(response.body);
-
-    if (data['success'] == true) {
-      return data['data'];
-    } else {
-      return [];
-    }
->>>>>>> Stashed changes
   }
 }
