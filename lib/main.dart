@@ -6,6 +6,7 @@ import 'admin_APP/viewModels/supply_viewmodel.dart';
 import 'admin_APP/viewModels/citizen_viewmodel.dart';
 import 'admin_APP/viewModels/emergency_viewmodel.dart';
 import 'admin_APP/viewModels/allocation_viewmodel.dart';
+import 'admin_APP/viewModels/weather_viewmodel.dart'; // 新增
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,6 +24,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => EmergencyViewModel()),
         ChangeNotifierProvider(create: (_) => AdminSupplyViewModel()),
         ChangeNotifierProvider(create: (_) => AllocationViewModel()),
+        ChangeNotifierProvider(create: (_) => WeatherViewModel()), // 新增
       ],
       child: MaterialApp(
         title: 'Flutter Disaster App',

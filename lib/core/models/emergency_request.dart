@@ -4,8 +4,9 @@ class EmergencyRequest {
   final double latitude;
   final double longitude;
   final String type;
+  final String description;
   final DateTime createdAt;
-  bool handled; // ← 新增，非 final 才能修改
+  bool handled;
 
   EmergencyRequest({
     required this.id,
@@ -13,21 +14,52 @@ class EmergencyRequest {
     required this.latitude,
     required this.longitude,
     required this.type,
+    required this.description,
     required this.createdAt,
-    this.handled = false, // ← 預設未處理
+    this.handled = false,
   });
 
-  factory EmergencyRequest.fromJson(Map<String, dynamic> json) {
+  factory EmergencyRequest.fromJson(
+    Map<String, dynamic> json,
+  ) {
     return EmergencyRequest(
-<<<<<<< HEAD
-      id: json['id']?.toString() ?? '',
-      citizenId: json['citizenId']?.toString() ?? '',
-      latitude: _toDouble(json['latitude']),
-      longitude: _toDouble(json['longitude']),
-      type: json['type']?.toString() ?? '',
-      createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '') ??
+      id: (json['id'] ?? json['uuid'] ?? '')
+          .toString(),
+
+      citizenId:
+          (json['citizenId'] ??
+                  json['reporterId'] ??
+                  '')
+              .toString(),
+
+      latitude: _toDouble(
+        json['latitude'] ?? json['lat'],
+      ),
+
+      longitude: _toDouble(
+        json['longitude'] ?? json['lng'],
+      ),
+
+      type: (json['type'] ??
+              json['status'] ??
+              'SOS')
+          .toString(),
+
+      description:
+          (json['description'] ?? '')
+              .toString(),
+
+      createdAt:
+          DateTime.tryParse(
+            json['createdAt']
+                    ?.toString() ??
+                '',
+          ) ??
           DateTime.now(),
-      handled: json['handled'] == true || json['handled'] == 1,
+
+      handled:
+          json['handled'] == true ||
+              json['handled'] == 1,
     );
   }
 
@@ -38,44 +70,52 @@ class EmergencyRequest {
       'latitude': latitude,
       'longitude': longitude,
       'type': type,
-      'createdAt': createdAt.toIso8601String(),
+      'description': description,
+      'createdAt':
+          createdAt.toIso8601String(),
       'handled': handled,
     };
   }
 
-  static double _toDouble(dynamic value) {
-    if (value == null) return 0;
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0;
-    return 0;
-  }
-=======
-      id: json['uuid']?.toString() ?? json['id']?.toString() ?? '',
-      citizenId: json['reporterId']?.toString() ?? '',
-      latitude: (json['lat'] as num?)?.toDouble() ?? 0.0,
-      longitude: (json['lng'] as num?)?.toDouble() ?? 0.0,
-      type: json['status']?.toString() ?? 'sos', // 根據你資料庫欄位調整
-      description: json['description']?.toString(),
-      // 處理 List<String>，如果傳過來的是 JSON 字串，需要做 decode
-      neededSupplies: json['neededSupplies'] != null 
-          ? List<String>.from(json['neededSupplies']) 
-          : null,
-      createdAt: DateTime.tryParse(json['reportTime'] ?? json['createdAt'] ?? '') ?? DateTime.now(),
-      // 處理 SQLite 存 0/1 的情況
-      handled: json['handled'] == 1 || json['handled'] == true,
+  EmergencyRequest copyWith({
+    String? id,
+    String? citizenId,
+    double? latitude,
+    double? longitude,
+    String? type,
+    String? description,
+    DateTime? createdAt,
+    bool? handled,
+  }) {
+    return EmergencyRequest(
+      id: id ?? this.id,
+      citizenId:
+          citizenId ?? this.citizenId,
+      latitude: latitude ?? this.latitude,
+      longitude:
+          longitude ?? this.longitude,
+      type: type ?? this.type,
+      description:
+          description ?? this.description,
+      createdAt:
+          createdAt ?? this.createdAt,
+      handled: handled ?? this.handled,
     );
   }
 
-  Map<String, dynamic> toJson() => {
-        'uuid': id,
-        'reporterId': citizenId,
-        'lat': latitude,
-        'lng': longitude,
-        'status': type,
-        'description': description,
-        'reportTime': createdAt.toIso8601String(),
-        'handled': handled ? 1 : 0,
-      };
->>>>>>> f69460cd2207e884a63750829a091e7e38ece7cf
+  static double _toDouble(dynamic value) {
+    if (value == null) return 0;
+
+    if (value is double) return value;
+
+    if (value is int) {
+      return value.toDouble();
+    }
+
+    if (value is String) {
+      return double.tryParse(value) ?? 0;
+    }
+
+    return 0;
+  }
 }

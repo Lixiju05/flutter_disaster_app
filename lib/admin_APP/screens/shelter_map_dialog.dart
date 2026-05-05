@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'dashboard_page.dart' show kBg, kCardBg, kCyan, kGreen, kMuted, kBorder;
 
@@ -84,8 +85,7 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
   int _selectedIndex = 0;
   final MapController _mapController = MapController();
 
-  int get _totalCapacity =>
-      kShelters.fold(0, (sum, s) => sum + s.capacity);
+  int get _totalCapacity => kShelters.fold(0, (sum, s) => sum + s.capacity);
 
   void _selectShelter(int index) {
     setState(() => _selectedIndex = index);
@@ -93,6 +93,30 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
       LatLng(kShelters[index].lat, kShelters[index].lng),
       15.5,
     );
+  }
+
+  Future<void> _openNavigation(ShelterData shelter) async {
+    final uri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1'
+      '&destination=${shelter.lat},${shelter.lng}'
+      '&travelmode=driving',
+    );
+
+    final ok = await launchUrl(
+      uri,
+      mode: LaunchMode.externalApplication,
+    );
+
+    if (!ok) {
+      debugPrint('無法開啟 Google Maps 導航');
+    }
+  }
+
+  String _formatNumber(int value) {
+    return value.toString().replaceAllMapped(
+          RegExp(r'\B(?=(\d{3})+(?!\d))'),
+          (m) => ',',
+        );
   }
 
   @override
@@ -115,42 +139,49 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
             ),
           ],
         ),
-        child: Column(children: [
-          _buildHeader(),
-          Expanded(
-            child: Row(children: [
-              // ── 左側清單 ──
-              Container(
-                width: 360,
-                decoration: const BoxDecoration(
-                  border: Border(
-                    right: BorderSide(color: Color(0xFF112233)),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                      child: Text('設施清單',
-                          style: TextStyle(
-                              color: kMuted, fontSize: 11, letterSpacing: 1.2)),
-                    ),
-                    Expanded(
-                      child: ListView.builder(
-                        padding: EdgeInsets.zero,
-                        itemCount: kShelters.length,
-                        itemBuilder: (_, i) => _buildListItem(i),
+        child: Column(
+          children: [
+            _buildHeader(),
+            Expanded(
+              child: Row(
+                children: [
+                  Container(
+                    width: 360,
+                    decoration: const BoxDecoration(
+                      border: Border(
+                        right: BorderSide(color: Color(0xFF112233)),
                       ),
                     ),
-                  ],
-                ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                          child: Text(
+                            '設施清單',
+                            style: TextStyle(
+                              color: kMuted,
+                              fontSize: 11,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: ListView.builder(
+                            padding: EdgeInsets.zero,
+                            itemCount: kShelters.length,
+                            itemBuilder: (_, i) => _buildListItem(i),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(child: _buildMap()),
+                ],
               ),
-              // ── 右側地圖 ──
-              Expanded(child: _buildMap()),
-            ]),
-          ),
-        ]),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -161,50 +192,58 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: Color(0xFF112233))),
       ),
-      child: Row(children: [
-        Container(
-          width: 38,
-          height: 38,
-          decoration: BoxDecoration(
-            color: Colors.amber.withOpacity(.15),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.amber.withOpacity(.3)),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.amber.withOpacity(.15),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.amber.withOpacity(.3)),
+            ),
+            child: const Icon(Icons.apartment, color: Colors.amber, size: 19),
           ),
-          child:
-              const Icon(Icons.apartment, color: Colors.amber, size: 19),
-        ),
-        const SizedBox(width: 14),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('防空避難設施地圖',
-              style: TextStyle(
+          const SizedBox(width: 14),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '防空避難設施地圖',
+                style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
-                  fontWeight: FontWeight.bold)),
-          Text('埔里鎮轄區內共 ${kShelters.length} 處避難設施',
-              style: TextStyle(color: kMuted, fontSize: 11)),
-        ]),
-        const Spacer(),
-        IconButton(
-          onPressed: () => Navigator.pop(context),
-          icon: const Icon(Icons.close, color: Colors.white54, size: 20),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-        ),
-      ]),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                '埔里鎮轄區內共 ${kShelters.length} 處避難設施',
+                style: TextStyle(color: kMuted, fontSize: 11),
+              ),
+            ],
+          ),
+          const Spacer(),
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close, color: Colors.white54, size: 20),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildListItem(int index) {
     final s = kShelters[index];
     final selected = _selectedIndex == index;
+
     return InkWell(
       onTap: () => _selectShelter(index),
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
         decoration: BoxDecoration(
-          color: selected
-              ? Colors.amber.withOpacity(.07)
-              : Colors.transparent,
+          color: selected ? Colors.amber.withOpacity(.07) : Colors.transparent,
           border: Border(
             left: BorderSide(
               color: selected ? Colors.amber : Colors.transparent,
@@ -213,61 +252,80 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
             bottom: const BorderSide(color: Color(0xFF0A1A28)),
           ),
         ),
-        child: Row(children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: selected
-                  ? Colors.amber.withOpacity(.18)
-                  : const Color(0xFF0A1824),
-              borderRadius: BorderRadius.circular(6),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color:
+                    selected ? Colors.amber.withOpacity(.18) : const Color(0xFF0A1824),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(
+                Icons.apartment,
+                color: selected ? Colors.amber : kMuted,
+                size: 16,
+              ),
             ),
-            child: Icon(Icons.apartment,
-                color: selected ? Colors.amber : kMuted, size: 16),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(s.name,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    s.name,
                     style: TextStyle(
-                        color: selected ? Colors.white : const Color(0xFFB0C8DC),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13)),
-                const SizedBox(height: 3),
-                Text(s.address,
-                    style: const TextStyle(color: kMuted, fontSize: 10)),
-                const SizedBox(height: 6),
-                Row(children: [
-                  _tag('可容納 ${s.capacity} 人', kGreen),
-                  const SizedBox(width: 6),
-                  _tag(s.floors, kCyan),
-                ]),
-              ],
+                      color: selected ? Colors.white : const Color(0xFFB0C8DC),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    s.address,
+                    style: const TextStyle(color: kMuted, fontSize: 10),
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      _tag('可容納 ${s.capacity} 人', kGreen),
+                      const SizedBox(width: 6),
+                      _tag(s.floors, kCyan),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          const Icon(Icons.chevron_right, color: kMuted, size: 16),
-        ]),
+            Icon(
+              Icons.chevron_right,
+              color: selected ? Colors.amber : kMuted,
+              size: 16,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _tag(String text, Color color) => Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-        decoration: BoxDecoration(
-          color: color.withOpacity(.12),
-          borderRadius: BorderRadius.circular(3),
-          border: Border.all(color: color.withOpacity(.3)),
+  Widget _tag(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.12),
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: color.withOpacity(.3)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
         ),
-        child: Text(text,
-            style: TextStyle(
-                color: color,
-                fontSize: 10,
-                fontWeight: FontWeight.bold)),
-      );
+      ),
+    );
+  }
 
   Widget _buildMap() {
     return ClipRRect(
@@ -275,146 +333,194 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
         topRight: Radius.circular(12),
         bottomRight: Radius.circular(12),
       ),
-      child: Stack(children: [
-        FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            initialCenter: LatLng(23.9609, 120.9683),
-            initialZoom: 14.5,
-            backgroundColor: const Color(0xFF060E18),
-          ),
-          children: [
-            // OpenStreetMap dark tile (CartoDB Dark Matter)
-            TileLayer(
-              urlTemplate:
-                  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-              subdomains: const ['a', 'b', 'c', 'd'],
-              userAgentPackageName: 'com.example.disaster_app',
+      child: Stack(
+        children: [
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: LatLng(23.9609, 120.9683),
+              initialZoom: 14.5,
+              backgroundColor: const Color(0xFF060E18),
             ),
-            // Shelter markers
-            MarkerLayer(
-              markers: kShelters.asMap().entries.map((entry) {
-                final i = entry.key;
-                final s = entry.value;
-                final selected = _selectedIndex == i;
-                return Marker(
-                  point: LatLng(s.lat, s.lng),
-                  width: selected ? 52 : 44,
-                  height: selected ? 52 : 44,
-                  child: GestureDetector(
-                    onTap: () => _selectShelter(i),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? Colors.amber
-                            : Colors.amber.withOpacity(.75),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white.withOpacity(.3),
-                          width: selected ? 2.5 : 1.5,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.amber.withOpacity(
-                                selected ? .6 : .3),
-                            blurRadius: selected ? 16 : 8,
-                            spreadRadius: selected ? 3 : 1,
+            children: [
+              TileLayer(
+                urlTemplate:
+                    'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                subdomains: const ['a', 'b', 'c', 'd'],
+                userAgentPackageName: 'com.example.disaster_app',
+              ),
+              MarkerLayer(
+                markers: kShelters.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final s = entry.value;
+                  final selected = _selectedIndex == i;
+
+                  return Marker(
+                    point: LatLng(s.lat, s.lng),
+                    width: selected ? 52 : 44,
+                    height: selected ? 52 : 44,
+                    child: GestureDetector(
+                      onTap: () => _selectShelter(i),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? Colors.amber
+                              : Colors.amber.withOpacity(.75),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withOpacity(.3),
+                            width: selected ? 2.5 : 1.5,
                           ),
-                        ],
-                      ),
-                      child: Icon(Icons.apartment,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.amber.withOpacity(
+                                selected ? .6 : .3,
+                              ),
+                              blurRadius: selected ? 16 : 8,
+                              spreadRadius: selected ? 3 : 1,
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          Icons.apartment,
                           color: Colors.white,
-                          size: selected ? 26 : 20),
+                          size: selected ? 26 : 20,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+
+          Positioned(
+            bottom: 12,
+            left: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xCC060E18),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: const Color(0xFF112233)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 14,
+                    height: 14,
+                    decoration: const BoxDecoration(
+                      color: Colors.amber,
+                      shape: BoxShape.circle,
                     ),
                   ),
-                );
-              }).toList(),
-            ),
-          ],
-        ),
-        // 圖例
-        Positioned(
-          bottom: 12,
-          left: 12,
-          child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xCC060E18),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: const Color(0xFF112233)),
-            ),
-            child: Row(children: [
-              Container(
-                width: 14,
-                height: 14,
-                decoration: const BoxDecoration(
-                  color: Colors.amber,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 7),
-              const Text('防空避難設施',
-                  style: TextStyle(color: Colors.white70, fontSize: 11)),
-            ]),
-          ),
-        ),
-        // 總容量
-        Positioned(
-          bottom: 12,
-          right: 12,
-          child: Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xCC060E18),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: Colors.amber.withOpacity(.3)),
-            ),
-            child: Text('總容量：${_totalCapacity.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',')} 人',
-                style: const TextStyle(
-                    color: Colors.amber,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12)),
-          ),
-        ),
-        // 選中設施資訊卡
-        if (_selectedIndex >= 0)
-          Positioned(
-            top: 12,
-            right: 12,
-            child: Container(
-              width: 200,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xEE060E18),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.amber.withOpacity(.35)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(kShelters[_selectedIndex].name,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12)),
-                  const SizedBox(height: 4),
-                  Text(kShelters[_selectedIndex].address,
-                      style: const TextStyle(
-                          color: kMuted, fontSize: 10)),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    _tag('容 ${kShelters[_selectedIndex].capacity} 人',
-                        kGreen),
-                    const SizedBox(width: 6),
-                    _tag(kShelters[_selectedIndex].floors, kCyan),
-                  ]),
+                  const SizedBox(width: 7),
+                  const Text(
+                    '防空避難設施',
+                    style: TextStyle(color: Colors.white70, fontSize: 11),
+                  ),
                 ],
               ),
             ),
           ),
-      ]),
+
+          Positioned(
+            bottom: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xCC060E18),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.amber.withOpacity(.3)),
+              ),
+              child: Text(
+                '總容量：${_formatNumber(_totalCapacity)} 人',
+                style: const TextStyle(
+                  color: Colors.amber,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ),
+
+          Positioned(
+            top: 12,
+            right: 12,
+            child: _selectedInfoCard(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _selectedInfoCard() {
+    final s = kShelters[_selectedIndex];
+
+    return Container(
+      width: 230,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xEE060E18),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.amber.withOpacity(.35)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.35),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            s.name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            s.address,
+            style: const TextStyle(color: kMuted, fontSize: 10),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _tag('容 ${s.capacity} 人', kGreen),
+              const SizedBox(width: 6),
+              _tag(s.floors, kCyan),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 36,
+            child: ElevatedButton.icon(
+              onPressed: () => _openNavigation(s),
+              icon: const Icon(Icons.navigation_rounded, size: 15),
+              label: const Text(
+                '導航前往',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber.withOpacity(.18),
+                foregroundColor: Colors.amber,
+                elevation: 0,
+                side: BorderSide(color: Colors.amber.withOpacity(.35)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(7),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

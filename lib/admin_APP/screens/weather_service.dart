@@ -14,7 +14,7 @@ class DisasterAlert {
   final String description;
   final String location;
   final DateTime time;
-  final String severity; // 輕度 / 中度 / 重度
+  final String severity;
   final Map<String, dynamic> raw;
 
   const DisasterAlert({
@@ -77,21 +77,19 @@ class WeatherService {
   static const String _cwaBase =
       'https://opendata.cwa.gov.tw/api/v1/rest/datastore';
 
-  // 中央氣象署開放資料 — 不需要 API Key 的公開端點
-  // 注意：部分端點可能需要授權，若回傳 401 請至 opendata.cwa.gov.tw 申請免費 Key
-  // 申請後將 Key 填入下方 _apiKey，並在請求加上 &Authorization=_apiKey
-  static const String _apiKey = 'YOUR_CWA_API_KEY'; // 選填
-
-  static String _auth() =>
-      _apiKey == 'YOUR_CWA_API_KEY' ? '' : '&Authorization=$_apiKey';
+  static String _auth(String apiKey) =>
+      apiKey.isNotEmpty ? '&Authorization=$apiKey' : '';
 
   // ── 地震速報 ──
-  static Future<List<DisasterAlert>> fetchEarthquakes() async {
+  static Future<List<DisasterAlert>> fetchEarthquakes({
+    String apiKey = '',
+  }) async {
     try {
       final url =
-          '$_cwaBase/E-A0015-001?format=JSON&limit=5${_auth()}';
-      final res = await http.get(Uri.parse(url)).timeout(
-          const Duration(seconds: 10));
+          '$_cwaBase/E-A0015-001?format=JSON&limit=5${_auth(apiKey)}';
+      final res = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return [];
       final data = jsonDecode(res.body);
       final records =
@@ -99,7 +97,8 @@ class WeatherService {
       return records.map((e) {
         final info = e['EarthquakeInfo'] ?? {};
         final epicenter = info['Epicenter'] ?? {};
-        final mag = info['EarthquakeMagnitude']?['MagnitudeValue'] ?? 0.0;
+        final mag =
+            info['EarthquakeMagnitude']?['MagnitudeValue'] ?? 0.0;
         final depth = info['FocalDepth'] ?? 0;
         final loc = epicenter['Location'] ?? '未知地點';
         final timeStr = info['OriginTime'] ?? '';
@@ -130,19 +129,23 @@ class WeatherService {
   }
 
   // ── 颱風資訊 ──
-  static Future<List<DisasterAlert>> fetchTyphoons() async {
+  static Future<List<DisasterAlert>> fetchTyphoons({
+    String apiKey = '',
+  }) async {
     try {
       final url =
-          '$_cwaBase/W-C0034-005?format=JSON${_auth()}';
-      final res = await http.get(Uri.parse(url)).timeout(
-          const Duration(seconds: 10));
+          '$_cwaBase/W-C0034-005?format=JSON${_auth(apiKey)}';
+      final res = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return [];
       final data = jsonDecode(res.body);
       final records =
           data['records']?['tropicalCyclones']?['tropicalCyclone']
               as List<dynamic>? ?? [];
       return records.map((t) {
-        final name = t['cwaTyphoonName'] ?? t['typhoonName'] ?? '颱風';
+        final name =
+            t['cwaTyphoonName'] ?? t['typhoonName'] ?? '颱風';
         final fixes = t['fix'] as List<dynamic>? ?? [];
         final latest = fixes.isNotEmpty ? fixes.last : {};
         final intensity = latest['intensity'] ?? '';
@@ -171,12 +174,15 @@ class WeatherService {
   }
 
   // ── 豪大雨特報 ──
-  static Future<List<DisasterAlert>> fetchHeavyRain() async {
+  static Future<List<DisasterAlert>> fetchHeavyRain({
+    String apiKey = '',
+  }) async {
     try {
       final url =
-          '$_cwaBase/W-C0033-001?format=JSON${_auth()}';
-      final res = await http.get(Uri.parse(url)).timeout(
-          const Duration(seconds: 10));
+          '$_cwaBase/W-C0033-001?format=JSON${_auth(apiKey)}';
+      final res = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return [];
       final data = jsonDecode(res.body);
       final records =
@@ -191,9 +197,8 @@ class WeatherService {
           final phenomena = info['phenomena'] ?? '';
           final significance = info['significance'] ?? '';
           if (phenomena.toString().isEmpty) continue;
-          final startStr = h['validTime']?['startCondition']
-                  ?['startTime'] ??
-              '';
+          final startStr =
+              h['validTime']?['startCondition']?['startTime'] ?? '';
           DateTime time;
           try {
             time = DateTime.parse(startStr);
@@ -219,11 +224,13 @@ class WeatherService {
   }
 
   // ── 整合所有災害通報 ──
-  static Future<List<DisasterAlert>> fetchAllAlerts() async {
+  static Future<List<DisasterAlert>> fetchAllAlerts({
+    String apiKey = '',
+  }) async {
     final results = await Future.wait([
-      fetchEarthquakes(),
-      fetchTyphoons(),
-      fetchHeavyRain(),
+      fetchEarthquakes(apiKey: apiKey),
+      fetchTyphoons(apiKey: apiKey),
+      fetchHeavyRain(apiKey: apiKey),
     ]);
     final all = results.expand((e) => e).toList();
     all.sort((a, b) => b.time.compareTo(a.time));
@@ -232,34 +239,27 @@ class WeatherService {
 }
 
 // ══════════════════════════════════════════════════════════
-//  RAINFALL / WATER LEVEL SERVICE（水利署）
+//  RAINFALL SERVICE（氣象署雨量測站）
 // ══════════════════════════════════════════════════════════
 
 class RainfallService {
-  // 水利署開放資料 API（免費公開）
-  static const String _wraBase =
-      'https://alerts.ncdr.nat.gov.tw/RssDetail.aspx?id=';
+  static const String _cwaBase =
+      'https://opendata.cwa.gov.tw/api/v1/rest/datastore';
 
-  // 改用環境部（原環保署）AQI + 水利署水文資料
-  // 水文資料端點（不需 Key）
-  static const String _hydroBase =
-      'https://opendata.wra.gov.tw/Service/OpenData?format=JSON';
+  // 南投縣埔里鎮附近測站
+  static const String _stationIds = 'C0I310,C0I280,C0I260';
 
-  // 南投縣埔里鎮附近測站 ID（眉溪/南港溪流域）
-  static const List<String> _targetStations = [
-    'C0I310', // 埔里測站
-    'C0I280', // 魚池測站
-    'C0I260', // 國姓測站
-  ];
-
-  static Future<List<RainfallStation>> fetchRainfall() async {
+  static Future<List<RainfallStation>> fetchRainfall({
+    String apiKey = '',
+  }) async {
     try {
-      // 氣象署雨量觀測端點
-      const url =
-          'https://opendata.cwa.gov.tw/api/v1/rest/datastore/'
-          'O-A0002-001?format=JSON&StationId=C0I310,C0I280,C0I260';
-      final res = await http.get(Uri.parse(url)).timeout(
-          const Duration(seconds: 10));
+      final auth =
+          apiKey.isNotEmpty ? '&Authorization=$apiKey' : '';
+      final url =
+          '$_cwaBase/O-A0002-001?format=JSON&StationId=$_stationIds$auth';
+      final res = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return _mockRainfall();
       final data = jsonDecode(res.body);
       final stations =
@@ -269,16 +269,20 @@ class RainfallService {
         final obs = s['RainfallElement'] ?? {};
         DateTime time;
         try {
-          time = DateTime.parse(s['ObsTime']?['DateTime'] ?? '');
+          time =
+              DateTime.parse(s['ObsTime']?['DateTime'] ?? '');
         } catch (_) {
           time = DateTime.now();
         }
         return RainfallStation(
           stationId: s['StationId'] ?? '',
           stationName: s['StationName'] ?? '',
-          rainfall10Min: _toDouble(obs['Now']?['Precipitation']),
-          rainfallHour: _toDouble(obs['Past1hr']?['Precipitation']),
-          rainfall24Hr: _toDouble(obs['Past24hr']?['Precipitation']),
+          rainfall10Min:
+              _toDouble(obs['Now']?['Precipitation']),
+          rainfallHour:
+              _toDouble(obs['Past1hr']?['Precipitation']),
+          rainfall24Hr:
+              _toDouble(obs['Past24hr']?['Precipitation']),
           waterLevel: 0.0,
           observeTime: time,
         );
@@ -294,7 +298,6 @@ class RainfallService {
     return double.tryParse(v.toString()) ?? 0.0;
   }
 
-  // 若 API 無法連線則回傳模擬資料（顯示 API 斷線提示）
   static List<RainfallStation> _mockRainfall() => [
         RainfallStation(
           stationId: 'MOCK',
@@ -316,15 +319,15 @@ class AqiService {
   static Future<AqiStation?> fetchNantouAqi() async {
     try {
       const url =
-          'https://data.moenv.gov.tw/api/v2/aqx_p_432?api_key='
-          'e8dd42e6-9b8b-43f8-991e-b3dee723a52d'
+          'https://data.moenv.gov.tw/api/v2/aqx_p_432'
+          '?api_key=e8dd42e6-9b8b-43f8-991e-b3dee723a52d'
           '&limit=1000&format=JSON';
-      final res = await http.get(Uri.parse(url)).timeout(
-          const Duration(seconds: 10));
+      final res = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) return null;
       final data = jsonDecode(res.body);
       final records = data['records'] as List<dynamic>? ?? [];
-      // 找南投測站
       final nantou = records.firstWhere(
         (r) => r['county'] == '南投縣',
         orElse: () => null,
@@ -341,8 +344,10 @@ class AqiService {
         county: nantou['county'] ?? '南投縣',
         aqi: int.tryParse(nantou['aqi']?.toString() ?? '0') ?? 0,
         status: nantou['status'] ?? '良好',
-        pm25: double.tryParse(nantou['pm2.5']?.toString() ?? '0') ?? 0,
-        pm10: double.tryParse(nantou['pm10']?.toString() ?? '0') ?? 0,
+        pm25:
+            double.tryParse(nantou['pm2.5']?.toString() ?? '0') ?? 0,
+        pm10:
+            double.tryParse(nantou['pm10']?.toString() ?? '0') ?? 0,
         publishTime: time,
       );
     } catch (e) {

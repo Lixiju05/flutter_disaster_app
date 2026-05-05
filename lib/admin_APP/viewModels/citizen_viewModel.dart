@@ -24,57 +24,32 @@ class CitizenViewmodel extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-<<<<<<< HEAD
     try {
-      final data = await _repository.getCitizens();
+      final List<Citizen> data = await _repository.getCitizens();
 
-      _allCitizens = data;
-      _citizens = data;
+      _allCitizens = List.from(data);
+      _citizens = List.from(data);
     } catch (e) {
       _errorMessage = '民眾資料載入失敗：$e';
-      _citizens = [];
       _allCitizens = [];
-=======
-    _citizens=await _repository.getCitizens();
-
-    _isLoading=false;
-    notifyListeners();
-  }
-  //搜尋民眾
-  void search(String keyword) async {
-    // 如果你要重新從伺服器搜尋，要加上 await
-    // 如果只是在本地篩選，請確保 _citizens 已經被 await 過了
-    if (keyword.isEmpty) {
-      await loadCitizens();
-      return;
-    }
-    _citizens = _citizens
-        .where((c) => c.name.toLowerCase().contains(keyword.toLowerCase()))
-        .toList();
-    notifyListeners();
-  }
-  //更新民眾是否需要救援
-  void updateNeedsRescue(Citizen citizen, bool needsRescue){
-    final index= _citizens.indexWhere((c) => c.id == citizen.id);
-    if (index != -1){
-      _citizens[index].needsRescue=needsRescue;
+      _citizens = [];
+    } finally {
+      _isLoading = false;
       notifyListeners();
->>>>>>> f69460cd2207e884a63750829a091e7e38ece7cf
     }
-
-    _isLoading = false;
-    notifyListeners();
   }
 
   void search(String keyword) {
     final text = keyword.trim().toLowerCase();
 
     if (text.isEmpty) {
-      _citizens = _allCitizens;
+      _citizens = List.from(_allCitizens);
     } else {
       _citizens = _allCitizens.where((c) {
-        return c.name.toLowerCase().contains(text) ||
-            c.id.toLowerCase().contains(text);
+        final name = c.name.toLowerCase();
+        final id = c.id.toString().toLowerCase();
+
+        return name.contains(text) || id.contains(text);
       }).toList();
     }
 
@@ -82,18 +57,29 @@ class CitizenViewmodel extends ChangeNotifier {
   }
 
   void updateNeedsRescue(Citizen citizen, bool needsRescue) {
-    final index = _citizens.indexWhere((c) => c.id == citizen.id);
-
-    if (index != -1) {
-      _citizens[index].needsRescue = needsRescue;
+    for (final c in _allCitizens) {
+      if (c.id == citizen.id) {
+        c.needsRescue = needsRescue;
+        break;
+      }
     }
 
-    final allIndex = _allCitizens.indexWhere((c) => c.id == citizen.id);
-
-    if (allIndex != -1) {
-      _allCitizens[allIndex].needsRescue = needsRescue;
+    for (final c in _citizens) {
+      if (c.id == citizen.id) {
+        c.needsRescue = needsRescue;
+        break;
+      }
     }
 
+    notifyListeners();
+  }
+
+  Future<void> refresh() async {
+    await loadCitizens();
+  }
+
+  void clearError() {
+    _errorMessage = null;
     notifyListeners();
   }
 }
