@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
-import 'admin_APP/screens/dashboard_page.dart';
-import 'admin_APP/server/http_server.dart';
+import 'package:provider/provider.dart';
+
 import 'admin_APP/screens/login_page.dart';
+import 'admin_APP/viewModels/supply_viewmodel.dart';
+import 'admin_APP/viewModels/citizen_viewmodel.dart';
+import 'admin_APP/viewModels/emergency_viewmodel.dart';
+import 'admin_APP/viewModels/allocation_viewmodel.dart';
 
 void main() async {
-  // Flutter 初始化
   WidgetsFlutterBinding.ensureInitialized();
-
-  // 啟動 HTTP Server
-  HttpServerService.start(); 
-  
   runApp(const MyApp());
 }
 
@@ -18,17 +17,25 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Disaster App',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFFF4F7FB),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1E3A5F),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CitizenViewmodel()),
+        ChangeNotifierProvider(create: (_) => EmergencyViewModel()),
+        ChangeNotifierProvider(create: (_) => AdminSupplyViewModel()),
+        ChangeNotifierProvider(create: (_) => AllocationViewModel()),
+      ],
+      child: MaterialApp(
+        title: 'Flutter Disaster App',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          scaffoldBackgroundColor: const Color(0xFFF4F7FB),
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF1E3A5F),
+          ),
+          useMaterial3: true,
         ),
-        useMaterial3: true,
+        home: const LoginPage(),
       ),
-      home: const LoginPage(),
     );
   }
-}//main.dart
+}

@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_disaster_app/core/models/emergency_request.dart';
-import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
+import 'package:flutter_disaster_app/admin_APP/viewModels/emergency_viewmodel.dart';
 
-import 'dashboard_page.dart';
-import 'citizen_page.dart';
-import 'supply_page.dart';
-import 'health_report_page.dart';
+const Color _kBg = Color(0xFF07131F);
+const Color _kCardBg = Color(0xFF0A1826);
+const Color _kCardBg2 = Color(0xFF0D2133);
+const Color _kCyan = Color(0xFF00C8FF);
+const Color _kGreen = Color(0xFF00D09C);
+const Color _kMuted = Color(0xFF5C7896);
+const Color _kBorder = Color(0xFF123047);
+const Color _kAmber = Color(0xFFFFC107);
+const Color _kRed = Color(0xFFFF4C4C);
+const Color _kPurple = Color(0xFFB45CFF);
 
 class EmergencyPage extends StatefulWidget {
   const EmergencyPage({super.key});
@@ -15,257 +22,34 @@ class EmergencyPage extends StatefulWidget {
 }
 
 class _EmergencyPageState extends State<EmergencyPage> {
-  final AdminRepository repo = AdminRepository();
-  final TextEditingController _searchController = TextEditingController();
-
-  static const Color primaryBlue = Color(0xFF183A61);
-  static const Color accentBlue = Color(0xFF4A90E2);
-  static const Color pageBg = Color(0xFFF4F7FB);
-  static const Color cardBg = Colors.white;
-  static const Color titleColor = Color(0xFF183153);
-  static const Color textSoft = Color(0xFF6B7A90);
-  static const Color borderColor = Color(0xFFE6ECF3);
-
-  late List<EmergencyRequest> _allEmergencies;
-  late List<EmergencyRequest> _filteredEmergencies;
-
   @override
   void initState() {
     super.initState();
-    _allEmergencies = repo.getEmergencies();
-    _filteredEmergencies = List.from(_allEmergencies);
-  }
-
-  void _searchEmergency(String keyword) {
-    setState(() {
-      _filteredEmergencies = _allEmergencies.where((event) {
-        return event.type.toLowerCase().contains(keyword.toLowerCase()) ||
-            event.id.toLowerCase().contains(keyword.toLowerCase()) ||
-            event.citizenId.toLowerCase().contains(keyword.toLowerCase());
-      }).toList();
+    Future.microtask(() {
+      context.read<EmergencyViewModel>().loadEmergencies();
     });
   }
 
-  int get totalCount => _allEmergencies.length;
-
-  int get sosCount => _allEmergencies
-      .where((e) => e.type.toLowerCase() == 'sos')
-      .length;
-
-  int get otherCount => _allEmergencies
-      .where((e) => e.type.toLowerCase() != 'sos')
-      .length;
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: pageBg,
-      body: Row(
-        children: [
-          _buildSidebar(context),
-          Expanded(
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildTopBar(),
-                    const SizedBox(height: 22),
-                    _buildHeaderBanner(),
-                    const SizedBox(height: 20),
-                    _buildSummaryCards(),
-                    const SizedBox(height: 20),
-                    _buildSearchAndActionBar(),
-                    const SizedBox(height: 20),
-                    Expanded(
-                      child: _buildEmergencyTableCard(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    final vm = context.watch<EmergencyViewModel>();
 
-  Widget _buildSidebar(BuildContext context) {
     return Container(
-      width: 280,
-      decoration: BoxDecoration(
-        color: primaryBlue,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(4, 0),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(20, 26, 20, 22),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Colors.white.withOpacity(0.08),
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.admin_panel_settings_rounded,
-                    color: Colors.white,
-                    size: 26,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                const Expanded(
-                  child: Text(
-                    '防災後台系統',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          _buildSidebarItem(
-            icon: Icons.dashboard_rounded,
-            title: 'Dashboard',
-            onTap: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => DashboardPage()),
-              );
-            },
-          ),
-          _buildSidebarItem(
-            icon: Icons.people_alt_rounded,
-            title: '災民管理',
-            onTap: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const CitizenPage()),
-              );
-            },
-          ),
-          _buildSidebarItem(
-  icon: Icons.warning_amber_rounded,
-  title: '緊急事件',
-  selected: true,
-  onTap: () {},
-),
-_buildSidebarItem(
-  icon: Icons.inventory_2_rounded,
-  title: '物資管理',
-  onTap: () {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const SupplyPage()),
-    );
-  },
-),
-          _buildSidebarItem(
-            icon: Icons.health_and_safety_rounded,
-            title: '健康回報',
-            onTap: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => HealthReportPage()),
-              );
-            },
-          ),
-          const Spacer(),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: const Row(
-                children: [
-                  Icon(
-                    Icons.notifications_active_rounded,
-                    color: Colors.white70,
-                    size: 18,
-                  ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '緊急通報需即時追蹤',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12.5,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSidebarItem({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-    bool selected = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Ink(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            decoration: BoxDecoration(
-              color: selected ? Colors.white.withOpacity(0.12) : Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-              border: selected
-                  ? Border.all(color: Colors.white.withOpacity(0.08))
-                  : null,
-            ),
-            child: Row(
-              children: [
-                Icon(icon, color: Colors.white, size: 22),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.96),
-                      fontSize: 16.5,
-                      fontWeight: selected ? FontWeight.bold : FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+      color: _kBg,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTopBar(),
+              const SizedBox(height: 18),
+              _buildHeaderBanner(),
+              const SizedBox(height: 18),
+              _buildSummaryCards(vm),
+              const SizedBox(height: 18),
+              Expanded(child: _buildEmergencyList(vm)),
+            ],
           ),
         ),
       ),
@@ -273,117 +57,99 @@ _buildSidebarItem(
   }
 
   Widget _buildTopBar() {
-    return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: const Row(
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '緊急事件管理',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: titleColor,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Emergency Response Center',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: textSoft,
-                  ),
-                ),
-              ],
+    return Row(
+      children: [
+        const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '緊急事件',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 30,
+                fontWeight: FontWeight.bold,
+                letterSpacing: .5,
+              ),
             ),
-          ),
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: Color(0xFFFFEBEE),
-            child: Icon(
-              Icons.warning_amber_rounded,
-              color: Color(0xFFE53935),
+            SizedBox(height: 5),
+            Text(
+              'EMERGENCY REQUEST CENTER',
+              style: TextStyle(
+                color: _kMuted,
+                fontSize: 11,
+                letterSpacing: 2,
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
+        const SizedBox(width: 14),
+        _chip('● 即時求救', _kRed),
+        const Spacer(),
+        _chip('USER APP REPORTS', _kMuted),
+      ],
     );
   }
 
   Widget _buildHeaderBanner() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
       decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kRed.withOpacity(.25)),
         gradient: const LinearGradient(
           colors: [
-            Color(0xFF7A1F1F),
-            Color(0xFFB83232),
-            Color(0xFFE76F51),
+            Color(0xFF3A1030),
+            Color(0xFF5A183A),
+            Color(0xFF7A223F),
           ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-            color: Colors.red.withOpacity(0.18),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
+            color: _kRed.withOpacity(.08),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Expanded(
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.emergency_rounded,
+              color: Colors.white,
+              size: 32,
+            ),
+          ),
+          const SizedBox(width: 18),
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '即時掌握緊急通報',
+                  '即時緊急求救事件',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 27,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 10),
+                SizedBox(height: 8),
                 Text(
-                  '在這裡可檢視 SOS 通報、事件類型、發生座標與建立時間，協助快速判斷與調度。',
+                  '以下為民眾從使用者 APP 回報的緊急求救事件，管理端負責查看與標記處理狀態。',
                   style: TextStyle(
                     color: Colors.white70,
-                    fontSize: 14.5,
+                    fontSize: 14,
                     height: 1.6,
                   ),
                 ),
               ],
-            ),
-          ),
-          SizedBox(width: 16),
-          CircleAvatar(
-            radius: 34,
-            backgroundColor: Color.fromRGBO(255, 255, 255, 0.16),
-            child: Icon(
-              Icons.campaign_rounded,
-              size: 34,
-              color: Colors.white,
             ),
           ),
         ],
@@ -391,60 +157,69 @@ _buildSidebarItem(
     );
   }
 
-  Widget _buildSummaryCards() {
+  Widget _buildSummaryCards(EmergencyViewModel vm) {
+    final total = vm.emergencies.length;
+    final handled = vm.emergencies.where((e) => e.handled).length;
+    final pending = total - handled;
+
     return Row(
       children: [
         Expanded(
-          child: _buildMiniStatCard(
-            title: '事件總數',
-            value: totalCount.toString(),
+          child: _summaryCard(
+            title: '總事件數',
+            value: total.toString(),
             icon: Icons.list_alt_rounded,
-            iconColor: const Color(0xFF4A90E2),
-            iconBg: const Color(0xFFEAF2FF),
+            color: _kPurple,
+            bg: const Color(0xFF2A1640),
+            tag: '總計',
           ),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 14),
         Expanded(
-          child: _buildMiniStatCard(
-            title: 'SOS 事件',
-            value: sosCount.toString(),
-            icon: Icons.sos_rounded,
-            iconColor: const Color(0xFFE53935),
-            iconBg: const Color(0xFFFFEBEE),
+          child: _summaryCard(
+            title: '待處理',
+            value: pending.toString(),
+            icon: Icons.warning_amber_rounded,
+            color: _kAmber,
+            bg: const Color(0xFF3A2A05),
+            tag: '警戒',
           ),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 14),
         Expanded(
-          child: _buildMiniStatCard(
-            title: '其他事件',
-            value: otherCount.toString(),
-            icon: Icons.report_gmailerrorred_rounded,
-            iconColor: const Color(0xFFF59E0B),
-            iconBg: const Color(0xFFFFF4E5),
+          child: _summaryCard(
+            title: '已處理',
+            value: handled.toString(),
+            icon: Icons.check_circle_rounded,
+            color: _kGreen,
+            bg: const Color(0xFF062B23),
+            tag: '完成',
           ),
         ),
       ],
     );
   }
 
-  Widget _buildMiniStatCard({
+  Widget _summaryCard({
     required String title,
     required String value,
     required IconData icon,
-    required Color iconColor,
-    required Color iconBg,
+    required Color color,
+    required Color bg,
+    required String tag,
   }) {
     return Container(
+      height: 102,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: borderColor),
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(.35)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
+            color: color.withOpacity(.08),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -454,349 +229,283 @@ _buildSidebarItem(
             width: 52,
             height: 52,
             decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(16),
+              color: color.withOpacity(.13),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: iconColor, size: 28),
+            child: Icon(icon, color: color, size: 24),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 16),
           Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13.5,
-                  color: textSoft,
-                  fontWeight: FontWeight.w500,
+                value,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 34,
+                  fontWeight: FontWeight.bold,
+                  height: 1,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: titleColor,
-                ),
+                title,
+                style: const TextStyle(color: _kMuted, fontSize: 14),
               ),
             ],
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withOpacity(.12),
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: Text(
+              tag,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSearchAndActionBar() {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            height: 58,
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: borderColor),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.025),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: TextField(
-              controller: _searchController,
-              onChanged: _searchEmergency,
-              decoration: InputDecoration(
-                hintText: '請輸入事件類型、事件 ID 或災民 ID 搜尋',
-                hintStyle: const TextStyle(color: textSoft),
-                prefixIcon: const Icon(Icons.search_rounded, color: textSoft),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Container(
-          height: 58,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFB83232), Color(0xFFE76F51)],
-            ),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.red.withOpacity(0.22),
-                blurRadius: 14,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: ElevatedButton.icon(
-            onPressed: () {},
-            icon: const Icon(Icons.add_alert_rounded, color: Colors.white),
-            label: const Text(
-              '新增事件',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            style: ElevatedButton.styleFrom(
-              elevation: 0,
-              backgroundColor: Colors.transparent,
-              shadowColor: Colors.transparent,
-              padding: const EdgeInsets.symmetric(horizontal: 22),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget _buildEmergencyList(EmergencyViewModel vm) {
+    if (vm.isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: _kRed),
+      );
+    }
 
-  Widget _buildEmergencyTableCard() {
+    if (vm.errorMessage != null) {
+      return Center(
+        child: Text(
+          vm.errorMessage!,
+          style: const TextStyle(color: _kRed),
+        ),
+      );
+    }
+
+    if (vm.emergencies.isEmpty) {
+      return _buildEmptyState();
+    }
+
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: borderColor),
+        color: _kCardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _kBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
-            blurRadius: 16,
+            color: Colors.black.withOpacity(.28),
+            blurRadius: 18,
             offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Column(
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: vm.emergencies.length,
+        itemBuilder: (context, index) {
+          final emergency = vm.emergencies[index];
+          return _buildEmergencyCard(emergency, vm, index);
+        },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(26),
+        decoration: BoxDecoration(
+          color: const Color(0xFF081C2B),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _kRed.withOpacity(.18)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.verified_user_outlined,
+              color: _kGreen.withOpacity(.75),
+              size: 46,
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              '目前沒有緊急事件',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '使用者 APP 若送出求救回報，事件會自動同步到這裡。',
+              style: TextStyle(
+                color: _kMuted,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmergencyCard(
+    EmergencyRequest emergency,
+    EmergencyViewModel vm,
+    int index,
+  ) {
+    final color = emergency.handled ? _kGreen : _kAmber;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: index.isEven ? _kCardBg2 : const Color(0xFF091625),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: emergency.handled
+              ? _kGreen.withOpacity(.25)
+              : _kAmber.withOpacity(.28),
+        ),
+      ),
+      child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            width: 52,
+            height: 52,
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFD),
-              borderRadius: BorderRadius.circular(16),
+              color: color.withOpacity(.13),
+              borderRadius: BorderRadius.circular(14),
             ),
-            child: const Row(
+            child: Icon(
+              emergency.handled
+                  ? Icons.check_circle_rounded
+                  : Icons.warning_amber_rounded,
+              color: color,
+              size: 26,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    '事件 ID',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: titleColor,
-                    ),
+                Text(
+                  '求救類型：${emergency.type}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Colors.white,
                   ),
                 ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    '災民 ID',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: titleColor,
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(Icons.location_on, color: _kCyan.withOpacity(.7), size: 14),
+                    const SizedBox(width: 5),
+                    Text(
+                      '${emergency.latitude.toStringAsFixed(4)}, ${emergency.longitude.toStringAsFixed(4)}',
+                      style: const TextStyle(color: _kMuted, fontSize: 13),
                     ),
-                  ),
+                  ],
                 ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    '事件類型',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: titleColor,
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.access_time, color: _kMuted.withOpacity(.8), size: 14),
+                    const SizedBox(width: 5),
+                    Text(
+                      emergency.createdAt.toString().substring(0, 16),
+                      style: const TextStyle(color: _kMuted, fontSize: 12),
                     ),
-                  ),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    '發生座標',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: titleColor,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    '建立時間',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: titleColor,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    '操作',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: titleColor,
-                    ),
-                  ),
+                  ],
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: _filteredEmergencies.isEmpty
-                ? const Center(
-                    child: Text(
-                      '查無符合資料',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: textSoft,
-                      ),
-                    ),
-                  )
-                : ListView.separated(
-                    itemCount: _filteredEmergencies.length,
-                    separatorBuilder: (_, __) => const Divider(
-                      height: 1,
-                      color: Color(0xFFEDF2F7),
-                    ),
-                    itemBuilder: (context, index) {
-                      final event = _filteredEmergencies[index];
-
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 14,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                event.id,
-                                style: const TextStyle(
-                                  fontSize: 14.5,
-                                  fontWeight: FontWeight.w600,
-                                  color: titleColor,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                event.citizenId,
-                                style: const TextStyle(
-                                  fontSize: 14.5,
-                                  color: textSoft,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: _buildTypeChip(event.type),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: Text(
-                                '${event.latitude}, ${event.longitude}',
-                                style: const TextStyle(
-                                  fontSize: 14.5,
-                                  color: textSoft,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: Text(
-                                _formatDateTime(event.createdAt),
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  color: textSoft,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Row(
-                                children: [
-                                  _buildActionButton(
-                                    icon: Icons.visibility_rounded,
-                                    color: const Color(0xFF4A90E2),
-                                    bgColor: const Color(0xFFEAF2FF),
-                                    onTap: () {},
-                                  ),
-                                  const SizedBox(width: 10),
-                                  _buildActionButton(
-                                    icon: Icons.edit_rounded,
-                                    color: const Color(0xFFF59E0B),
-                                    bgColor: const Color(0xFFFFF4E5),
-                                    onTap: () {},
-                                  ),
-                                  const SizedBox(width: 10),
-                                  _buildActionButton(
-                                    icon: Icons.delete_rounded,
-                                    color: const Color(0xFFE53935),
-                                    bgColor: const Color(0xFFFFEBEE),
-                                    onTap: () {},
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-          ),
+          _statusBadge(emergency.handled),
+          const SizedBox(width: 12),
+          if (!emergency.handled)
+            ElevatedButton.icon(
+              onPressed: () {
+                vm.markHandled(emergency);
+              },
+              icon: const Icon(Icons.check_circle_outline, size: 17),
+              label: const Text('標記已處理'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kGreen,
+                foregroundColor: Colors.black,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: _kGreen.withOpacity(.12),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: _kGreen.withOpacity(.35)),
+              ),
+              child: const Text(
+                '已完成',
+                style: TextStyle(
+                  color: _kGreen,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildTypeChip(String type) {
-    Color bgColor;
-    Color textColor;
-    IconData icon;
-
-    if (type.toLowerCase() == 'sos') {
-      bgColor = const Color(0xFFFFEBEE);
-      textColor = const Color(0xFFE53935);
-      icon = Icons.sos_rounded;
-    } else {
-      bgColor = const Color(0xFFEAF2FF);
-      textColor = const Color(0xFF1E88E5);
-      icon = Icons.report_problem_rounded;
-    }
+  Widget _statusBadge(bool handled) {
+    final color = handled ? _kGreen : _kAmber;
+    final text = handled ? '已處理' : '待處理';
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(999),
+        color: color.withOpacity(.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(.35)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: textColor),
-          const SizedBox(width: 6),
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: color.withOpacity(.45), blurRadius: 8),
+              ],
+            ),
+          ),
+          const SizedBox(width: 7),
           Text(
-            type.toUpperCase(),
+            text,
             style: TextStyle(
-              color: textColor,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
             ),
           ),
         ],
@@ -804,34 +513,22 @@ _buildSidebarItem(
     );
   }
 
-  Widget _buildActionButton({
-    required IconData icon,
-    required Color color,
-    required Color bgColor,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Ink(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(12),
+  static Widget _chip(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.10),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(.28)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
         ),
-        child: Icon(icon, size: 20, color: color),
       ),
     );
-  }
-
-  String _formatDateTime(DateTime dateTime) {
-    final year = dateTime.year.toString().padLeft(4, '0');
-    final month = dateTime.month.toString().padLeft(2, '0');
-    final day = dateTime.day.toString().padLeft(2, '0');
-    final hour = dateTime.hour.toString().padLeft(2, '0');
-    final minute = dateTime.minute.toString().padLeft(2, '0');
-
-    return '$year/$month/$day  $hour:$minute';
   }
 }

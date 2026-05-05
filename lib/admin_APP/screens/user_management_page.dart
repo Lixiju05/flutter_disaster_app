@@ -1,8 +1,8 @@
+
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-
 class UserManagementPage extends StatefulWidget {
   const UserManagementPage({super.key});
 
@@ -11,6 +11,8 @@ class UserManagementPage extends StatefulWidget {
 }
 
 class _UserManagementPageState extends State<UserManagementPage> {
+  // ⭐ 新增这一行（放最上面）
+static const Color moduleColor = Color(0xFF4A90E2);
   final TextEditingController _searchController = TextEditingController();
 
   Timer? _debounce;
@@ -25,11 +27,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
   String _searchKeyword = '';
   String _selectedArea = 'all';
 
-  static const String _baseUrl = 'http://localhost:8080';
+ //static const String _baseUrl = 'http://localhost:8080';
+ static const String _baseUrl = 'https://delphine-eisteddfodic-afflictively.ngrok-free.dev';
 
   static const Color _bg = Color(0xFFF5F7FB);
-  static const Color _navy = Color(0xFF0F3D91);
-  static const Color _navy2 = Color(0xFF2563EB);
   static const Color _card = Colors.white;
   static const Color _border = Color(0xFFE2E8F0);
   static const Color _textMain = Color(0xFF0F172A);
@@ -37,7 +38,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
   static const Color _blue = Color(0xFF2563EB);
   static const Color _green = Color(0xFF16A34A);
   static const Color _orange = Color(0xFFF59E0B);
-  static const Color _red = Color(0xFFEF4444);
+  static const Color _red = Color.fromARGB(255, 208, 35, 35);
 
   @override
   void initState() {
@@ -60,57 +61,83 @@ class _UserManagementPageState extends State<UserManagementPage> {
     _searchController.dispose();
     super.dispose();
   }
-
   Future<void> loadUsers({bool showLoading = true}) async {
-    if (showLoading) {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = '';
-      });
-    }
+  final url = Uri.parse(_baseUrl);
+  final requestBody = jsonEncode({
+    'type': 'getAllUsers',
+  });
 
-    try {
-      final response = await http.post(
-        Uri.parse(_baseUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'type': 'getAllUsers',
-        }),
-      );
+  print('========== Flutter 準備呼叫 getAllUsers ==========');
+  print('URL: $url');
+  print('BODY: $requestBody');
+  print('時間: ${DateTime.now()}');
+  print('===============================================');
 
-      final data = jsonDecode(response.body);
+  if (showLoading && mounted) {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+  }
 
-      if (response.statusCode == 200 && data['success'] == true) {
-        final users = List<Map<String, dynamic>>.from(data['data']);
+  try {
+    final response = await http
+        .post(
+          url,
+          headers: {
+            'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            'ngrok-skip-browser-warning': 'true',
+          },
+          body: requestBody,
+        )
+        .timeout(const Duration(seconds: 10));
 
-        if (!mounted) return;
+    print('========== Flutter 收到 API ==========');
+    print('statusCode: ${response.statusCode}');
+    print('response.body: ${response.body}');
+    print('=====================================');
 
-        setState(() {
-          _allUsers = users;
-        });
+    final data = jsonDecode(response.body);
 
-        _applyFilters();
-      } else {
-        if (!mounted) return;
+    if (response.statusCode == 200 && data['success'] == true) {
+      final users = List<Map<String, dynamic>>.from(data['data']);
 
-        setState(() {
-          _errorMessage = data['message'] ?? '取得用戶資料失敗';
-        });
-      }
-    } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        _errorMessage = '連線錯誤：$e';
+        _allUsers = users;
+      });
+
+      _applyFilters();
+    } else {
+      if (!mounted) return;
+
+      setState(() {
+        _errorMessage = data['message'] ?? '取得用戶資料失敗';
       });
     }
+  } catch (e, stack) {
+    print('========== Flutter API 呼叫失敗 ==========');
+    print('錯誤: $e');
+    print(stack);
+    print('=======================================');
 
+    if (!mounted) return;
+
+    setState(() {
+      _errorMessage = '連線錯誤：$e';
+    });
+  } finally {
     if (mounted && showLoading) {
       setState(() {
         _isLoading = false;
       });
     }
   }
+}
+
+  
 
   void _onSearchChanged(String value) {
     _debounce?.cancel();
@@ -222,82 +249,74 @@ class _UserManagementPageState extends State<UserManagementPage> {
                       ),
                     ),
                   )
-                : _allUsers.isEmpty
-                    ? const Center(
-                        child: Text(
-                          '目前沒有用戶資料',
-                          style: TextStyle(
-                            color: _textSub,
-                            fontSize: 16,
+                : SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        _buildHeroHeader(),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                          child: Column(
+                            children: [
+                              _buildStatsRow(
+                                total: _allUsers.length,
+                                current: _users.length,
+                                areaCount: areaList.length - 1,
+                              ),
+                              const SizedBox(height: 22),
+                              _buildSearchActionBar(),
+                              const SizedBox(height: 22),
+                              _buildSegmentTabs(areaList),
+                              const SizedBox(height: 22),
+                              if (_allUsers.isEmpty)
+                                _buildEmptyState('目前沒有用戶資料')
+                              else if (_users.isEmpty)
+                                _buildEmptyState('沒有符合條件的用戶資料')
+                              else
+                                ..._users.map(
+                                  (user) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 18),
+                                    child: _buildUserCard(user),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
-                      )
-                    : SingleChildScrollView(
-                        child: Column(
-                          children: [
-                            _buildHeroHeader(),
-                            Padding(
-                              padding: const EdgeInsets.all(24),
-                              child: Column(
-                                children: [
-                                  _buildStatsRow(
-                                    total: _allUsers.length,
-                                    current: _users.length,
-                                    areaCount: areaList.length - 1,
-                                  ),
-                                  const SizedBox(height: 22),
-                                  _buildSearchActionBar(),
-                                  const SizedBox(height: 22),
-                                  _buildSegmentTabs(areaList),
-                                  const SizedBox(height: 22),
-                                  if (_users.isEmpty)
-                                    _buildEmptyState()
-                                  else
-                                    ..._users.map(
-                                      (user) => Padding(
-                                        padding:
-                                            const EdgeInsets.only(bottom: 18),
-                                        child: _buildUserCard(user),
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      ],
+                    ),
+                  ),
       ),
     );
   }
 
   Widget _buildHeroHeader() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 30),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_navy, _navy2],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.vertical(
-          bottom: Radius.circular(30),
-        ),
+      margin: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _border),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
-            width: 68,
-            height: 68,
+            width: 56,
+            height: 56,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.16),
-              borderRadius: BorderRadius.circular(20),
+              color: moduleColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(18),
             ),
             child: const Icon(
-              Icons.person_outline_rounded,
-              color: Colors.white,
-              size: 34,
+              Icons.groups_rounded,
+              color: moduleColor,
+              size: 30,
             ),
           ),
           const SizedBox(width: 18),
@@ -308,16 +327,16 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 Text(
                   '用戶管理',
                   style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 30,
+                    color: _textMain,
+                    fontSize: 28,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 SizedBox(height: 6),
                 Text(
-                  '快速查找用戶姓名、電話、區域與基本資訊',
+                  '管理災民基本資料、聯絡資訊與區域分佈',
                   style: TextStyle(
-                    color: Color(0xFFD6E4FF),
+                    color: _textSub,
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
                   ),
@@ -325,18 +344,16 @@ class _UserManagementPageState extends State<UserManagementPage> {
               ],
             ),
           ),
-          const SizedBox(width: 12),
           Container(
             width: 50,
             height: 50,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.14),
+              color: const Color(0xFFEFF6FF),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.24)),
             ),
             child: const Icon(
               Icons.notifications_none_rounded,
-              color: Colors.white,
+              color: moduleColor,
             ),
           ),
         ],
@@ -488,8 +505,11 @@ class _UserManagementPageState extends State<UserManagementPage> {
               decoration: InputDecoration(
                 hintText: '搜尋姓名 / 電話 / 區域...',
                 hintStyle: const TextStyle(color: _textSub),
-                prefixIcon:
-                    const Icon(Icons.search_rounded, color: _textSub, size: 24),
+                prefixIcon: const Icon(
+                  Icons.search_rounded,
+                  color: _textSub,
+                  size: 24,
+                ),
                 suffixIcon: _searchKeyword.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.close_rounded, color: _textSub),
@@ -503,8 +523,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
                       )
                     : null,
                 border: InputBorder.none,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 18,
+                ),
               ),
             ),
           ),
@@ -634,7 +656,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
             ),
             child: const Icon(
               Icons.person_rounded,
-              color: _blue,
+              color: moduleColor,
               size: 42,
             ),
           ),
@@ -656,7 +678,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 Text(
                   'ID: ${(user['id'] ?? '').toString()}',
                   style: const TextStyle(
-                    color: _blue,
+                   color: moduleColor,
                     fontSize: 14,
                     fontWeight: FontWeight.w700,
                   ),
@@ -690,16 +712,21 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 const SizedBox(height: 14),
                 Container(
                   width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.call_outlined,
-                          color: _textSub, size: 18),
+                      const Icon(
+                        Icons.call_outlined,
+                        color: _textSub,
+                        size: 18,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -724,8 +751,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     color: _getStatusBgColor(status),
                     borderRadius: BorderRadius.circular(20),
@@ -780,9 +809,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
     );
   }
 
-  Widget _buildPhoneBox({
-    required String value,
-  }) {
+  Widget _buildPhoneBox({required String value}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       decoration: BoxDecoration(
@@ -807,7 +834,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
             ),
             child: const Icon(
               Icons.phone_rounded,
-              color: _blue,
+             color: moduleColor,
               size: 20,
             ),
           ),
@@ -864,7 +891,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
               color: const Color(0xFFF1F5FF),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: _blue, size: 18),
+            child: Icon(icon, color: moduleColor,size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -898,7 +925,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(String message) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(42),
@@ -907,13 +934,13 @@ class _UserManagementPageState extends State<UserManagementPage> {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: _border),
       ),
-      child: const Column(
+      child: Column(
         children: [
-          Icon(Icons.inbox_outlined, size: 50, color: _textSub),
-          SizedBox(height: 14),
+          const Icon(Icons.inbox_outlined, size: 50, color: _textSub),
+          const SizedBox(height: 14),
           Text(
-            '沒有符合條件的用戶資料',
-            style: TextStyle(
+            message,
+            style: const TextStyle(
               color: _textSub,
               fontSize: 15,
               fontWeight: FontWeight.w600,
@@ -988,7 +1015,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                     child: const Text(
                       '關閉',
                       style: TextStyle(
-                        color: _blue,
+                        color: moduleColor,
                         fontWeight: FontWeight.w700,
                         fontSize: 15,
                       ),

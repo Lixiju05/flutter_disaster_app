@@ -1,21 +1,80 @@
-class AdminSupply {
-  final String itemName;  //物資名稱
-  int totalQuantity;      // 總量
-  int allocatedQuantity;  // 已分配量
+class SupplyItem {
+  final int itemId;
+  final String name;
+  final String category;
+  final String unit;
+  final int stockQty;
+  final int neededQty;
 
-  AdminSupply({
-    required this.itemName,
-    required this.totalQuantity,
-    this.allocatedQuantity = 0,
+  const SupplyItem({
+    required this.itemId,
+    required this.name,
+    required this.category,
+    required this.unit,
+    required this.stockQty,
+    required this.neededQty,
   });
 
-  int get remainingQuantity => totalQuantity - allocatedQuantity;
+  /// 还需要多少数量
+  int get shortageQty {
+    final shortage = neededQty - stockQty;
+    return shortage > 0 ? shortage : 0;
+  }
 
-  void allocate(int quantity) {
-    if (quantity <= remainingQuantity) {
-      allocatedQuantity += quantity;
-    } else {
-      throw Exception('庫存不足');
-    }
+  /// 是否库存不足
+  bool get isLowStock => stockQty < neededQty;
+
+  /// 库存达成率，例如 100 / 200 = 0.5
+  double get stockRate {
+    if (neededQty <= 0) return 1.0;
+    return stockQty / neededQty;
+  }
+
+  factory SupplyItem.fromJson(Map<String, dynamic> json) {
+    return SupplyItem(
+      itemId: _toInt(json['itemId'] ?? json['id']),
+      name: (json['name'] ?? json['itemName'] ?? '').toString(),
+      category: (json['category'] ?? '').toString(),
+      unit: (json['unit'] ?? '').toString(),
+      stockQty: _toInt(json['stockQty'] ?? json['totalQuantity']),
+      neededQty: _toInt(json['neededQty']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'itemId': itemId,
+      'name': name,
+      'category': category,
+      'unit': unit,
+      'stockQty': stockQty,
+      'neededQty': neededQty,
+    };
+  }
+
+  SupplyItem copyWith({
+    int? itemId,
+    String? name,
+    String? category,
+    String? unit,
+    int? stockQty,
+    int? neededQty,
+  }) {
+    return SupplyItem(
+      itemId: itemId ?? this.itemId,
+      name: name ?? this.name,
+      category: category ?? this.category,
+      unit: unit ?? this.unit,
+      stockQty: stockQty ?? this.stockQty,
+      neededQty: neededQty ?? this.neededQty,
+    );
+  }
+
+  static int _toInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
   }
 }

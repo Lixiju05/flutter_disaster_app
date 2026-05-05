@@ -39,10 +39,12 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     try {
-      final response = await http.post(
+      final response = await http.post (
         Uri.parse('https://delphine-eisteddfodic-afflictively.ngrok-free.dev'),
         headers: {
           'Content-Type': 'application/json',
+           'Accept': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
         },
         body: jsonEncode({
           'type': 'login',

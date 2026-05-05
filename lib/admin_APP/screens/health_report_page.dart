@@ -27,7 +27,8 @@ class _HealthReportPageState extends State<HealthReportPage> {
   String selectedFilter = 'all';
   String searchKeyword = '';
 
-  static const String _baseUrl = 'http://localhost:8080';
+  //static const String _baseUrl = 'http://localhost:8080';
+  static const String _baseUrl = 'https://delphine-eisteddfodic-afflictively.ngrok-free.dev';
 
   static const Color _bg = Color(0xFFF4F7FB);
   static const Color _navy = Color(0xFF163A63);
@@ -68,7 +69,9 @@ void dispose() {
     try {
       final response = await http.post(
         Uri.parse(_baseUrl),
-        headers: {'Content-Type': 'application/json'},
+        headers: {'Content-Type': 'application/json',
+         'Accept': 'application/json',
+         'ngrok-skip-browser-warning': 'true'},
         body: jsonEncode({
           'type': 'getAllReports',
         }),

@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter_disaster_app/core/models/supply.dart';
+import 'package:flutter_disaster_app/admin_APP/viewModels/supply_viewmodel.dart';
 
-import 'dashboard_page.dart';
-import 'user_management_page.dart';
-import 'emergency_page.dart';
-import 'health_report_page.dart';
+const Color _kBg = Color(0xFF07131F);
+const Color _kCardBg = Color(0xFF0A1826);
+const Color _kCardBg2 = Color(0xFF0D2133);
+const Color _kCyan = Color(0xFF00C8FF);
+const Color _kGreen = Color(0xFF00D09C);
+const Color _kMuted = Color(0xFF5C7896);
+const Color _kBorder = Color(0xFF123047);
+const Color _kAmber = Color(0xFFFFC107);
+const Color _kRed = Color(0xFFFF4C4C);
+const Color _kPurple = Color(0xFF7D5CFF);
 
 class SupplyPage extends StatefulWidget {
   const SupplyPage({super.key});
@@ -15,157 +22,128 @@ class SupplyPage extends StatefulWidget {
 }
 
 class _SupplyPageState extends State<SupplyPage> {
-  final AdminRepository repo = AdminRepository();
   final TextEditingController _searchController = TextEditingController();
-
-  static const Color primaryBlue = Color(0xFF183A61);
-  static const Color accentBlue = Color(0xFF4A90E2);
-  static const Color pageBg = Color(0xFFF4F7FB);
-  static const Color cardBg = Colors.white;
-  static const Color titleColor = Color(0xFF183153);
-  static const Color textSoft = Color(0xFF6B7A90);
-  static const Color borderColor = Color(0xFFE6ECF3);
-
-  late List<AdminSupply> _allSupplies;
-  late List<AdminSupply> _filteredSupplies;
-
   String _selectedCategory = '全部';
 
   @override
   void initState() {
     super.initState();
-    _allSupplies = List.from(repo.getAdminSupplies());
-    _filteredSupplies = List.from(_allSupplies);
+    Future.microtask(() {
+      context.read<AdminSupplyViewModel>().loadSupplies();
+    });
   }
 
-  List<String> get categories {
-    final names = _allSupplies.map((e) => e.itemName).toSet().toList();
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<String> _categories(List<SupplyItem> supplies) {
+    final names = supplies
+        .map((e) => e.category)
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList();
     names.sort();
     return ['全部', ...names];
   }
 
-  void _applyFilters() {
+  List<SupplyItem> _filteredItems(List<SupplyItem> supplies) {
     final keyword = _searchController.text.trim().toLowerCase();
 
-    setState(() {
-      _filteredSupplies = _allSupplies.where((supply) {
-        final matchKeyword = supply.itemName.toLowerCase().contains(keyword);
+    return supplies.where((item) {
+      final matchKeyword = item.name.toLowerCase().contains(keyword) ||
+          item.category.toLowerCase().contains(keyword);
 
-        final matchCategory =
-            _selectedCategory == '全部' ? true : supply.itemName == _selectedCategory;
+      final matchCategory =
+          _selectedCategory == '全部' || item.category == _selectedCategory;
 
-        return matchKeyword && matchCategory;
-      }).toList();
-    });
+      return matchKeyword && matchCategory;
+    }).toList();
   }
 
-  void _searchSupply(String keyword) {
-    _applyFilters();
+  int _totalQuantity(List<SupplyItem> supplies) {
+    return supplies.fold(0, (sum, item) => sum + item.stockQty);
   }
 
-  int get totalItemKinds => _allSupplies.length;
-
-  int get totalQuantity => _allSupplies.fold(
-        0,
-        (sum, item) => sum + item.totalQuantity,
-      );
-
-  int get lowStockCount =>
-      _allSupplies.where((item) => item.totalQuantity <= 10).length;
-
-  void _addSupply(String name, int quantity) {
-    setState(() {
-      _allSupplies.add(
-        AdminSupply(
-          itemName: name,
-          totalQuantity: quantity,
-        ),
-      );
-    });
-    _applyFilters();
-  }
-
-  void _editSupply(AdminSupply oldSupply, String newName, int newQuantity) {
-    final index = _allSupplies.indexOf(oldSupply);
-    if (index == -1) return;
-
-    setState(() {
-      _allSupplies[index] = AdminSupply(
-        itemName: newName,
-        totalQuantity: newQuantity,
-      );
-    });
-
-    if (_selectedCategory != '全部' && !categories.contains(_selectedCategory)) {
-      _selectedCategory = '全部';
-    }
-
-    _applyFilters();
-  }
-
-  void _deleteSupply(AdminSupply supply) {
-    setState(() {
-      _allSupplies.remove(supply);
-    });
-
-    if (_selectedCategory != '全部' && !categories.contains(_selectedCategory)) {
-      _selectedCategory = '全部';
-    }
-
-    _applyFilters();
+  int _lowStockCount(List<SupplyItem> supplies) {
+    return supplies.where((item) => item.isLowStock).length;
   }
 
   Future<void> _showAddDialog() async {
     final nameController = TextEditingController();
-    final quantityController = TextEditingController();
+    final categoryController = TextEditingController();
+    final unitController = TextEditingController(text: '個');
+    final stockController = TextEditingController();
+    final neededController = TextEditingController();
+    final vm = context.read<AdminSupplyViewModel>();
 
     await showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+          backgroundColor: _kCardBg,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: const Text(
+            '新增物資',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
-          title: const Text('新增物資'),
           content: SizedBox(
-            width: 360,
+            width: 380,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: '物資名稱',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: quantityController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: '數量',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+                _dialogInput(nameController, '物資名稱'),
+                const SizedBox(height: 12),
+                _dialogInput(categoryController, '分類，例如：食品 / 醫療 / 生活用品'),
+                const SizedBox(height: 12),
+                _dialogInput(unitController, '單位，例如：瓶 / 包 / 個'),
+                const SizedBox(height: 12),
+                _dialogInput(stockController, '目前庫存', number: true),
+                const SizedBox(height: 12),
+                _dialogInput(neededController, '需求量', number: true),
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消', style: TextStyle(color: _kMuted)),
             ),
             ElevatedButton(
-              onPressed: () {
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kCyan,
+                foregroundColor: Colors.black,
+              ),
+              onPressed: () async {
                 final name = nameController.text.trim();
-                final quantity =
-                    int.tryParse(quantityController.text.trim()) ?? 0;
+                final category = categoryController.text.trim();
+                final unit = unitController.text.trim();
+                final stockQty =
+                    int.tryParse(stockController.text.trim()) ?? 0;
+                final neededQty =
+                    int.tryParse(neededController.text.trim()) ?? 0;
 
-                if (name.isEmpty) return;
+                if (name.isEmpty || category.isEmpty || unit.isEmpty) return;
 
-                _addSupply(name, quantity);
-                Navigator.pop(context);
+                final success = await vm.addSupply(
+                  name: name,
+                  category: category,
+                  unit: unit,
+                  stockQty: stockQty,
+                  neededQty: neededQty,
+                );
+
+                if (!mounted) return;
+
+                if (success) {
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('新增物資成功')),
+                  );
+                }
               },
               child: const Text('新增'),
             ),
@@ -175,58 +153,100 @@ class _SupplyPageState extends State<SupplyPage> {
     );
   }
 
-  Future<void> _showEditDialog(AdminSupply supply) async {
-    final nameController = TextEditingController(text: supply.itemName);
-    final quantityController =
-        TextEditingController(text: supply.totalQuantity.toString());
+  Future<void> _showStockDialog(SupplyItem item) async {
+    final qtyController = TextEditingController();
+    final vm = context.read<AdminSupplyViewModel>();
 
     await showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+          backgroundColor: _kCardBg,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: Text(
+            '補貨：${item.name}',
+            style: const TextStyle(color: Colors.white),
           ),
-          title: const Text('編輯物資'),
-          content: SizedBox(
-            width: 360,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: '物資名稱',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: quantityController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: '數量',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          content: _dialogInput(qtyController, '補貨數量', number: true),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消', style: TextStyle(color: _kMuted)),
             ),
             ElevatedButton(
-              onPressed: () {
-                final name = nameController.text.trim();
-                final quantity =
-                    int.tryParse(quantityController.text.trim()) ?? 0;
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kGreen,
+                foregroundColor: Colors.black,
+              ),
+              onPressed: () async {
+                final qty = int.tryParse(qtyController.text.trim()) ?? 0;
+                if (qty <= 0) return;
 
-                if (name.isEmpty) return;
+                final success =
+                    await vm.updateStock(itemId: item.itemId, qty: qty);
 
-                _editSupply(supply, name, quantity);
-                Navigator.pop(context);
+                if (!mounted) return;
+
+                if (success) {
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('補貨成功')),
+                  );
+                }
+              },
+              child: const Text('確認補貨'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _showNeededDialog(SupplyItem item) async {
+    final neededController =
+        TextEditingController(text: item.neededQty.toString());
+    final vm = context.read<AdminSupplyViewModel>();
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: _kCardBg,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          title: Text(
+            '修改需求量：${item.name}',
+            style: const TextStyle(color: Colors.white),
+          ),
+          content: _dialogInput(neededController, '新的需求量', number: true),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('取消', style: TextStyle(color: _kMuted)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kCyan,
+                foregroundColor: Colors.black,
+              ),
+              onPressed: () async {
+                final neededQty =
+                    int.tryParse(neededController.text.trim()) ?? 0;
+
+                final success = await vm.updateNeeded(
+                  itemId: item.itemId,
+                  neededQty: neededQty,
+                );
+
+                if (!mounted) return;
+
+                if (success) {
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('需求量已更新')),
+                  );
+                }
               },
               child: const Text('儲存'),
             ),
@@ -236,274 +256,62 @@ class _SupplyPageState extends State<SupplyPage> {
     );
   }
 
-  Future<void> _showDeleteDialog(AdminSupply supply) async {
-    await showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          title: const Text('刪除物資'),
-          content: Text('確定要刪除「${supply.itemName}」嗎？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                _deleteSupply(supply);
-                Navigator.pop(context);
-              },
-              child: const Text('刪除'),
-            ),
-          ],
-        );
-      },
+  Widget _dialogInput(
+    TextEditingController controller,
+    String label, {
+    bool number = false,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: number ? TextInputType.number : TextInputType.text,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: _kMuted),
+        enabledBorder: OutlineInputBorder(
+          borderSide: const BorderSide(color: _kBorder),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderSide: const BorderSide(color: _kCyan),
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: pageBg,
-      body: Row(
-        children: [
-          _buildSidebar(context),
-          Expanded(
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildTopBar(),
-                    const SizedBox(height: 22),
-                    _buildHeaderBanner(),
-                    const SizedBox(height: 20),
-                    _buildSummaryCards(),
-                    const SizedBox(height: 20),
-                    _buildSearchAndActionBar(),
-                    const SizedBox(height: 16),
-                    _buildCategoryChips(),
-                    const SizedBox(height: 20),
-                    Expanded(
-                      child: _buildSupplyTableCard(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+    final vm = context.watch<AdminSupplyViewModel>();
+    final allSupplies = vm.supplies;
+    final filteredSupplies = _filteredItems(allSupplies);
+    final categories = _categories(allSupplies);
 
-  Widget _buildSidebar(BuildContext context) {
     return Container(
-      width: 280,
-      decoration: BoxDecoration(
-        color: primaryBlue,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(4, 0),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(20, 26, 20, 22),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: Colors.white.withOpacity(0.08),
+      color: _kBg,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTopBar(),
+              const SizedBox(height: 18),
+              _buildHeaderBanner(),
+              const SizedBox(height: 18),
+              _buildSummaryCards(allSupplies),
+              const SizedBox(height: 18),
+              _buildSearchAndActionBar(),
+              const SizedBox(height: 14),
+              _buildCategoryChips(categories),
+              const SizedBox(height: 18),
+              Expanded(
+                child: _buildSupplyTableCard(
+                  vm: vm,
+                  supplies: filteredSupplies,
                 ),
               ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.admin_panel_settings_rounded,
-                    color: Colors.white,
-                    size: 26,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    '災難管理系統',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-
-          _buildSidebarItem(
-            icon: Icons.dashboard_rounded,
-            title: '儀表板',
-            onTap: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const DashboardPage()),
-              );
-            },
-          ),
-
-          _buildSidebarItem(
-            icon: Icons.people_alt_rounded,
-            title: '用戶管理',
-            onTap: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const UserManagementPage(),
-                ),
-              );
-            },
-          ),
-
-          _buildSidebarItem(
-            icon: Icons.warning_amber_rounded,
-            title: '緊急事件',
-            onTap: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const EmergencyPage()),
-              );
-            },
-          ),
-
-          _buildSidebarItem(
-            icon: Icons.inventory_2_rounded,
-            title: '物資管理',
-            selected: true,
-            onTap: () {},
-          ),
-
-          _buildSidebarItem(
-            icon: Icons.favorite_rounded,
-            title: '健康回報',
-            onTap: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const HealthReportPage()),
-              );
-            },
-          ),
-
-          const Spacer(),
-
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: const Row(
-                children: [
-                  Icon(
-                    Icons.inventory_2_rounded,
-                    color: Colors.white70,
-                    size: 18,
-                  ),
-                  SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '物資庫存需持續盤點更新',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12.5,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSidebarItem({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-    bool selected = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Ink(
-            height: 64,
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            decoration: BoxDecoration(
-              color: selected
-                  ? Colors.white.withOpacity(0.14)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-              border: selected
-                  ? Border.all(color: Colors.white.withOpacity(0.10))
-                  : null,
-            ),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 30,
-                  child: Icon(
-                    icon,
-                    color: Colors.white,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.96),
-                      fontSize: 18,
-                      fontWeight:
-                          selected ? FontWeight.bold : FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            ],
           ),
         ),
       ),
@@ -511,86 +319,78 @@ class _SupplyPageState extends State<SupplyPage> {
   }
 
   Widget _buildTopBar() {
-    return Container(
-      height: 72,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: borderColor),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: const Row(
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '物資管理',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: titleColor,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Supply Inventory Control Center',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: textSoft,
-                  ),
-                ),
-              ],
+    return Row(
+      children: [
+        const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '物資管理',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 30,
+                fontWeight: FontWeight.bold,
+                letterSpacing: .5,
+              ),
             ),
-          ),
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: Color(0xFFEAF2FF),
-            child: Icon(
-              Icons.inventory_2_rounded,
-              color: accentBlue,
+            SizedBox(height: 5),
+            Text(
+              'SUPPLY INVENTORY CONTROL CENTER',
+              style: TextStyle(
+                color: _kMuted,
+                fontSize: 11,
+                letterSpacing: 2,
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        ),
+        const SizedBox(width: 14),
+        _chip('● 即時庫存', _kCyan),
+        const Spacer(),
+        _chip('API DATABASE', _kMuted),
+      ],
     );
   }
 
   Widget _buildHeaderBanner() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+      padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
       decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kCyan.withOpacity(.25)),
         gradient: const LinearGradient(
           colors: [
-            Color(0xFF0F4C5C),
-            Color(0xFF1C7C8C),
-            Color(0xFF4FB3BF),
+            Color(0xFF07304A),
+            Color(0xFF095A64),
+            Color(0xFF0B7C7C),
           ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1C7C8C).withOpacity(0.18),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
+            color: _kCyan.withOpacity(.08),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Expanded(
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.local_shipping_rounded,
+              color: Colors.white,
+              size: 30,
+            ),
+          ),
+          const SizedBox(width: 18),
+          const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -602,26 +402,16 @@ class _SupplyPageState extends State<SupplyPage> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 10),
+                SizedBox(height: 8),
                 Text(
-                  '在這裡可以快速查看物資名稱、總數量與庫存狀況，協助管理單位有效調度與補充資源。',
+                  '物資資料由後端 API 與真實資料庫提供，管理端負責顯示、補貨與修改需求量。',
                   style: TextStyle(
                     color: Colors.white70,
-                    fontSize: 14.5,
+                    fontSize: 14,
                     height: 1.6,
                   ),
                 ),
               ],
-            ),
-          ),
-          SizedBox(width: 16),
-          CircleAvatar(
-            radius: 34,
-            backgroundColor: Color.fromRGBO(255, 255, 255, 0.16),
-            child: Icon(
-              Icons.local_shipping_rounded,
-              size: 34,
-              color: Colors.white,
             ),
           ),
         ],
@@ -629,68 +419,65 @@ class _SupplyPageState extends State<SupplyPage> {
     );
   }
 
-  Widget _buildSummaryCards() {
+  Widget _buildSummaryCards(List<SupplyItem> supplies) {
     return Row(
       children: [
         Expanded(
-          child: GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedCategory = '全部';
-              });
-              _applyFilters();
-            },
-            child: _buildMiniStatCard(
-              title: '物資種類',
-              value: totalItemKinds.toString(),
-              icon: Icons.category_rounded,
-              iconColor: const Color(0xFF4A90E2),
-              iconBg: const Color(0xFFEAF2FF),
-            ),
+          child: _summaryCard(
+            title: '物資種類',
+            value: supplies.length.toString(),
+            icon: Icons.category_rounded,
+            color: _kCyan,
+            bg: const Color(0xFF07304A),
+            tag: '分類',
           ),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 14),
         Expanded(
-          child: _buildMiniStatCard(
+          child: _summaryCard(
             title: '總庫存量',
-            value: totalQuantity.toString(),
+            value: _totalQuantity(supplies).toString(),
             icon: Icons.warehouse_rounded,
-            iconColor: const Color(0xFF2E7D32),
-            iconBg: const Color(0xFFEAF7EC),
+            color: _kGreen,
+            bg: const Color(0xFF062B23),
+            tag: '充足',
           ),
         ),
-        const SizedBox(width: 16),
+        const SizedBox(width: 14),
         Expanded(
-          child: _buildMiniStatCard(
+          child: _summaryCard(
             title: '低庫存項目',
-            value: lowStockCount.toString(),
+            value: _lowStockCount(supplies).toString(),
             icon: Icons.warning_amber_rounded,
-            iconColor: const Color(0xFFF59E0B),
-            iconBg: const Color(0xFFFFF4E5),
+            color: _kAmber,
+            bg: const Color(0xFF3A2A05),
+            tag: '警戒',
           ),
         ),
       ],
     );
   }
 
-  Widget _buildMiniStatCard({
+  Widget _summaryCard({
     required String title,
     required String value,
     required IconData icon,
-    required Color iconColor,
-    required Color iconBg,
+    required Color color,
+    required Color bg,
+    required String tag,
   }) {
     return Container(
+      height: 102,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: borderColor),
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(.35)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
-            blurRadius: 14,
-            offset: const Offset(0, 6),
+            color: color.withOpacity(.08),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -700,33 +487,50 @@ class _SupplyPageState extends State<SupplyPage> {
             width: 52,
             height: 52,
             decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(16),
+              color: color.withOpacity(.13),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: iconColor, size: 28),
+            child: Icon(icon, color: color, size: 24),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 16),
           Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13.5,
-                  color: textSoft,
-                  fontWeight: FontWeight.w500,
+                value,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 34,
+                  fontWeight: FontWeight.bold,
+                  height: 1,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Text(
-                value,
+                title,
                 style: const TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: titleColor,
+                  color: _kMuted,
+                  fontSize: 14,
                 ),
               ),
             ],
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withOpacity(.12),
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: Text(
+              tag,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -738,68 +542,40 @@ class _SupplyPageState extends State<SupplyPage> {
       children: [
         Expanded(
           child: Container(
-            height: 58,
+            height: 54,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: borderColor),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.025),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              color: _kCardBg2,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _kCyan.withOpacity(.18)),
             ),
             child: TextField(
               controller: _searchController,
-              onChanged: _searchSupply,
-              decoration: InputDecoration(
-                hintText: '請輸入物資名稱搜尋',
-                hintStyle: const TextStyle(color: textSoft),
-                prefixIcon: const Icon(Icons.search_rounded, color: textSoft),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(18),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 16),
+              onChanged: (_) => setState(() {}),
+              style: const TextStyle(color: Colors.white, fontSize: 15),
+              decoration: const InputDecoration(
+                hintText: '請輸入物資名稱或分類搜尋',
+                hintStyle: TextStyle(color: _kMuted, fontSize: 15),
+                prefixIcon: Icon(Icons.search_rounded, color: _kMuted),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(vertical: 16),
               ),
             ),
           ),
         ),
-        const SizedBox(width: 16),
-        Container(
-          height: 58,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF1C7C8C), Color(0xFF4FB3BF)],
-            ),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF1C7C8C).withOpacity(0.22),
-                blurRadius: 14,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
+        const SizedBox(width: 14),
+        SizedBox(
+          height: 54,
           child: ElevatedButton.icon(
             onPressed: _showAddDialog,
-            icon: const Icon(Icons.add_box_rounded, color: Colors.white),
-            label: const Text(
-              '新增物資',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+            icon: const Icon(Icons.add_box_rounded, size: 18),
+            label: const Text('新增物資'),
             style: ElevatedButton.styleFrom(
-              elevation: 0,
-              backgroundColor: Colors.transparent,
-              shadowColor: Colors.transparent,
+              backgroundColor: _kCyan,
+              foregroundColor: Colors.black,
               padding: const EdgeInsets.symmetric(horizontal: 22),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
           ),
@@ -808,37 +584,35 @@ class _SupplyPageState extends State<SupplyPage> {
     );
   }
 
-  Widget _buildCategoryChips() {
-    final chips = categories;
-
+  Widget _buildCategoryChips(List<String> categories) {
     return Wrap(
       spacing: 10,
       runSpacing: 10,
-      children: chips.map((category) {
+      children: categories.map((category) {
         final isSelected = _selectedCategory == category;
 
         return InkWell(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(999),
           onTap: () {
             setState(() {
               _selectedCategory = category;
             });
-            _applyFilters();
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
             decoration: BoxDecoration(
-              color: isSelected ? accentBlue : Colors.white,
-              borderRadius: BorderRadius.circular(24),
+              color: isSelected ? _kCyan.withOpacity(.15) : _kCardBg2,
+              borderRadius: BorderRadius.circular(999),
               border: Border.all(
-                color: isSelected ? accentBlue : borderColor,
+                color: isSelected ? _kCyan : _kBorder,
               ),
             ),
             child: Text(
               category,
               style: TextStyle(
-                color: isSelected ? Colors.white : titleColor,
-                fontWeight: FontWeight.w600,
+                color: isSelected ? _kCyan : _kMuted,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
               ),
             ),
           ),
@@ -847,18 +621,34 @@ class _SupplyPageState extends State<SupplyPage> {
     );
   }
 
-  Widget _buildSupplyTableCard() {
+  Widget _buildSupplyTableCard({
+    required AdminSupplyViewModel vm,
+    required List<SupplyItem> supplies,
+  }) {
+    if (vm.isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: _kCyan),
+      );
+    }
+
+    if (vm.errorMessage != null) {
+      return Center(
+        child: Text(
+          vm.errorMessage!,
+          style: const TextStyle(color: _kRed),
+        ),
+      );
+    }
+
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: borderColor),
+        color: _kCardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _kBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
-            blurRadius: 16,
+            color: Colors.black.withOpacity(.28),
+            blurRadius: 18,
             offset: const Offset(0, 8),
           ),
         ],
@@ -866,136 +656,31 @@ class _SupplyPageState extends State<SupplyPage> {
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFD),
-              borderRadius: BorderRadius.circular(16),
+            height: 54,
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            decoration: const BoxDecoration(
+              color: Color(0xFF0C2235),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+              border: Border(bottom: BorderSide(color: _kBorder)),
             ),
-            child: const Row(
+            child: Row(
               children: [
-                Expanded(
-                  flex: 4,
-                  child: Text(
-                    '物資名稱',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: titleColor,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    '總數量',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: titleColor,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    '庫存狀態',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: titleColor,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 2,
-                  child: Text(
-                    '操作',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: titleColor,
-                    ),
-                  ),
-                ),
+                _headerCell('物資名稱', flex: 3),
+                _headerCell('分類', flex: 2),
+                _headerCell('庫存', flex: 2),
+                _headerCell('需求量', flex: 2),
+                _headerCell('狀態', flex: 2),
+                _headerCell('操作', flex: 3),
               ],
             ),
           ),
-          const SizedBox(height: 10),
           Expanded(
-            child: _filteredSupplies.isEmpty
-                ? const Center(
-                    child: Text(
-                      '查無符合資料',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: textSoft,
-                      ),
-                    ),
-                  )
-                : ListView.separated(
-                    itemCount: _filteredSupplies.length,
-                    separatorBuilder: (_, __) => const Divider(
-                      height: 1,
-                      color: Color(0xFFEDF2F7),
-                    ),
+            child: supplies.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    itemCount: supplies.length,
                     itemBuilder: (context, index) {
-                      final supply = _filteredSupplies[index];
-                      final quantity = supply.totalQuantity;
-
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 14,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              flex: 4,
-                              child: Text(
-                                supply.itemName,
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: titleColor,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: Text(
-                                quantity.toString(),
-                                style: const TextStyle(
-                                  fontSize: 14.5,
-                                  color: textSoft,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: _buildStockChip(quantity),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Row(
-                                children: [
-                                  _buildActionButton(
-                                    icon: Icons.edit_rounded,
-                                    color: const Color(0xFF4A90E2),
-                                    bgColor: const Color(0xFFEAF2FF),
-                                    onTap: () => _showEditDialog(supply),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  _buildActionButton(
-                                    icon: Icons.delete_rounded,
-                                    color: const Color(0xFFE53935),
-                                    bgColor: const Color(0xFFFFEBEE),
-                                    onTap: () => _showDeleteDialog(supply),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
+                      return _buildSupplyRow(supplies[index], index);
                     },
                   ),
           ),
@@ -1004,59 +689,221 @@ class _SupplyPageState extends State<SupplyPage> {
     );
   }
 
-  Widget _buildStockChip(int quantity) {
-    late final Color bgColor;
-    late final Color textColor;
-    late final String label;
+  Widget _buildEmptyState() {
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.all(26),
+        decoration: BoxDecoration(
+          color: const Color(0xFF081C2B),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _kCyan.withOpacity(.16)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.inventory_2_outlined,
+              color: _kCyan.withOpacity(.75),
+              size: 44,
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              '目前沒有物資資料',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '請新增物資，或確認後端 API 是否已提供庫存資料。',
+              style: TextStyle(
+                color: _kMuted,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-    if (quantity <= 10) {
-      bgColor = const Color(0xFFFFEBEE);
-      textColor = const Color(0xFFE53935);
-      label = '低庫存';
-    } else if (quantity <= 30) {
-      bgColor = const Color(0xFFFFF4E5);
-      textColor = const Color(0xFFF59E0B);
-      label = '需注意';
-    } else {
-      bgColor = const Color(0xFFEAF7EC);
-      textColor = const Color(0xFF43A047);
-      label = '庫存充足';
-    }
+  Widget _headerCell(String text, {int flex = 1}) {
+    return Expanded(
+      flex: flex,
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Color(0xFF7FA6C6),
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          letterSpacing: .8,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSupplyRow(SupplyItem item, int index) {
+    final isEven = index % 2 == 0;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(999),
+        color: isEven ? Colors.transparent : Colors.white.withOpacity(.025),
+        border: Border(
+          bottom: BorderSide(color: _kBorder.withOpacity(.55)),
+        ),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: textColor,
-          fontWeight: FontWeight.w700,
-          fontSize: 13,
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 16,
+                  backgroundColor: _kPurple.withOpacity(.14),
+                  child: const Icon(
+                    Icons.inventory_2_rounded,
+                    color: _kPurple,
+                    size: 15,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    item.name,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              item.category,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: _kMuted, fontSize: 13),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              '${item.stockQty} ${item.unit}',
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              '${item.neededQty} ${item.unit}',
+              style: const TextStyle(color: _kMuted, fontSize: 13),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: _buildStockChip(item),
+          ),
+          Expanded(
+            flex: 3,
+            child: Row(
+              children: [
+                _buildActionButton(
+                  label: '補貨',
+                  color: _kGreen,
+                  bgColor: _kGreen.withOpacity(.12),
+                  onTap: () => _showStockDialog(item),
+                ),
+                const SizedBox(width: 8),
+                _buildActionButton(
+                  label: '需求量',
+                  color: _kCyan,
+                  bgColor: _kCyan.withOpacity(.12),
+                  onTap: () => _showNeededDialog(item),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStockChip(SupplyItem item) {
+    final color = item.isLowStock ? _kRed : _kGreen;
+    final label = item.isLowStock ? '庫存不足' : '正常';
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(.12),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withOpacity(.35)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
         ),
       ),
     );
   }
 
   Widget _buildActionButton({
-    required IconData icon,
+    required String label,
     required Color color,
     required Color bgColor,
     required VoidCallback onTap,
   }) {
     return InkWell(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(8),
       onTap: onTap,
-      child: Ink(
-        width: 40,
-        height: 40,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: bgColor,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withOpacity(.35)),
         ),
-        child: Icon(icon, size: 20, color: color),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
+  static Widget _chip(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.10),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withOpacity(.28)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
+        ),
       ),
     );
   }

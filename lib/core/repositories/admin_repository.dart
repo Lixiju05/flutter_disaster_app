@@ -1,54 +1,220 @@
+import 'package:flutter_disaster_app/admin_APP/services/api_services.dart';
+
 import '../models/citizen.dart';
-import '../models/prepared_supply.dart';
 import '../models/emergency_request.dart';
 import '../models/supply.dart';
-import '../models/rescue_request.dart';
+import '../models/allocation.dart';
+import '../models/dispatch.dart';
 
-class AdminRepository { //先放假訊息
-  //假民眾
-  final List<Citizen> _citizens = [  // _ -> private
-  Citizen(
-    id: "C001",
-    name: "王小明",
-    latitude: 24.15,
-    longitude: 120.67,
-    needsRescue: false,
-  ),
-  Citizen(
-    id: "C002",
-    name: "李小龍",
-    latitude: 24.16,
-    longitude: 120.66,
-    needsRescue: false,
-    ),
-  ];
-//假求救訊息
-  final List<EmergencyRequest> _emergencies = [
-    EmergencyRequest(
-      id: "E001",
-      citizenId: "C001",
-      latitude: 24.15,
-      longitude: 120.67,
-      type: "sos",
-      createdAt: DateTime.now(),
-    ),
-  ];
-  //假庫存
-  final List<AdminSupply> _adminSupplies = [
-    AdminSupply(itemName: "Water", totalQuantity: 100),
-    AdminSupply(itemName: "Food", totalQuantity: 50),
-  ];
+class AdminRepository {
+  /// =========================
+  /// Citizen
+  /// =========================
 
-//取得民眾列表
-List<Citizen> getCitizens(){
-  return _citizens;
-}
-//取得求救列表
-List<EmergencyRequest> getEmergencies() {
-  return _emergencies;
-}
-//取得庫存列表
-List<AdminSupply> getAdminSupplies() {
-  return _adminSupplies;
-}
+  Future<List<Citizen>> getCitizens() async {
+    try {
+      final data = await ApiServices.post({
+        "type": "getAllUsers",
+      });
+
+      if (data['success'] == true) {
+        return (data['data'] as List)
+            .map((e) => Citizen.fromJson(e))
+            .toList();
+      }
+
+      return [];
+    } catch (e) {
+      print('GET CITIZENS ERROR: $e');
+      return [];
+    }
+  }
+
+  /// =========================
+  /// Emergency
+  /// =========================
+
+  Future<List<EmergencyRequest>> getEmergencies() async {
+    try {
+      final data = await ApiServices.post({
+        "type": "getAllReports",
+      });
+
+      if (data['success'] == true) {
+        return (data['data'] as List)
+            .map((e) => EmergencyRequest.fromJson(e))
+            .toList();
+      }
+
+      return [];
+    } catch (e) {
+      print('GET EMERGENCIES ERROR: $e');
+      return [];
+    }
+  }
+
+  /// =========================
+  /// Inventory
+  /// =========================
+
+  Future<List<SupplyItem>> getInventory() async {
+    try {
+      final data = await ApiServices.post({
+        "type": "getInventory",
+      });
+
+      if (data['success'] == true) {
+        return (data['data'] as List)
+            .map((e) => SupplyItem.fromJson(e))
+            .toList();
+      }
+
+      return [];
+    } catch (e) {
+      print('GET INVENTORY ERROR: $e');
+      return [];
+    }
+  }
+
+  Future<bool> addInventory({
+    required String name,
+    required String category,
+    required String unit,
+    required int stockQty,
+    required int neededQty,
+  }) async {
+    try {
+      final data = await ApiServices.post({
+        "type": "addInventory",
+        "name": name,
+        "category": category,
+        "unit": unit,
+        "stockQty": stockQty,
+        "neededQty": neededQty,
+      });
+
+      return data['success'] == true;
+    } catch (e) {
+      print('ADD INVENTORY ERROR: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateStock({
+    required int itemId,
+    required int qty,
+  }) async {
+    try {
+      final data = await ApiServices.post({
+        "type": "updateStock",
+        "itemId": itemId,
+        "qty": qty,
+      });
+
+      return data['success'] == true;
+    } catch (e) {
+      print('UPDATE STOCK ERROR: $e');
+      return false;
+    }
+  }
+
+  Future<bool> updateNeeded({
+    required int itemId,
+    required int neededQty,
+  }) async {
+    try {
+      final data = await ApiServices.post({
+        "type": "updateNeeded",
+        "itemId": itemId,
+        "neededQty": neededQty,
+      });
+
+      return data['success'] == true;
+    } catch (e) {
+      print('UPDATE NEEDED ERROR: $e');
+      return false;
+    }
+  }
+
+  /// =========================
+  /// Allocation
+  /// =========================
+
+  Future<List<AllocationItem>> getAllocations() async {
+    try {
+      final data = await ApiServices.post({
+        "type": "getAllocations",
+      });
+
+      if (data['success'] == true) {
+        return (data['data'] as List)
+            .map((e) => AllocationItem.fromJson(e))
+            .toList();
+      }
+
+      return [];
+    } catch (e) {
+      print('GET ALLOCATIONS ERROR: $e');
+      return [];
+    }
+  }
+
+  Future<bool> allocate({
+    required int itemId,
+    required String zoneId,
+    required int qty,
+  }) async {
+    try {
+      final data = await ApiServices.post({
+        "type": "allocate",
+        "itemId": itemId,
+        "zoneId": zoneId,
+        "qty": qty,
+      });
+
+      return data['success'] == true;
+    } catch (e) {
+      print('ALLOCATE ERROR: $e');
+      return false;
+    }
+  }
+
+  /// =========================
+  /// Dispatch
+  /// =========================
+
+  Future<List<DispatchItem>> getDispatches() async {
+    try {
+      final data = await ApiServices.post({
+        "type": "getDispatches",
+      });
+
+      if (data['success'] == true) {
+        return (data['data'] as List)
+            .map((e) => DispatchItem.fromJson(e))
+            .toList();
+      }
+
+      return [];
+    } catch (e) {
+      print('GET DISPATCHES ERROR: $e');
+      return [];
+    }
+  }
+
+  Future<bool> dispatch({
+    required int allocationId,
+  }) async {
+    try {
+      final data = await ApiServices.post({
+        "type": "dispatch",
+        "allocationId": allocationId,
+      });
+
+      return data['success'] == true;
+    } catch (e) {
+      print('DISPATCH ERROR: $e');
+      return false;
+    }
+  }
 }

@@ -3,51 +3,113 @@ import 'package:flutter_disaster_app/core/models/supply.dart';
 import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
 
 class AdminSupplyViewModel extends ChangeNotifier {
-  // 假資料列表
-  List<AdminSupply> _supplies = [
-    AdminSupply(itemName: '水', totalQuantity: 100),
-    AdminSupply(itemName: '口罩', totalQuantity: 500),
-    AdminSupply(itemName: '醫療包', totalQuantity: 50),
-  ];
+  final AdminRepository _repo = AdminRepository();
 
-  List<AdminSupply> get supplies => _supplies;
+  List<SupplyItem> _supplies = [];
+  List<SupplyItem> _allSupplies = [];
 
   bool _isLoading = false;
+  String? _errorMessage;
+
+  List<SupplyItem> get supplies => _supplies;
   bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
 
   AdminSupplyViewModel() {
     loadSupplies();
   }
 
-  // 模擬載入資料
   Future<void> loadSupplies() async {
-    _isLoading = true;
-    notifyListeners();
+    _setLoading(true);
+    _errorMessage = null;
 
-    await Future.delayed(Duration(milliseconds: 300)); // 模擬等待時間
+    try {
+      final data = await _repo.getInventory();
+      _allSupplies = data;
+      _supplies = data;
+    } catch (e) {
+      _errorMessage = '物資資料載入失敗：$e';
+      _supplies = [];
+    }
 
-    _isLoading = false;
-    notifyListeners();
+    _setLoading(false);
   }
 
-  // 分配物資
-  void allocateSupply(AdminSupply supply, int quantity) {
-    final index = _supplies.indexWhere((s) => s.itemName == supply.itemName);
-    if (index != -1) {
-      try {
-        _supplies[index].allocate(quantity);
-        notifyListeners();
-      } catch (e) {
-        print('分配失敗: ${e.toString()}');
-      }
+  Future<bool> addSupply({
+    required String name,
+    required String category,
+    required String unit,
+    required int stockQty,
+    required int neededQty,
+  }) async {
+    try {
+      final success = await _repo.addInventory(
+        name: name,
+        category: category,
+        unit: unit,
+        stockQty: stockQty,
+        neededQty: neededQty,
+      );
+      if (success) await loadSupplies();
+      return success;
+    } catch (e) {
+      _errorMessage = '新增物資失敗：$e';
+      notifyListeners();
+      return false;
     }
   }
 
-  // 搜尋物資
+  Future<bool> updateStock({
+    required int itemId,
+    required int qty,
+  }) async {
+    try {
+      final success = await _repo.updateStock(itemId: itemId, qty: qty);
+      if (success) await loadSupplies();
+      return success;
+    } catch (e) {
+      _errorMessage = '補貨失敗：$e';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> updateNeeded({
+    required int itemId,
+    required int neededQty,
+  }) async {
+    try {
+      final success = await _repo.updateNeeded(
+          itemId: itemId, neededQty: neededQty);
+      if (success) await loadSupplies();
+      return success;
+    } catch (e) {
+      _errorMessage = '修改需求量失敗：$e';
+      notifyListeners();
+      return false;
+    }
+  }
+
   void search(String keyword) {
-    _supplies = _supplies
-        .where((s) => s.itemName.toLowerCase().contains(keyword.toLowerCase()))
-        .toList();
+    final text = keyword.trim().toLowerCase();
+    if (text.isEmpty) {
+      _supplies = _allSupplies;
+    } else {
+      _supplies = _allSupplies.where((item) {
+        return item.name.toLowerCase().contains(text) ||
+            item.category.toLowerCase().contains(text);
+      }).toList();
+    }
+    notifyListeners();
+  }
+
+  void clearSearch() {
+    _supplies = _allSupplies;
+    notifyListeners();
+  }
+
+  void _setLoading(bool value) {
+    _isLoading = value;
     notifyListeners();
   }
 }
