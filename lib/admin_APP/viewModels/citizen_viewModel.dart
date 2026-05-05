@@ -24,6 +24,7 @@ class CitizenViewmodel extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
+<<<<<<< HEAD
     try {
       final data = await _repository.getCitizens();
 
@@ -33,6 +34,32 @@ class CitizenViewmodel extends ChangeNotifier {
       _errorMessage = '民眾資料載入失敗：$e';
       _citizens = [];
       _allCitizens = [];
+=======
+    _citizens=await _repository.getCitizens();
+
+    _isLoading=false;
+    notifyListeners();
+  }
+  //搜尋民眾
+  void search(String keyword) async {
+    // 如果你要重新從伺服器搜尋，要加上 await
+    // 如果只是在本地篩選，請確保 _citizens 已經被 await 過了
+    if (keyword.isEmpty) {
+      await loadCitizens();
+      return;
+    }
+    _citizens = _citizens
+        .where((c) => c.name.toLowerCase().contains(keyword.toLowerCase()))
+        .toList();
+    notifyListeners();
+  }
+  //更新民眾是否需要救援
+  void updateNeedsRescue(Citizen citizen, bool needsRescue){
+    final index= _citizens.indexWhere((c) => c.id == citizen.id);
+    if (index != -1){
+      _citizens[index].needsRescue=needsRescue;
+      notifyListeners();
+>>>>>>> f69460cd2207e884a63750829a091e7e38ece7cf
     }
 
     _isLoading = false;
