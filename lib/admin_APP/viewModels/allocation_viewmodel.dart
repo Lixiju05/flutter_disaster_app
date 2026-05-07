@@ -33,7 +33,7 @@ class AllocationViewModel extends ChangeNotifier {
     _errorMessage = null;
     try {
       final results = await Future.wait([
-        _repo.getInventory(),
+        _repo.getAdminSupplies(),
         _repo.getAllocations(),
         _repo.getDispatches(),
       ]);
@@ -67,16 +67,25 @@ class AllocationViewModel extends ChangeNotifier {
   }
 
   Future<bool> dispatch(int allocationId) async {
-    try {
-      final success = await _repo.dispatch(allocationId: allocationId);
-      if (success) await loadAll();
-      return success;
-    } catch (e) {
-      _errorMessage = '出貨失敗：$e';
-      notifyListeners();
-      return false;
+  try {
+    // 1️⃣ 修正：使用傳入的參數 allocationId，而不是未定義的 allocation.id
+    final success = await _repo.dispatch(
+      dispatchId: allocationId, 
+      status: 'shipped',
+    );
+
+    if (success) {
+      await loadDispatches(); // 成功後刷新清單
+      return true; // ✅ 補上回傳值，解決 body_might_complete_normally
     }
+    
+    return false; // ✅ 執行失敗也要回傳 false
+  } catch (e) {
+    _errorMessage = '出貨失敗：$e';
+    notifyListeners();
+    return false;
   }
+}
 
   void _setLoading(bool v) {
     _isLoading = v;

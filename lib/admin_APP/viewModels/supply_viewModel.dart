@@ -24,7 +24,7 @@ class AdminSupplyViewModel extends ChangeNotifier {
     _errorMessage = null;
 
     try {
-      final data = await _repo.getInventory();
+      final data = await _repo.getAdminSupplies();
       _allSupplies = data;
       _supplies = data;
     } catch (e) {
@@ -71,7 +71,7 @@ class AdminSupplyViewModel extends ChangeNotifier {
     try {
       final success = await _repo.updateStock(
         itemId: itemId,
-        qty: qty,
+        additionalQty: qty,
       );
 
       if (success) {

@@ -1,83 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_disaster_app/core/models/citizen.dart';
 import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
-
-class CitizenViewmodel extends ChangeNotifier {
-  final AdminRepository _repository = AdminRepository();
-
-  List<Citizen> _citizens = [];
-  List<Citizen> _allCitizens = [];
-
-  bool _isLoading = false;
-  String? _errorMessage;
-
+class CitizenViewmodel extends ChangeNotifier{
+  List<Citizen> _citizens=[];
   List<Citizen> get citizens => _citizens;
-  bool get isLoading => _isLoading;
-  String? get errorMessage => _errorMessage;
 
-  CitizenViewmodel() {
+  bool _isLoading=false;  //是否載入資料 UI根據狀態顯示loading spinner
+  bool get isLodding => _isLoading; 
+
+  CitizenViewmodel(){
     loadCitizens();
   }
-
-  Future<void> loadCitizens() async {
-    _isLoading = true;
-    _errorMessage = null;
+  final _repository=AdminRepository() ;
+  //載入民眾資料
+  Future<void> loadCitizens() async{
+    _isLoading=true;
     notifyListeners();
 
-    try {
-      final data = await _repository.getCitizens();
-      _citizens = data;
-      _allCitizens = data;
-    } catch (e) {
-      _errorMessage = '載入災民資料失敗：$e';
-      _citizens = [];
-      _allCitizens = [];
-    }
+    _citizens=await _repository.getCitizens();
 
-    _isLoading = false;
+    _isLoading=false;
     notifyListeners();
   }
-
-  void search(String keyword) {
-    final text = keyword.trim().toLowerCase();
-
-    if (text.isEmpty) {
-      _citizens = _allCitizens;
-    } else {
-      _citizens = _allCitizens.where((c) {
-        return c.name.toLowerCase().contains(text) ||
-            c.id.toLowerCase().contains(text);
-      }).toList();
-    }
-
+  //搜尋民眾
+  void search(String keyword){
+    _citizens=_repository.getCitizens()
+    .where((c) => c.name.toLowerCase().contains(keyword.toLowerCase())).toList();
     notifyListeners();
   }
-
-  void clearSearch() {
-    _citizens = _allCitizens;
-    notifyListeners();
+  //更新民眾是否需要救援
+  void updateNeedsRescue(Citizen citizen, bool needsRescue){
+    final index= _citizens.indexWhere((c) => c.id == citizen.id);
+    if (index != -1){
+      _citizens[index].needsRescue=needsRescue;
+      notifyListeners();
+    }
   }
 
-  void updateNeedsRescue(Citizen citizen, bool needsRescue) {
-    final index = _citizens.indexWhere((c) => c.id == citizen.id);
-    final allIndex = _allCitizens.indexWhere((c) => c.id == citizen.id);
-
-    final updatedCitizen = Citizen(
-      id: citizen.id,
-      name: citizen.name,
-      latitude: citizen.latitude,
-      longitude: citizen.longitude,
-      needsRescue: needsRescue,
-    );
-
-    if (index != -1) {
-      _citizens[index] = updatedCitizen;
-    }
-
-    if (allIndex != -1) {
-      _allCitizens[allIndex] = updatedCitizen;
-    }
-
-    notifyListeners();
-  }
 }
