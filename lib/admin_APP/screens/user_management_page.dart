@@ -1,8 +1,24 @@
-
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+
+// ── 色系（與 dashboard 統一）────────────────────────────
+const Color _kBg = Color(0xFFF5F7FA);
+const Color _kCardBg = Color(0xFFFFFFFF);
+const Color _kCardBg2 = Color(0xFFF8FAFC);
+const Color _kBorder = Color(0xFFE5E7EB);
+const Color _kBlue = Color(0xFF2563EB);
+const Color _kGreen = Color(0xFF16A34A);
+const Color _kOrange = Color(0xFFF59E0B);
+const Color _kPurple = Color(0xFF7C3AED);
+const Color _kTextMain = Color(0xFF0F172A);
+const Color _kTextSub = Color(0xFF64748B);
+const Color _kRed = Color(0xFFDC2626);
+
+const String _umBaseUrl =
+    'https://delphine-eisteddfodic-afflictively.ngrok-free.dev';
+
 class UserManagementPage extends StatefulWidget {
   const UserManagementPage({super.key});
 
@@ -11,46 +27,27 @@ class UserManagementPage extends StatefulWidget {
 }
 
 class _UserManagementPageState extends State<UserManagementPage> {
-  // ⭐ 新增这一行（放最上面）
-static const Color moduleColor = Color(0xFF4A90E2);
   final TextEditingController _searchController = TextEditingController();
 
   Timer? _debounce;
   Timer? _refreshTimer;
 
-  List<dynamic> _allUsers = [];
-  List<dynamic> _users = [];
+  List<Map<String, dynamic>> _allUsers = [];
+  List<Map<String, dynamic>> _users = [];
 
-  bool _isLoading = false;
+  bool _isLoading = true;
   String _errorMessage = '';
-
   String _searchKeyword = '';
   String _selectedArea = 'all';
-
- //static const String _baseUrl = 'http://localhost:8080';
- static const String _baseUrl = 'https://delphine-eisteddfodic-afflictively.ngrok-free.dev';
-
-  static const Color _bg = Color(0xFFF5F7FB);
-  static const Color _card = Colors.white;
-  static const Color _border = Color(0xFFE2E8F0);
-  static const Color _textMain = Color(0xFF0F172A);
-  static const Color _textSub = Color(0xFF64748B);
-  static const Color _blue = Color(0xFF2563EB);
-  static const Color _green = Color(0xFF16A34A);
-  static const Color _orange = Color(0xFFF59E0B);
-  static const Color _red = Color.fromARGB(255, 208, 35, 35);
 
   @override
   void initState() {
     super.initState();
-
-    loadUsers();
+    _loadUsers();
 
     _refreshTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) {
-        loadUsers(showLoading: false);
-      },
+      const Duration(seconds: 30),
+      (_) => _loadUsers(showLoading: false),
     );
   }
 
@@ -61,102 +58,73 @@ static const Color moduleColor = Color(0xFF4A90E2);
     _searchController.dispose();
     super.dispose();
   }
-  Future<void> loadUsers({bool showLoading = true}) async {
-  final url = Uri.parse(_baseUrl);
-  final requestBody = jsonEncode({
-    'type': 'getAllUsers',
-  });
 
-  print('========== Flutter 準備呼叫 getAllUsers ==========');
-  print('URL: $url');
-  print('BODY: $requestBody');
-  print('時間: ${DateTime.now()}');
-  print('===============================================');
-
-  if (showLoading && mounted) {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-    });
-  }
-
-  try {
-    final response = await http
-        .post(
-          url,
-          headers: {
-            'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            'ngrok-skip-browser-warning': 'true',
-          },
-          body: requestBody,
-        )
-        .timeout(const Duration(seconds: 10));
-
-    print('========== Flutter 收到 API ==========');
-    print('statusCode: ${response.statusCode}');
-    print('response.body: ${response.body}');
-    print('=====================================');
-
-    final data = jsonDecode(response.body);
-
-    if (response.statusCode == 200 && data['success'] == true) {
-      final users = List<Map<String, dynamic>>.from(data['data']);
-
-      if (!mounted) return;
-
+  // ── API ──────────────────────────────────────────────
+  Future<void> _loadUsers({bool showLoading = true}) async {
+    if (showLoading && mounted) {
       setState(() {
-        _allUsers = users;
-      });
-
-      _applyFilters();
-    } else {
-      if (!mounted) return;
-
-      setState(() {
-        _errorMessage = data['message'] ?? '取得用戶資料失敗';
+        _isLoading = true;
+        _errorMessage = '';
       });
     }
-  } catch (e, stack) {
-    print('========== Flutter API 呼叫失敗 ==========');
-    print('錯誤: $e');
-    print(stack);
-    print('=======================================');
 
-    if (!mounted) return;
+    try {
+      final response = await http
+          .post(
+            Uri.parse(_umBaseUrl),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'ngrok-skip-browser-warning': 'true',
+            },
+            body: jsonEncode({'type': 'getAllUsers'}),
+          )
+          .timeout(const Duration(seconds: 10));
 
-    setState(() {
-      _errorMessage = '連線錯誤：$e';
-    });
-  } finally {
-    if (mounted && showLoading) {
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        final users = List<Map<String, dynamic>>.from(data['data']);
+
+        if (!mounted) return;
+
+        setState(() {
+          _allUsers = users;
+          _isLoading = false;
+          _errorMessage = '';
+        });
+
+        _applyFilters();
+      } else {
+        if (!mounted) return;
+
+        setState(() {
+          _errorMessage = data['message'] ?? '取得用戶資料失敗';
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+
       setState(() {
+        _errorMessage = '連線錯誤：$e';
         _isLoading = false;
       });
     }
   }
-}
 
-  
-
-  void _onSearchChanged(String value) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () {
-      setState(() {
-        _searchKeyword = value.trim().toLowerCase();
-      });
-      _applyFilters();
-    });
-  }
-
+  // ── 篩選 ─────────────────────────────────────────────
   void _applyFilters() {
-    List<dynamic> result = List.from(_allUsers);
+    List<Map<String, dynamic>> result = List.from(_allUsers);
 
     if (_selectedArea != 'all') {
-      result = result.where((u) {
-        final area = (u['area'] ?? '').toString().toLowerCase();
-        return area == _selectedArea.toLowerCase();
-      }).toList();
+      result = result
+          .where(
+            (u) =>
+                (u['area'] ?? '').toString().toLowerCase() ==
+                _selectedArea.toLowerCase(),
+          )
+          .toList();
     }
 
     if (_searchKeyword.isNotEmpty) {
@@ -171,385 +139,237 @@ static const Color moduleColor = Color(0xFF4A90E2);
       }).toList();
     }
 
-    if (!mounted) return;
+    if (mounted) {
+      setState(() => _users = result);
+    }
+  }
 
-    setState(() {
-      _users = result;
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+
+    _debounce = Timer(const Duration(milliseconds: 280), () {
+      setState(() => _searchKeyword = value.trim().toLowerCase());
+      _applyFilters();
     });
   }
 
-  List<String> _getAreas() {
-    final areas = _allUsers
+  List<String> get _areas {
+    final list = _allUsers
         .map((u) => (u['area'] ?? '').toString())
         .where((a) => a.isNotEmpty)
         .toSet()
-        .toList();
+        .toList()
+      ..sort();
 
-    areas.sort();
-    return ['all', ...areas];
+    return ['all', ...list];
   }
 
   int _countByArea(String area) {
     return _allUsers.where((u) => (u['area'] ?? '') == area).length;
   }
 
-  String _getStatusText(dynamic user) {
-    final raw = (user['status'] ?? '').toString().trim();
-    if (raw.isEmpty) return '一般';
+  String _userStatusText(Map<String, dynamic> user) {
+    final status = (user['status'] ?? '').toString().trim();
 
-    if (raw == 'safe' || raw == '正常') return '正常';
-    if (raw == 'warning' || raw == '需關注') return '需關注';
-    if (raw == 'critical' || raw == 'danger' || raw == '危急') return '危急';
-    return raw;
+    if (status == 'verified' || status == '已驗證') return '已驗證';
+    if (status == 'pending' || status == '待審核') return '待審核';
+    if (status == 'disabled' || status == '停用') return '停用';
+
+    return '已登記';
   }
 
-  Color _getStatusColor(String status) {
+  Color _userStatusColor(String status) {
     switch (status) {
-      case '正常':
-        return _green;
-      case '需關注':
-        return _orange;
-      case '危急':
-        return _red;
+      case '已驗證':
+        return _kGreen;
+      case '待審核':
+        return _kOrange;
+      case '停用':
+        return _kRed;
       default:
-        return _blue;
+        return _kBlue;
     }
   }
 
-  Color _getStatusBgColor(String status) {
-    switch (status) {
-      case '正常':
-        return const Color(0xFFDCFCE7);
-      case '需關注':
-        return const Color(0xFFFEF3C7);
-      case '危急':
-        return const Color(0xFFFEE2E2);
-      default:
-        return const Color(0xFFDBEAFE);
-    }
+  int get _verifiedCount {
+    return _allUsers.where((u) {
+      final status = _userStatusText(u);
+      return status == '已驗證' || status == '已登記';
+    }).length;
   }
 
+  // ════════════════════════════════════════════════════
+  // BUILD
+  // ════════════════════════════════════════════════════
   @override
   Widget build(BuildContext context) {
-    final areaList = _getAreas();
-
-    return Scaffold(
-      backgroundColor: _bg,
-      body: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : _errorMessage.isNotEmpty
-                ? Center(
-                    child: Text(
-                      _errorMessage,
-                      style: const TextStyle(
-                        color: Colors.red,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  )
-                : SingleChildScrollView(
-                    child: Column(
-                      children: [
-                        _buildHeroHeader(),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                          child: Column(
-                            children: [
-                              _buildStatsRow(
-                                total: _allUsers.length,
-                                current: _users.length,
-                                areaCount: areaList.length - 1,
-                              ),
-                              const SizedBox(height: 22),
-                              _buildSearchActionBar(),
-                              const SizedBox(height: 22),
-                              _buildSegmentTabs(areaList),
-                              const SizedBox(height: 22),
-                              if (_allUsers.isEmpty)
-                                _buildEmptyState('目前沒有用戶資料')
-                              else if (_users.isEmpty)
-                                _buildEmptyState('沒有符合條件的用戶資料')
-                              else
-                                ..._users.map(
-                                  (user) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 18),
-                                    child: _buildUserCard(user),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+    return Container(
+      color: _kBg,
+      child: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(),
+            Expanded(child: _buildBody()),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildHeroHeader() {
-    return Container(
-      margin: const EdgeInsets.all(24),
-      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: _kBlue),
+      );
+    }
+
+    if (_errorMessage.isNotEmpty) {
+      return _buildError();
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(24, 18, 24, 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildStatsRow(),
+          const SizedBox(height: 18),
+          _buildSearchAndFilter(),
+          const SizedBox(height: 18),
+          if (_allUsers.isEmpty)
+            _buildEmpty('目前沒有用戶資料')
+          else if (_users.isEmpty)
+            _buildEmpty('沒有符合條件的用戶資料')
+          else
+            ..._users.map(
+              (user) => Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _buildUserCard(user),
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  // ── Header ──────────────────────────────────────────
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 18, 24, 16),
+      decoration: const BoxDecoration(
+        color: _kCardBg,
+        border: Border(
+          bottom: BorderSide(color: _kBorder),
+        ),
       ),
       child: Row(
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: moduleColor.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: const Icon(
-              Icons.groups_rounded,
-              color: moduleColor,
-              size: 30,
-            ),
-          ),
-          const SizedBox(width: 18),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '用戶管理',
-                  style: TextStyle(
-                    color: _textMain,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w800,
-                  ),
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '用戶管理',
+                style: TextStyle(
+                  color: _kTextMain,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
                 ),
-                SizedBox(height: 6),
-                Text(
-                  '管理災民基本資料、聯絡資訊與區域分佈',
-                  style: TextStyle(
-                    color: _textSub,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.notifications_none_rounded,
-              color: moduleColor,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatsRow({
-    required int total,
-    required int current,
-    required int areaCount,
-  }) {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildStatCard(
-            title: '全部用戶',
-            subtitle: '所有註冊用戶',
-            value: total.toString(),
-            icon: Icons.groups_2_outlined,
-            iconColor: _blue,
-            iconBg: const Color(0xFFE8F0FF),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildStatCard(
-            title: '目前顯示',
-            subtitle: '當前列表數量',
-            value: current.toString(),
-            icon: Icons.remove_red_eye_outlined,
-            iconColor: _green,
-            iconBg: const Color(0xFFE8F8ED),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildStatCard(
-            title: '區域數量',
-            subtitle: '服務區域數量',
-            value: areaCount.toString(),
-            icon: Icons.apartment_outlined,
-            iconColor: _orange,
-            iconBg: const Color(0xFFFFF3E0),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard({
-    required String title,
-    required String subtitle,
-    required String value,
-    required IconData icon,
-    required Color iconColor,
-    required Color iconBg,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.035),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 62,
-            height: 62,
-            decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Icon(icon, color: iconColor, size: 30),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: _textSub,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: _textMain,
-                    fontSize: 34,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: _textSub,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Icon(Icons.chevron_right_rounded, color: _textSub),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSearchActionBar() {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            height: 64,
-            decoration: BoxDecoration(
-              color: _card,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: _border),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 14,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: TextField(
-              controller: _searchController,
-              onChanged: _onSearchChanged,
-              style: const TextStyle(
-                color: _textMain,
-                fontSize: 16,
               ),
-              decoration: InputDecoration(
-                hintText: '搜尋姓名 / 電話 / 區域...',
-                hintStyle: const TextStyle(color: _textSub),
-                prefixIcon: const Icon(
-                  Icons.search_rounded,
-                  color: _textSub,
-                  size: 24,
+              SizedBox(height: 2),
+              Text(
+                'CITIZEN INFORMATION CENTER',
+                style: TextStyle(
+                  color: _kTextSub,
+                  fontSize: 12,
+                  letterSpacing: 1.4,
                 ),
-                suffixIcon: _searchKeyword.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.close_rounded, color: _textSub),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() {
-                            _searchKeyword = '';
-                          });
-                          _applyFilters();
-                        },
-                      )
-                    : null,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 18,
-                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 14),
+          _pill('系統運作正常', _kGreen),
+          const Spacer(),
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => _loadUsers(),
+            child: Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: _kCardBg,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _kBorder),
+              ),
+              child: const Icon(
+                Icons.refresh_rounded,
+                color: _kBlue,
+                size: 18,
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  // ── 統計卡片 ─────────────────────────────────────────
+  Widget _buildStatsRow() {
+    return Row(
+      children: [
+        Expanded(
+          child: _statCard(
+            '用戶總數',
+            '${_allUsers.length}',
+            Icons.groups_rounded,
+            _kBlue,
+          ),
         ),
-        const SizedBox(width: 14),
-        _buildActionButton(Icons.filter_alt_outlined, '篩選'),
         const SizedBox(width: 12),
-        _buildActionButton(Icons.sort_rounded, '排序'),
+        Expanded(
+          child: _statCard(
+            '已登記',
+            '$_verifiedCount',
+            Icons.verified_user_outlined,
+            _kGreen,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _statCard(
+            '管理員',
+            '1',
+            Icons.admin_panel_settings_outlined,
+            _kPurple,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _statCard(
+            '區域數',
+            '${_areas.length - 1}',
+            Icons.apartment_outlined,
+            _kOrange,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildActionButton(IconData icon, String label) {
+  Widget _statCard(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _border),
+        color: _kCardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.025),
+            color: Colors.black.withOpacity(.035),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -557,90 +377,224 @@ static const Color moduleColor = Color(0xFF4A90E2);
       ),
       child: Row(
         children: [
-          Icon(icon, color: _textSub, size: 22),
-          const SizedBox(width: 8),
-          Text(
-            label,
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: color.withOpacity(.10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: const TextStyle(
+                  color: _kTextMain,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: _kTextSub,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 搜尋 + 區域篩選 ───────────────────────────────────
+  Widget _buildSearchAndFilter() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          height: 46,
+          decoration: BoxDecoration(
+            color: _kCardBg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _kBorder),
+          ),
+          child: TextField(
+            controller: _searchController,
+            onChanged: _onSearchChanged,
             style: const TextStyle(
-              color: _textMain,
-              fontWeight: FontWeight.w700,
+              color: _kTextMain,
               fontSize: 14,
             ),
+            decoration: InputDecoration(
+              hintText: '搜尋姓名 / 電話 / 區域...',
+              hintStyle: const TextStyle(
+                color: _kTextSub,
+                fontSize: 14,
+              ),
+              prefixIcon: const Icon(
+                Icons.search,
+                color: _kTextSub,
+                size: 18,
+              ),
+              suffixIcon: _searchKeyword.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: _kTextSub,
+                        size: 18,
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchKeyword = '');
+                        _applyFilters();
+                      },
+                    )
+                  : null,
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 13,
+              ),
+            ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 14),
+        _buildAreaSelector(),
+      ],
     );
   }
 
-  Widget _buildSegmentTabs(List<String> areaList) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.025),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: areaList.map((area) {
-          final bool isSelected = _selectedArea == area;
-          final label = area == 'all' ? '全部' : area;
+  Widget _buildAreaSelector() {
+    return SizedBox(
+      height: 92,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _areas.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final area = _areas[index];
+          final selected = _selectedArea == area;
+
+          final label = area == 'all' ? '全部區域' : area;
           final count = area == 'all' ? _allUsers.length : _countByArea(area);
 
           return InkWell(
             borderRadius: BorderRadius.circular(18),
             onTap: () {
-              setState(() {
-                _selectedArea = area;
-              });
+              setState(() => _selectedArea = area);
               _applyFilters();
             },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              curve: Curves.easeOut,
+              width: 158,
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: isSelected ? _blue : Colors.transparent,
+                color: selected ? _kBlue : _kCardBg,
                 borderRadius: BorderRadius.circular(18),
-              ),
-              child: Text(
-                '$label ($count)',
-                style: TextStyle(
-                  color: isSelected ? Colors.white : _textMain,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+                border: Border.all(
+                  color: selected ? _kBlue : _kBorder,
                 ),
+                boxShadow: [
+                  BoxShadow(
+                    color: selected
+                        ? _kBlue.withOpacity(.18)
+                        : Colors.black.withOpacity(.03),
+                    blurRadius: selected ? 18 : 10,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 30,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? Colors.white.withOpacity(.18)
+                              : _kBlue.withOpacity(.08),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          area == 'all'
+                              ? Icons.public_rounded
+                              : Icons.location_on_rounded,
+                          color: selected ? Colors.white : _kBlue,
+                          size: 17,
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: selected ? Colors.white : _kGreen,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: selected ? Colors.white : _kTextMain,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '$count 位居民',
+                    style: TextStyle(
+                      color: selected ? Colors.white70 : _kTextSub,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ),
           );
-        }).toList(),
+        },
       ),
     );
   }
 
-  Widget _buildUserCard(dynamic user) {
-    final status = _getStatusText(user);
+  // ── 用戶卡片 ──────────────────────────────────────────
+  Widget _buildUserCard(Map<String, dynamic> user) {
+    final status = _userStatusText(user);
+    final color = _userStatusColor(status);
 
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: _border),
+        color: _kCardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.035),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(.035),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -648,221 +602,145 @@ static const Color moduleColor = Color(0xFF4A90E2);
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 88,
-            height: 88,
+            width: 4,
+            height: 90,
             decoration: BoxDecoration(
-              color: const Color(0xFFEAF1FF),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: const Icon(
-              Icons.person_rounded,
-              color: moduleColor,
-              size: 42,
+              color: _kBlue,
+              borderRadius: BorderRadius.circular(99),
             ),
           ),
-          const SizedBox(width: 20),
+          const SizedBox(width: 14),
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: _kBlue.withOpacity(.10),
+            child: Text(
+              (user['name'] ?? '?').toString().isNotEmpty
+                  ? (user['name'] ?? '?').toString()[0]
+                  : '?',
+              style: const TextStyle(
+                color: _kBlue,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
           Expanded(
-            flex: 7,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  (user['name'] ?? '未命名').toString(),
-                  style: const TextStyle(
-                    color: _textMain,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'ID: ${(user['id'] ?? '').toString()}',
-                  style: const TextStyle(
-                   color: moduleColor,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 18),
                 Row(
                   children: [
                     Expanded(
-                      child: _buildPhoneBox(
-                        value: (user['phone'] ?? '').toString(),
+                      child: Text(
+                        (user['name'] ?? '').toString(),
+                        style: const TextStyle(
+                          color: _kTextMain,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildInfoBox(
-                        icon: Icons.location_on_outlined,
-                        label: '區域',
-                        value: (user['area'] ?? '').toString(),
-                      ),
+                    _statusBadge(status, color),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'ID：${user['id'] ?? '--'}  ·  血型：${user['bloodType'] ?? '--'}',
+                  style: const TextStyle(
+                    color: _kTextSub,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _tag(
+                      Icons.phone_outlined,
+                      (user['phone'] ?? '').toString(),
+                      _kBlue,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _buildInfoBox(
-                        icon: Icons.favorite_outline_rounded,
-                        label: '血型',
-                        value: (user['bloodType'] ?? '未填').toString(),
-                      ),
+                    _tag(
+                      Icons.location_on_outlined,
+                      (user['area'] ?? '').toString(),
+                      _kGreen,
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 8),
                 Container(
-                  width: double.infinity,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
+                    horizontal: 12,
+                    vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(16),
+                    color: _kCardBg2,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: _kBorder),
                   ),
                   child: Row(
                     children: [
                       const Icon(
                         Icons.call_outlined,
-                        color: _textSub,
-                        size: 18,
+                        color: _kTextSub,
+                        size: 13,
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 7),
                       Expanded(
                         child: Text(
-                          '緊急聯絡人：${(user['emergencyContactName'] ?? '').toString()} ｜ ${(user['emergencyContactPhone'] ?? '').toString()}',
+                          '緊急聯絡：${user['emergencyContactName'] ?? ''}'
+                          ' (${user['emergencyContactRelation'] ?? ''}) '
+                          '${user['emergencyContactPhone'] ?? ''}',
                           style: const TextStyle(
-                            color: _textSub,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                            color: _kTextSub,
+                            fontSize: 12,
                           ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            flex: 2,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _getStatusBgColor(status),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.circle,
-                        size: 10,
-                        color: _getStatusColor(status),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        status,
-                        style: TextStyle(
-                          color: _getStatusColor(status),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: 170,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _showDetailDialog(context, user),
-                    icon: const Icon(Icons.visibility_outlined, size: 18),
-                    label: const Text('查看詳情'),
-                    style: ElevatedButton.styleFrom(
-                      elevation: 0,
-                      backgroundColor: _blue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      textStyle: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPhoneBox({required String value}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFF8FBFF), Color(0xFFEEF4FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFD7E3FF),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE3EDFF),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(
-              Icons.phone_rounded,
-             color: moduleColor,
-              size: 20,
             ),
           ),
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value.isEmpty ? '未填寫' : value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _textMain,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => _showDetail(user),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: _kBlue.withOpacity(.06),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: _kBlue.withOpacity(.2),
                 ),
-                const SizedBox(height: 4),
-                const Text(
-                  '聯絡電話',
-                  style: TextStyle(
-                    color: _textSub,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.visibility_outlined,
+                    color: _kBlue,
+                    size: 14,
                   ),
-                ),
-              ],
+                  SizedBox(width: 5),
+                  Text(
+                    '詳情',
+                    style: TextStyle(
+                      color: _kBlue,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -870,79 +748,322 @@ static const Color moduleColor = Color(0xFF4A90E2);
     );
   }
 
-  Widget _buildInfoBox({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFBFCFE),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE6ECF5)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5FF),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: moduleColor,size: 18),
+  // ── 詳情 Dialog ──────────────────────────────────────
+  void _showDetail(Map<String, dynamic> user) {
+    final status = _userStatusText(user);
+    final color = _userStatusColor(status);
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(.35),
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: 480,
+          decoration: BoxDecoration(
+            color: _kCardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _kBorder),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value.isEmpty ? '未填寫' : value,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _textMain,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 12, 16),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: _kBlue.withOpacity(.10),
+                      child: Text(
+                        (user['name'] ?? '?').toString().isNotEmpty
+                            ? (user['name'] ?? '?').toString()[0]
+                            : '?',
+                        style: const TextStyle(
+                          color: _kBlue,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            (user['name'] ?? '').toString(),
+                            style: const TextStyle(
+                              color: _kTextMain,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              _statusBadge(status, color),
+                              const SizedBox(width: 8),
+                              Text(
+                                'ID：${user['id'] ?? '--'}',
+                                style: const TextStyle(
+                                  color: _kTextSub,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(
+                        Icons.close,
+                        color: _kTextSub,
+                        size: 18,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: _textSub,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
+              ),
+              const Divider(height: 1, color: _kBorder),
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    _dialogRow('電話', (user['phone'] ?? '').toString()),
+                    _dialogRow('區域', (user['area'] ?? '').toString()),
+                    _dialogRow('血型', (user['bloodType'] ?? '').toString()),
+                    _dialogRow(
+                      '醫療資訊',
+                      (user['medicalInfo'] ?? '無').toString(),
+                    ),
+                    _dialogRow(
+                      '緊急聯絡人',
+                      '${user['emergencyContactName'] ?? ''} (${user['emergencyContactRelation'] ?? ''})',
+                    ),
+                    _dialogRow(
+                      '緊急聯絡電話',
+                      (user['emergencyContactPhone'] ?? '').toString(),
+                    ),
+                    _dialogRow(
+                      '註冊時間',
+                      (user['registeredAt'] ?? '').toString(),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildEmptyState(String message) {
+  Widget _dialogRow(String label, String value) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(42),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 12,
+      ),
       decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: _border),
+        color: _kCardBg2,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _kBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: _kTextSub,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.isEmpty ? '未填寫' : value,
+              style: const TextStyle(
+                color: _kTextMain,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 錯誤狀態 ──────────────────────────────────────────
+  Widget _buildError() {
+    return Center(
+      child: Container(
+        width: 420,
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: _kCardBg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: _kRed.withOpacity(.2),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: _kRed.withOpacity(.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.error_outline,
+                color: _kRed,
+                size: 26,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              _errorMessage,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: _kRed,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 18),
+            OutlinedButton.icon(
+              onPressed: () => _loadUsers(),
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('重新載入'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _kBlue,
+                side: BorderSide(
+                  color: _kBlue.withOpacity(.4),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── 空狀態 ────────────────────────────────────────────
+  Widget _buildEmpty(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(48),
+      decoration: BoxDecoration(
+        color: _kCardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _kBorder),
       ),
       child: Column(
         children: [
-          const Icon(Icons.inbox_outlined, size: 50, color: _textSub),
-          const SizedBox(height: 14),
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: _kBlue.withOpacity(.06),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.inbox_outlined,
+              size: 26,
+              color: _kTextSub,
+            ),
+          ),
+          const SizedBox(height: 12),
           Text(
-            message,
+            text,
             style: const TextStyle(
-              color: _textSub,
-              fontSize: 15,
+              color: _kTextSub,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 共用小元件 ─────────────────────────────────────────
+  static Widget _statusBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 4,
+      ),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: color.withOpacity(.2),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            text,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _tag(IconData icon, String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.06),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(
+          color: color.withOpacity(.18),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 12,
+            color: color,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            text.isEmpty ? '未填寫' : text,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -951,113 +1072,25 @@ static const Color moduleColor = Color(0xFF4A90E2);
     );
   }
 
-  void _showDetailDialog(BuildContext context, dynamic user) {
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: Container(
-          width: 620,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: _card,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  (user['name'] ?? '未命名').toString(),
-                  style: const TextStyle(
-                    color: _textMain,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '用戶 ID：${(user['id'] ?? '').toString()}',
-                  style: const TextStyle(
-                    color: _textSub,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                _buildDialogItem('電話', (user['phone'] ?? '').toString()),
-                _buildDialogItem('區域', (user['area'] ?? '').toString()),
-                _buildDialogItem(
-                  '血型',
-                  (user['bloodType'] ?? '未填寫').toString(),
-                ),
-                _buildDialogItem(
-                  '醫療資訊',
-                  (user['medicalInfo'] ?? '無').toString(),
-                ),
-                _buildDialogItem(
-                  '緊急聯絡人',
-                  '${(user['emergencyContactName'] ?? '').toString()} (${(user['emergencyContactRelation'] ?? '').toString()})',
-                ),
-                _buildDialogItem(
-                  '緊急聯絡電話',
-                  (user['emergencyContactPhone'] ?? '').toString(),
-                ),
-                _buildDialogItem(
-                  '註冊時間',
-                  (user['registeredAt'] ?? '').toString(),
-                ),
-                const SizedBox(height: 10),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text(
-                      '關閉',
-                      style: TextStyle(
-                        color: moduleColor,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+  static Widget _pill(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 5,
+      ),
+      decoration: BoxDecoration(
+        color: color.withOpacity(.08),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: color.withOpacity(.18),
         ),
       ),
-    );
-  }
-
-  Widget _buildDialogItem(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: RichText(
-          text: TextSpan(
-            style: const TextStyle(
-              fontSize: 14,
-              color: _textMain,
-              height: 1.6,
-            ),
-            children: [
-              TextSpan(
-                text: '$label：',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              TextSpan(
-                text: value.isEmpty ? '未填寫' : value,
-                style: const TextStyle(color: _textSub),
-              ),
-            ],
-          ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
