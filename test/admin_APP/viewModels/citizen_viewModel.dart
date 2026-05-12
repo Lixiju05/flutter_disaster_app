@@ -23,11 +23,18 @@ class CitizenViewmodel extends ChangeNotifier{
     notifyListeners();
   }
   //搜尋民眾
-  void search(String keyword){
-    _citizens=_repository.getCitizens()
-    .where((c) => c.name.toLowerCase().contains(keyword.toLowerCase())).toList();
-    notifyListeners();
-  }
+  void search(String keyword) async {
+  // 先 await 拿到真正的 List<Citizen> 資料
+  final allCitizens = await _repository.getCitizens();
+
+  // 拿到 List 之後，才能執行 .where 進行篩選
+  _citizens = allCitizens
+      .where((c) => c.name.toLowerCase().contains(keyword.toLowerCase()))
+      .toList();
+
+  // 通知 UI 更新介面
+  notifyListeners();
+}
   //更新民眾是否需要救援
   void updateNeedsRescue(Citizen citizen, bool needsRescue){
     final index= _citizens.indexWhere((c) => c.id == citizen.id);

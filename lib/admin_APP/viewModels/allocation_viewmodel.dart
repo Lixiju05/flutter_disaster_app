@@ -66,6 +66,24 @@ class AllocationViewModel extends ChangeNotifier {
     }
   }
 
+  Future<void> loadDispatches() async {
+    _isLoading = true; // 假設你有這個變數控制載入動畫
+    notifyListeners();
+
+    try {
+      // 呼叫 Repo 取得最新資料
+      final results = await _repo.getDispatches();
+      _dispatches = results.map((item) => DispatchItem.fromJson(item)).toList();
+      _errorMessage = ''; // 清空錯誤訊息
+    } catch (e) {
+      _errorMessage = '載入出貨紀錄失敗：$e';
+      print('Load Dispatches Error: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners(); // 結束載入並通知 UI 更新
+    }
+  }
+
   Future<bool> dispatch(int allocationId) async {
   try {
     // 1️⃣ 修正：使用傳入的參數 allocationId，而不是未定義的 allocation.id
