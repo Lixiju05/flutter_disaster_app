@@ -4,10 +4,11 @@ import 'dart:math';
 
 import 'package:admin_server/database/database_service.dart';
 import 'package:admin_server/core/models/healthReport.dart';
+import 'package:admin_server/core/models/supply_request.dart';
+
 
 Future<void> main() async {
   await DatabaseService.init();
-  DatabaseService.instance.seedAll();
 
   var server = await HttpServer.bind(
     InternetAddress.anyIPv4,
@@ -155,6 +156,10 @@ Future<void> handleRequest(HttpRequest request) async {
 
       case 'getDispatches':
         await handleGetDispatches(request);
+        break;
+      
+      case 'addSupplyRequest':
+        await handleAddSupplyRequest(jsonData, request);
         break;
 
       default:
@@ -452,5 +457,30 @@ Future<void> handleGetDispatches(HttpRequest request) async {
   sendJson(request, 200, {
     "success": true,
     "data": data,
+  });
+}
+
+//處理物資需求
+Future<void> handleAddSupplyRequest(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  await DatabaseService.instance.insertSupplyRequest(
+    SupplyRequest(
+      requestId: jsonData['requestId'],
+      itemId: jsonData['itemId'],
+      qty: jsonData['qty'],
+      lat: (jsonData['lat'] as num?)?.toDouble(),
+      lng: (jsonData['lng'] as num?)?.toDouble(),
+      zoneId: jsonData['zoneId'],
+      gridId: jsonData['gridId'],
+      status: 'pending',
+      createdAt: DateTime.now(),
+    ),
+  );
+
+  sendJson(request, 200, {
+    "success": true,
+    "message": "request saved"
   });
 }

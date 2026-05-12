@@ -3,6 +3,7 @@ import 'package:sqlite3/sqlite3.dart';
 import 'package:admin_server/core/models/healthReport.dart';
 import 'package:admin_server/core/models/admin.dart';
 import 'package:admin_server/core/models/user.dart';
+import 'package:admin_server/core/models/supply_request.dart';
 
 class DatabaseService {
   final Database _db; // 核心實例變數
@@ -25,11 +26,12 @@ class DatabaseService {
     instance = DatabaseService(rawDb);
 
     // 建立所有資料表
-    rawDb.execute('''CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT);''');
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE,password TEXT,zoneId TEXT;''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, phone TEXT, area TEXT, emergencyContactName TEXT, emergencyContactPhone TEXT, emergencyContactRelation TEXT, bloodType TEXT, medicalInfo TEXT, registeredAt TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS health_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT UNIQUE, reporterId TEXT, name TEXT, phone TEXT, bloodType TEXT, status TEXT, description TEXT, lat REAL, lng REAL, reportTime TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT, unit TEXT, stockQty INTEGER DEFAULT 0, reservedQty INTEGER DEFAULT 0, neededQty INTEGER DEFAULT 0, updatedAt TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS allocations (id INTEGER PRIMARY KEY AUTOINCREMENT, itemId INTEGER, zoneId TEXT, quantity INTEGER, status TEXT, createdAt TEXT);''');
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS supply_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,requestId TEXT UNIQUE,itemId INTEGER,qty INTEGER,lat REAL,lng REAL,zoneId TEXT,gridId TEXT,status TEXT,createdAt TEXT);''');
 
     instance._initDefaultAdmin();
     instance.seedAll();
@@ -67,10 +69,29 @@ class DatabaseService {
     return result.isNotEmpty;
   }
 
-  Future <void> _initDefaultAdmin() async{
-    final result = await select("SELECT * FROM admins WHERE username = ?", ["admin"]);
-    if (result.isEmpty) {
-      await execute("INSERT INTO admins (username, password) VALUES (?, ?)", ["admin", "1234"]);
+  Future<void> _initDefaultAdmin() async {
+    // 建立一個轄區配置清單
+    final defaultOffices = [
+      {'u': 'admin_puli', 'p': 'puli123', 'z': '埔里鎮公所'},
+      {'u': 'admin_nanan', 'p': '1234', 'z': '南安里'},
+      {'u': 'admin_danan', 'p': '1234', 'z': '大湳里'},
+      {'u': 'admin_piba', 'p': '1234', 'z': '枇杷里'},
+      {'u': 'admin_shuimen', 'p': '1234', 'z': '水門里'},
+    ];
+
+    for (var office in defaultOffices) {
+      final result = await select(
+        "SELECT * FROM admins WHERE username = ?", 
+        [office['u']]
+      );
+      
+      if (result.isEmpty) {
+        await execute(
+          "INSERT INTO admins (username, password, zoneId) VALUES (?, ?, ?)", 
+          [office['u'], office['p'], office['z']]
+        );
+        print("建立轄區管理員: ${office['z']}");
+      }
     }
   }
 
@@ -141,21 +162,69 @@ class DatabaseService {
     required int stockQty,
     int neededQty = 0,
   }) async {
-    await execute('''
-      INSERT INTO inventory (
-        name, category, unit,
-        stockQty, reservedQty, neededQty,
-        updatedAt
-      )
-      VALUES (?, ?, ?, ?, 0, ?, ?)
-    ''', [
-      name,
-      category,
-      unit,
-      stockQty,
-      neededQty,
-      DateTime.now().toIso8601String(),
-    ]);
+
+    // 1️⃣ 先檢查有沒有同品項
+    final result = await select(
+      '''
+      SELECT * FROM inventory
+      WHERE name = ?
+      ''',
+      [name],
+    );
+
+    // 2️⃣ 有 -> 更新數量
+    if (result.isNotEmpty) {
+
+      final row = result.first;
+
+      final currentStock =
+          row['stockQty'] as int;
+
+      final currentNeeded =
+          row['neededQty'] as int;
+
+      await execute(
+        '''
+        UPDATE inventory
+        SET stockQty = ?,
+            neededQty = ?,
+            updatedAt = ?
+        WHERE name = ?
+        ''',
+        [
+          currentStock + stockQty,
+          currentNeeded + neededQty,
+          DateTime.now().toIso8601String(),
+          name,
+        ],
+      );
+
+    } else {
+
+      // 3️⃣ 沒有 -> 新增
+      await execute(
+        '''
+        INSERT INTO inventory (
+          name,
+          category,
+          unit,
+          stockQty,
+          reservedQty,
+          neededQty,
+          updatedAt
+        )
+        VALUES (?, ?, ?, ?, 0, ?, ?)
+        ''',
+        [
+          name,
+          category,
+          unit,
+          stockQty,
+          neededQty,
+          DateTime.now().toIso8601String(),
+        ],
+      );
+    }
   }
 
   //補貨
@@ -301,8 +370,63 @@ class DatabaseService {
     return result.toList();
   }
 
+  Future<void> insertSupplyRequest(SupplyRequest req) async {
+    await execute('''
+      INSERT INTO supply_requests (
+        requestId, itemId, qty,
+        lat, lng, zoneId, gridId,
+        status, createdAt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', [
+      req.requestId,
+      req.itemId,
+      req.qty,
+      req.lat,
+      req.lng,
+      req.zoneId,
+      req.gridId,
+      req.status,
+      req.createdAt.toIso8601String(),
+    ]);
+  }
+
+  Future<List<Map<String, Object?>>> getAllRequests() async {
+    final result = await select('SELECT * FROM supply_requests ORDER BY createdAt DESC');
+    return result.toList();
+  }
+
+  Future<void> updateRequestStatus(String requestId, String status) async {
+    await execute('''
+      UPDATE supply_requests
+      SET status = ?
+      WHERE requestId = ?
+    ''', [status, requestId]);
+  }
+
+  // 1. 登入時抓取該帳號對應的轄區
+  Future<String?> getZoneIdByAdmin(String username, String password) async {
+    final result = await select(
+      'SELECT zoneId FROM admins WHERE username = ? AND password = ?', 
+      [username, password]
+    );
+    if (result.isEmpty) return null;
+    return result.first['zoneId']?.toString();
+  }
+
+  // 2. 所有的查詢方法都「強制帶入」zoneId
+  Future<List<Map<String, Object?>>> getRequestsForOffice(String zoneId) async {
+    return await select('''
+      SELECT sr.*, i.name as itemName 
+      FROM supply_requests sr
+      JOIN inventory i ON sr.itemId = i.id
+      WHERE sr.zoneId = ? 
+      ORDER BY sr.createdAt DESC
+    ''', [zoneId]);
+  }
+
   // =====================
-  // SEED & HELPERS (重複的部分已刪除)
+  // SEED & HELPERS 
   // =====================
   Future<void> seedAll() async {
 
@@ -313,6 +437,8 @@ class DatabaseService {
   await seedInventory();
 
   await seedAllocations();
+
+  await seedSupplyRequests();
 
   print("All seed data completed");
 }
@@ -525,7 +651,84 @@ Future<void> seedAllocations() async {
   print("Seed allocations created");
   }
 
+  Future<void> seedSupplyRequests() async {
+    final result = await select("SELECT id FROM supply_requests LIMIT 1");
+    if (result.isNotEmpty) return;
 
+    await execute('''
+      INSERT INTO supply_requests (
+        requestId, itemId, qty,
+        lat, lng, zoneId, gridId,
+        status, createdAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', [
+      'REQ001',
+      1,
+      20,
+      23.9658,
+      120.9686,
+      '埔里鎮',
+      'gridA1',
+      'pending',
+      DateTime.now().toIso8601String(),
+    ]);
+
+    await execute('''
+      INSERT INTO supply_requests (
+        requestId, itemId, qty,
+        lat, lng, zoneId, gridId,
+        status, createdAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', [
+      'REQ002',
+      1,
+      30,
+      23.9672,
+      120.9701,
+      '埔里鎮',
+      'gridA1',
+      'pending',
+      DateTime.now().toIso8601String(),
+    ]);
+
+    await execute('''
+      INSERT INTO supply_requests (
+        requestId, itemId, qty,
+        lat, lng, zoneId, gridId,
+        status, createdAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', [
+      'REQ003',
+      2,
+      15,
+      24.0001,
+      120.9500,
+      '埔里國中附近',
+      'gridA2',
+      'pending',
+      DateTime.now().toIso8601String(),
+    ]);
+
+    await execute('''
+      INSERT INTO supply_requests (
+        requestId, itemId, qty,
+        lat, lng, zoneId, gridId,
+        status, createdAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', [
+      'REQ004',
+      3,
+      50,
+      24.0105,
+      120.9602,
+      '山區住戶',
+      'gridB1',
+      'pending',
+      DateTime.now().toIso8601String(),
+    ]);
+
+    print("Seed supply requests created");
+  }
 
   AppUser _rowToUser(Row row) {
     return AppUser(
