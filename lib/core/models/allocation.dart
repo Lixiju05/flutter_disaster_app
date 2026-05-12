@@ -6,7 +6,7 @@ class AllocationItem {
   final int qty;
   final String unit;
   final String createdAt;
-  final bool dispatched;
+  final String status;              // ← 原来是 bool dispatched，改成 String status
 
   const AllocationItem({
     required this.allocationId,
@@ -16,8 +16,11 @@ class AllocationItem {
     required this.qty,
     required this.unit,
     required this.createdAt,
-    required this.dispatched,
+    required this.status,           // ← 改
   });
+
+  // ← 加这个 getter，SupplyPage 里所有 a.dispatched 完全不用动
+  bool get dispatched => status == 'shipped';
 
   factory AllocationItem.fromJson(Map<String, dynamic> json) {
     return AllocationItem(
@@ -28,7 +31,7 @@ class AllocationItem {
       qty:          _toInt(json['qty']),
       unit:         (json['unit'] ?? '').toString(),
       createdAt:    (json['createdAt'] ?? '').toString(),
-      dispatched:   json['dispatched'] == true || json['dispatched'] == 1,
+      status:       (json['status'] ?? 'reserved').toString(), // ← 原来读 dispatched，改成读 status
     );
   }
 
