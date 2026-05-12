@@ -329,7 +329,7 @@ Future<void> handleSearchReports(
 ) async {
   final keyword = jsonData['keyword'] ?? '';
 
-  final results = DatabaseService.instance.searchReports(keyword);
+  final results =await DatabaseService.instance.searchReports(keyword);
 
   sendJson(request, HttpStatus.ok, {
     "success": true,
@@ -342,7 +342,7 @@ Future<void> handleSearchUsers(
 ) async {
   final keyword = jsonData['keyword'] ?? '';
 
-  final results = DatabaseService.instance.searchUsers(keyword);
+  final results =await DatabaseService.instance.searchUsers(keyword);
 
   sendJson(request, HttpStatus.ok, {
     "success": true,
@@ -351,7 +351,7 @@ Future<void> handleSearchUsers(
 }
 //查inventory
 Future<void> handleGetInventory(HttpRequest request) async {
-  final items = DatabaseService.instance.getAllInventory();
+  final items =await DatabaseService.instance.getAllInventory();
 
   sendJson(request, 200, {
     "success": true,
@@ -424,7 +424,7 @@ Future<void> handleAllocate(
 }
 //查allocation
 Future<void> handleGetAllocations(HttpRequest request) async {
-  final data = DatabaseService.instance.getAllocations();
+  final data =await DatabaseService.instance.getAllocations();
 
   sendJson(request, 200, {
     "success": true,
@@ -447,7 +447,7 @@ Future<void> handleDispatch(
 }
 //查出貨紀錄
 Future<void> handleGetDispatches(HttpRequest request) async {
-  final data = DatabaseService.instance.getDispatches();
+  final data =await DatabaseService.instance.getDispatches();
 
   sendJson(request, 200, {
     "success": true,
