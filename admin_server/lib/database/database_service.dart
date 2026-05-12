@@ -305,21 +305,227 @@ class DatabaseService {
   // SEED & HELPERS (重複的部分已刪除)
   // =====================
   Future<void> seedAll() async {
-    final result = await select("SELECT id FROM users LIMIT 1");
-    if (result.isEmpty) {
-      await seedUsers();
-      await seedHealthReports();
-      print("Seed data completed.");
-    }
-  }
+
+  await seedUsers();
+
+  await seedHealthReports();
+
+  await seedInventory();
+
+  await seedAllocations();
+
+  print("All seed data completed");
+}
 
   Future<void> seedUsers() async {
-    await execute("INSERT INTO users (id, name, phone, area, registeredAt) VALUES ('U001', '王小明', '0912345678', '台中', ?)", [DateTime.now().toIso8601String()]);
+    final users = [
+    ['U001', '王小明', '0912345678', '台中'],
+    ['U002', '李小華', '0923456789', '台北'],
+    ['U003', '陳志明', '0934567891', '高雄'],
+    ['U004', '林雅婷', '0945678912', '台南'],
+    ['U005', '黃建豪', '0956789123', '新竹'],
+    ['U006', '張美玲', '0967891234', '彰化'],
+    ['U007', '吳宗翰', '0978912345', '南投'],
+    ['U008', '蔡佩珊', '0989123456', '花蓮'],
+  ];
+
+  for (final u in users) {
+    await execute('''
+      INSERT OR IGNORE INTO users (
+        id, name, phone, area, registeredAt
+      )
+      VALUES (?, ?, ?, ?, ?)
+    ''', [
+      u[0],
+      u[1],
+      u[2],
+      u[3],
+      DateTime.now().toIso8601String(),
+    ]);
+  }
+
+  print("Seed users created");
   }
 
   Future<void> seedHealthReports() async {
-    await execute("INSERT INTO health_reports (uuid, reporterId, name, status, reportTime) VALUES ('R001', 'U001', '王小明', 'safe', ?)", [DateTime.now().toIso8601String()]);
+    final reports = [
+
+    [
+      'R001',
+      'U001',
+      '王小明',
+      'safe',
+      '目前安全，在避難所',
+      24.1477,
+      120.6736
+    ],
+
+    [
+      'R002',
+      'U002',
+      '李小華',
+      'injured',
+      '腳受傷，需要醫療協助',
+      25.0330,
+      121.5654
+    ],
+
+    [
+      'R003',
+      'U003',
+      '陳志明',
+      'critical',
+      '受困大樓內',
+      22.6273,
+      120.3014
+    ],
+
+    [
+      'R004',
+      'U004',
+      '林雅婷',
+      'safe',
+      '家人平安',
+      23.0000,
+      120.2269
+    ],
+
+    [
+      'R005',
+      'U005',
+      '黃建豪',
+      'missing',
+      '失去聯絡超過12小時',
+      24.8138,
+      120.9675
+    ],
+
+  ];
+
+  for (final r in reports) {
+
+    await execute('''
+      INSERT OR IGNORE INTO health_reports (
+        uuid,
+        reporterId,
+        name,
+        status,
+        description,
+        lat,
+        lng,
+        reportTime
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', [
+
+      r[0],
+      r[1],
+      r[2],
+      r[3],
+      r[4],
+      r[5],
+      r[6],
+      DateTime.now().toIso8601String(),
+
+    ]);
   }
+
+  print("Seed health reports created");
+  }
+
+Future<void> seedInventory() async {
+
+  final items = [
+
+    ['礦泉水', '食品飲水', '箱', 120, 20, 300],
+    ['泡麵', '食品飲水', '箱', 80, 10, 200],
+    ['餅乾', '食品飲水', '箱', 50, 5, 100],
+
+    ['毛毯', '生活用品', '件', 40, 15, 80],
+    ['睡袋', '生活用品', '件', 25, 5, 50],
+
+    ['口罩', '醫療衛生', '盒', 300, 50, 500],
+    ['急救包', '醫療衛生', '組', 60, 10, 120],
+    ['退燒藥', '醫療衛生', '盒', 45, 8, 100],
+
+    ['雨衣', '衣物', '件', 70, 12, 150],
+    ['保暖外套', '衣物', '件', 30, 3, 60],
+
+  ];
+
+  for (final i in items) {
+
+    await execute('''
+      INSERT INTO inventory (
+        name,
+        category,
+        unit,
+        stockQty,
+        reservedQty,
+        neededQty,
+        updatedAt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', [
+
+      i[0],
+      i[1],
+      i[2],
+      i[3],
+      i[4],
+      i[5],
+      DateTime.now().toIso8601String(),
+
+    ]);
+  }
+
+  print("Seed inventory created");
+  }
+
+Future<void> seedAllocations() async {
+
+  await execute('''
+    INSERT INTO allocations (
+      itemId,
+      zoneId,
+      quantity,
+      status,
+      createdAt
+    )
+    VALUES (?, ?, ?, ?, ?)
+  ''', [
+
+    1,
+    '南投避難所',
+    30,
+    'reserved',
+    DateTime.now().toIso8601String(),
+
+  ]);
+
+  await execute('''
+    INSERT INTO allocations (
+      itemId,
+      zoneId,
+      quantity,
+      status,
+      createdAt
+    )
+    VALUES (?, ?, ?, ?, ?)
+  ''', [
+
+    2,
+    '台中救援站',
+    20,
+    'shipped',
+    DateTime.now().toIso8601String(),
+
+  ]);
+
+  print("Seed allocations created");
+  }
+
+
 
   AppUser _rowToUser(Row row) {
     return AppUser(

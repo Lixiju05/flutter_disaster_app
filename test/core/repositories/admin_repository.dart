@@ -1,4 +1,4 @@
-import '../models/citizen.dart';
+/*import '../models/citizen.dart';
 import '../models/prepared_supply.dart';
 import '../models/emergency_request.dart';
 import '../models/supply.dart';
@@ -52,3 +52,4 @@ List<AdminSupply> getAdminSupplies() {
   return _adminSupplies;
 }
 }
+*/
