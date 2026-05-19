@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:admin_server/database/database_service.dart';
 import 'package:admin_server/core/models/healthReport.dart';
 import 'package:admin_server/core/models/supply_request.dart';
+import 'package:admin_server/utils/geo_helper.dart';
 
 
 Future<void> main() async {
@@ -162,6 +163,14 @@ Future<void> handleRequest(HttpRequest request) async {
         await handleAddSupplyRequest(jsonData, request);
         break;
 
+      case 'getRequestSummaryByGrid':
+        await handleGetRequestSummaryByGrid(request);
+        break;
+
+      case 'getHotZones':
+        await handleGetHotZones(request);
+        break;
+
       default:
         sendJson(request, HttpStatus.badRequest, {
           "success": false,
@@ -226,46 +235,26 @@ Future<void> handleHealthReport(
   }
 }
 /// 登入（含 Token）
-Future<void> handleLogin(
-  Map<String, dynamic> jsonData,
-  HttpRequest request,
-) async {
-  try {
-    print("LOGIN ENTER");
+Future<void> handleLogin(Map<String, dynamic> jsonData, HttpRequest request) async {
+  final username = jsonData['username'];
+  final password = jsonData['password'];
 
-    final username = jsonData['username'];
-    final password = jsonData['password'];
+  // 從資料庫查出該帳號完整的資訊
+  final result = await DatabaseService.instance.select(
+    'SELECT * FROM admins WHERE username = ? AND password = ?', 
+    [username, password]
+  );
 
-    if (username == null || password == null) {
-      sendJson(request, 400, {
-        "success": false,
-        "message": "Missing username or password"
-      });
-      return;
-    }
-
-    final success = DatabaseService.instance.checkLogin(username, password);
-
-    if (await success) {
-      sendJson(request, 200, {
-        "success": true,
-        "token": generateToken(),
-        "adminId": username,
-      });
-    } else {
-      sendJson(request, 403, {
-        "success": false,
-        "message": "Invalid credentials"
-      });
-    }
-  } catch (e, stack) {
-    print("LOGIN ERROR: $e");
-    print(stack);
-
-    sendJson(request, 500, {
-      "success": false,
-      "message": "Server error"
+  if (result.isNotEmpty) {
+    final adminRow = result.first;
+    sendJson(request, 200, {
+      "success": true,
+      "token": generateToken(),
+      "username": adminRow['username'],
+      "zoneId": adminRow['zoneId'], // 回傳這帳號管哪裡
     });
+  } else {
+    sendJson(request, 403, {"success": false, "message": "帳號密碼錯誤"});
   }
 }
 
@@ -465,22 +454,70 @@ Future<void> handleAddSupplyRequest(
   Map<String, dynamic> jsonData,
   HttpRequest request,
 ) async {
-  await DatabaseService.instance.insertSupplyRequest(
-    SupplyRequest(
-      requestId: jsonData['requestId'],
-      itemId: jsonData['itemId'],
-      qty: jsonData['qty'],
-      lat: (jsonData['lat'] as num?)?.toDouble(),
-      lng: (jsonData['lng'] as num?)?.toDouble(),
-      zoneId: jsonData['zoneId'],
-      gridId: jsonData['gridId'],
-      status: 'pending',
-      createdAt: DateTime.now(),
-    ),
-  );
+  try {
+    if (jsonData['requestId'] == null ||
+        jsonData['itemId'] == null ||
+        jsonData['qty'] == null ||
+        jsonData['lat'] == null ||
+        jsonData['lng'] == null) {
+      sendJson(request, 400, {
+        "success": false,
+        "message": "missing required fields"
+      });
+      return;
+    }
+
+    final lat = (jsonData['lat'] as num).toDouble();
+    final lng = (jsonData['lng'] as num).toDouble();
+
+    // 自動轉換 gridId / zoneId
+    final gridId = GeoHelper.getGridId(lat, lng);
+    final zoneId = GeoHelper.getZone(lat, lng);
+
+    await DatabaseService.instance.insertSupplyRequest(
+      SupplyRequest(
+        requestId: jsonData['requestId'],
+        itemId: jsonData['itemId'],
+        qty: jsonData['qty'],
+        lat: lat,
+        lng: lng,
+        zoneId: zoneId,
+        gridId: gridId,
+        status: 'pending',
+        createdAt: DateTime.now(),
+      ),
+    );
+
+    sendJson(request, 200, {
+      "success": true,
+      "message": "request saved",
+      "gridId": gridId,
+      "zoneId": zoneId,
+    });
+  } catch (e) {
+    print("ADD SUPPLY REQUEST ERROR: $e");
+
+    sendJson(request, 500, {
+      "success": false,
+      "message": e.toString(),
+    });
+  }
+}
+
+Future<void> handleGetRequestSummaryByGrid(HttpRequest request) async {
+  final data = await DatabaseService.instance.getRequestSummaryByGrid();
 
   sendJson(request, 200, {
     "success": true,
-    "message": "request saved"
+    "data": data,
+  });
+}
+
+Future<void> handleGetHotZones(HttpRequest request) async {
+  final data = await DatabaseService.instance.getHotZones();
+
+  sendJson(request, 200, {
+    "success": true,
+    "data": data,
   });
 }

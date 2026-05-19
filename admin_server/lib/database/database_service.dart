@@ -425,6 +425,37 @@ class DatabaseService {
     ''', [zoneId]);
   }
 
+  Future<List<Map<String, Object?>>> getRequestSummaryByGrid() async {
+    final result = await select('''
+      SELECT 
+        gridId,
+        zoneId,
+        itemId,
+        SUM(qty) AS totalQty,
+        COUNT(*) AS requestCount
+      FROM supply_requests
+      WHERE status = 'pending'
+      GROUP BY gridId, zoneId, itemId
+      ORDER BY totalQty DESC
+    ''');
+
+    return result.toList();
+  }
+  Future<List<Map<String, Object?>>> getHotZones() async {
+    final result = await select('''
+      SELECT 
+        gridId,
+        zoneId,
+        SUM(qty) AS totalQty,
+        COUNT(*) AS requestCount
+      FROM supply_requests
+      WHERE status = 'pending'
+      GROUP BY gridId, zoneId
+      ORDER BY totalQty DESC
+    ''');
+
+    return result.toList();
+  }
   // =====================
   // SEED & HELPERS 
   // =====================
