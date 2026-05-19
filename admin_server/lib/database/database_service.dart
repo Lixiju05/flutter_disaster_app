@@ -684,10 +684,10 @@ Future<void> seedAllocations() async {
 
   Future<void> seedSupplyRequests() async {
 
-    final result =
-        await select("SELECT id FROM supply_requests LIMIT 1");
+  final result =
+      await select("SELECT id FROM supply_requests LIMIT 1");
 
-    if (result.isNotEmpty) return;
+  if (result.isNotEmpty) return;
 
     final requests = [
 
@@ -695,6 +695,9 @@ Future<void> seedAllocations() async {
       [
         'REQ001',
         1,
+        '礦泉水',
+        '食品飲水',
+        '箱',
         20,
         23.9660,
         120.9675,
@@ -705,6 +708,9 @@ Future<void> seedAllocations() async {
       [
         'REQ002',
         1,
+        '礦泉水',
+        '食品飲水',
+        '箱',
         35,
         23.9652,
         120.9688,
@@ -716,6 +722,9 @@ Future<void> seedAllocations() async {
       [
         'REQ003',
         2,
+        '泡麵',
+        '食品飲水',
+        '箱',
         15,
         23.9850,
         120.9700,
@@ -726,6 +735,9 @@ Future<void> seedAllocations() async {
       [
         'REQ004',
         6,
+        '口罩',
+        '醫療衛生',
+        '盒',
         25,
         23.9885,
         120.9720,
@@ -737,6 +749,9 @@ Future<void> seedAllocations() async {
       [
         'REQ005',
         1,
+        '礦泉水',
+        '食品飲水',
+        '箱',
         50,
         23.9450,
         120.9690,
@@ -747,6 +762,9 @@ Future<void> seedAllocations() async {
       [
         'REQ006',
         7,
+        '急救包',
+        '醫療衛生',
+        '組',
         10,
         23.9420,
         120.9680,
@@ -758,6 +776,9 @@ Future<void> seedAllocations() async {
       [
         'REQ007',
         3,
+        '餅乾',
+        '食品飲水',
+        '箱',
         40,
         23.9680,
         120.9900,
@@ -768,6 +789,9 @@ Future<void> seedAllocations() async {
       [
         'REQ008',
         8,
+        '退燒藥',
+        '醫療衛生',
+        '盒',
         12,
         23.9700,
         120.9925,
@@ -779,6 +803,9 @@ Future<void> seedAllocations() async {
       [
         'REQ009',
         4,
+        '毛毯',
+        '生活用品',
+        '件',
         18,
         23.9670,
         120.9400,
@@ -789,6 +816,9 @@ Future<void> seedAllocations() async {
       [
         'REQ010',
         9,
+        '雨衣',
+        '衣物',
+        '件',
         30,
         23.9690,
         120.9420,
@@ -815,13 +845,13 @@ Future<void> seedAllocations() async {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''', [
 
-        r[0],
-        r[1],
-        r[2],
-        r[3],
-        r[4],
-        r[5],
-        r[6],
+        r[0], // requestId
+        r[1], // itemId
+        r[5], // qty
+        r[6], // lat
+        r[7], // lng
+        r[8], // zoneId
+        r[9], // gridId
         'pending',
         DateTime.now().toIso8601String(),
 
@@ -830,7 +860,7 @@ Future<void> seedAllocations() async {
 
     print("Seed supply requests created");
   }
-
+  
   AppUser _rowToUser(Row row) {
     return AppUser(
       id: row['id']?.toString() ?? '',
