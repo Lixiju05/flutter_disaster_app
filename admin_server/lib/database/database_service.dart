@@ -26,7 +26,7 @@ class DatabaseService {
     instance = DatabaseService(rawDb);
 
     // 建立所有資料表
-    rawDb.execute('''CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE,password TEXT,zoneId TEXT;''');
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE,password TEXT,zoneId TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, phone TEXT, area TEXT, emergencyContactName TEXT, emergencyContactPhone TEXT, emergencyContactRelation TEXT, bloodType TEXT, medicalInfo TEXT, registeredAt TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS health_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT UNIQUE, reporterId TEXT, name TEXT, phone TEXT, bloodType TEXT, status TEXT, description TEXT, lat REAL, lng REAL, reportTime TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT, unit TEXT, stockQty INTEGER DEFAULT 0, reservedQty INTEGER DEFAULT 0, neededQty INTEGER DEFAULT 0, updatedAt TEXT);''');
@@ -683,80 +683,150 @@ Future<void> seedAllocations() async {
   }
 
   Future<void> seedSupplyRequests() async {
-    final result = await select("SELECT id FROM supply_requests LIMIT 1");
+
+    final result =
+        await select("SELECT id FROM supply_requests LIMIT 1");
+
     if (result.isNotEmpty) return;
 
-    await execute('''
-      INSERT INTO supply_requests (
-        requestId, itemId, qty,
-        lat, lng, zoneId, gridId,
-        status, createdAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', [
-      'REQ001',
-      1,
-      20,
-      23.9658,
-      120.9686,
-      '埔里鎮',
-      'gridA1',
-      'pending',
-      DateTime.now().toIso8601String(),
-    ]);
+    final requests = [
 
-    await execute('''
-      INSERT INTO supply_requests (
-        requestId, itemId, qty,
-        lat, lng, zoneId, gridId,
-        status, createdAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', [
-      'REQ002',
-      1,
-      30,
-      23.9672,
-      120.9701,
-      '埔里鎮',
-      'gridA1',
-      'pending',
-      DateTime.now().toIso8601String(),
-    ]);
+      // 埔里市區（埔里鎮公所）
+      [
+        'REQ001',
+        1,
+        20,
+        23.9660,
+        120.9675,
+        '埔里市區',
+        'PULI_C',
+      ],
 
-    await execute('''
-      INSERT INTO supply_requests (
-        requestId, itemId, qty,
-        lat, lng, zoneId, gridId,
-        status, createdAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', [
-      'REQ003',
-      2,
-      15,
-      24.0001,
-      120.9500,
-      '埔里國中附近',
-      'gridA2',
-      'pending',
-      DateTime.now().toIso8601String(),
-    ]);
+      [
+        'REQ002',
+        1,
+        35,
+        23.9652,
+        120.9688,
+        '埔里市區',
+        'PULI_C',
+      ],
 
-    await execute('''
-      INSERT INTO supply_requests (
-        requestId, itemId, qty,
-        lat, lng, zoneId, gridId,
-        status, createdAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', [
-      'REQ004',
-      3,
-      50,
-      24.0105,
-      120.9602,
-      '山區住戶',
-      'gridB1',
-      'pending',
-      DateTime.now().toIso8601String(),
-    ]);
+      // 埔里北區（埔里國中）
+      [
+        'REQ003',
+        2,
+        15,
+        23.9850,
+        120.9700,
+        '埔里北區',
+        'PULI_N',
+      ],
+
+      [
+        'REQ004',
+        6,
+        25,
+        23.9885,
+        120.9720,
+        '埔里北區',
+        'PULI_N',
+      ],
+
+      // 埔里南區（埔里國小）
+      [
+        'REQ005',
+        1,
+        50,
+        23.9450,
+        120.9690,
+        '埔里南區',
+        'PULI_S',
+      ],
+
+      [
+        'REQ006',
+        7,
+        10,
+        23.9420,
+        120.9680,
+        '埔里南區',
+        'PULI_S',
+      ],
+
+      // 埔里東區（埔里消防分隊）
+      [
+        'REQ007',
+        3,
+        40,
+        23.9680,
+        120.9900,
+        '埔里東區',
+        'PULI_E',
+      ],
+
+      [
+        'REQ008',
+        8,
+        12,
+        23.9700,
+        120.9925,
+        '埔里東區',
+        'PULI_E',
+      ],
+
+      // 埔里西區（埔里轉運站）
+      [
+        'REQ009',
+        4,
+        18,
+        23.9670,
+        120.9400,
+        '埔里西區',
+        'PULI_W',
+      ],
+
+      [
+        'REQ010',
+        9,
+        30,
+        23.9690,
+        120.9420,
+        '埔里西區',
+        'PULI_W',
+      ],
+
+    ];
+
+    for (final r in requests) {
+
+      await execute('''
+        INSERT INTO supply_requests (
+          requestId,
+          itemId,
+          qty,
+          lat,
+          lng,
+          zoneId,
+          gridId,
+          status,
+          createdAt
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ''', [
+
+        r[0],
+        r[1],
+        r[2],
+        r[3],
+        r[4],
+        r[5],
+        r[6],
+        'pending',
+        DateTime.now().toIso8601String(),
+
+      ]);
+    }
 
     print("Seed supply requests created");
   }
