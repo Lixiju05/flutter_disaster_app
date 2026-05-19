@@ -882,6 +882,37 @@ Future<void> seedAllocations() async {
 
     return result.toList();
   }
+  
+  Future<List<Map<String, Object?>>> getRequestsByGrid(
+    String gridId,
+  ) async {
+
+    final result = await select('''
+      SELECT
+        sr.requestId,
+        sr.itemId,
+        i.name AS itemName,
+        i.unit AS unit,
+        sr.qty,
+        sr.lat,
+        sr.lng,
+        sr.zoneId,
+        sr.gridId,
+        sr.status,
+        sr.createdAt
+
+      FROM supply_requests sr
+
+      JOIN inventory i
+      ON sr.itemId = i.id
+
+      WHERE sr.gridId = ?
+
+      ORDER BY sr.createdAt DESC
+    ''', [gridId]);
+
+    return result.toList();
+  }
 
   AppUser _rowToUser(Row row) {
     return AppUser(

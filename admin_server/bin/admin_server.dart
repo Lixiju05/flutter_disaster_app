@@ -175,6 +175,13 @@ Future<void> handleRequest(HttpRequest request) async {
         await handleGetSupplyRequestDetails(request);
         break;
 
+      case 'getRequestsByGrid':
+        await handleGetRequestsByGrid(
+          jsonData,
+          request,
+        );
+        break;
+
       default:
         sendJson(request, HttpStatus.badRequest, {
           "success": false,
@@ -528,6 +535,24 @@ Future<void> handleGetHotZones(HttpRequest request) async {
 
 Future<void> handleGetSupplyRequestDetails(HttpRequest request) async {
   final data = await DatabaseService.instance.getSupplyRequestDetails();
+
+  sendJson(request, 200, {
+    "success": true,
+    "data": data,
+  });
+}
+
+Future<void> handleGetRequestsByGrid(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+
+  final gridId = jsonData['gridId'];
+
+  final data =
+      await DatabaseService.instance.getRequestsByGrid(
+    gridId,
+  );
 
   sendJson(request, 200, {
     "success": true,
