@@ -171,6 +171,10 @@ Future<void> handleRequest(HttpRequest request) async {
         await handleGetHotZones(request);
         break;
 
+      case 'getSupplyRequestDetails':
+        await handleGetSupplyRequestDetails(request);
+        break;
+
       default:
         sendJson(request, HttpStatus.badRequest, {
           "success": false,
@@ -515,6 +519,15 @@ Future<void> handleGetRequestSummaryByGrid(HttpRequest request) async {
 
 Future<void> handleGetHotZones(HttpRequest request) async {
   final data = await DatabaseService.instance.getHotZones();
+
+  sendJson(request, 200, {
+    "success": true,
+    "data": data,
+  });
+}
+
+Future<void> handleGetSupplyRequestDetails(HttpRequest request) async {
+  final data = await DatabaseService.instance.getSupplyRequestDetails();
 
   sendJson(request, 200, {
     "success": true,

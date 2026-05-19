@@ -860,7 +860,29 @@ Future<void> seedAllocations() async {
 
     print("Seed supply requests created");
   }
-  
+
+  Future<List<Map<String, Object?>>> getSupplyRequestDetails() async {
+    final result = await select('''
+      SELECT 
+        sr.requestId,
+        sr.itemId,
+        i.name AS itemName,
+        i.unit AS unit,
+        sr.qty,
+        sr.lat,
+        sr.lng,
+        sr.zoneId,
+        sr.gridId,
+        sr.status,
+        sr.createdAt
+      FROM supply_requests sr
+      JOIN inventory i ON sr.itemId = i.id
+      ORDER BY sr.createdAt DESC
+    ''');
+
+    return result.toList();
+  }
+
   AppUser _rowToUser(Row row) {
     return AppUser(
       id: row['id']?.toString() ?? '',
