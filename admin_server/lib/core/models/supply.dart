@@ -3,6 +3,7 @@ class SupplyItem {
   final String name;
   final String category;
   final String unit;
+  final int reservedQty;
   final int stockQty;
   final int neededQty;
 
@@ -11,6 +12,7 @@ class SupplyItem {
     required this.name,
     required this.category,
     required this.unit,
+    required this.reservedQty,
     required this.stockQty,
     required this.neededQty,
   });
@@ -35,6 +37,7 @@ class SupplyItem {
       unit: (json['unit'] ?? '').toString(),
       stockQty: _toInt(json['stockQty'] ?? json['totalQuantity']),
       neededQty: _toInt(json['neededQty']),
+      reservedQty: _toInt(json['reservedQty'] ?? 0),
     );
   }
 
@@ -46,6 +49,7 @@ class SupplyItem {
       'unit': unit,
       'stockQty': stockQty,
       'neededQty': neededQty,
+      'reservedQty': reservedQty,
     };
   }
 
@@ -60,6 +64,7 @@ class SupplyItem {
     String? unit,
     int? stockQty,
     int? neededQty,
+    int? reservedQty,
   }) {
     return SupplyItem(
       itemId: itemId ?? this.itemId,
@@ -68,6 +73,7 @@ class SupplyItem {
       unit: unit ?? this.unit,
       stockQty: stockQty ?? this.stockQty,
       neededQty: neededQty ?? this.neededQty,
+      reservedQty: reservedQty ?? this.reservedQty,
     );
   }
 

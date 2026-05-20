@@ -26,12 +26,13 @@ class DatabaseService {
     instance = DatabaseService(rawDb);
 
     // 建立所有資料表
-    rawDb.execute('''CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE,password TEXT,zoneId TEXT);''');
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE,password TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, phone TEXT, area TEXT, emergencyContactName TEXT, emergencyContactPhone TEXT, emergencyContactRelation TEXT, bloodType TEXT, medicalInfo TEXT, registeredAt TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS health_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT UNIQUE, reporterId TEXT, name TEXT, phone TEXT, bloodType TEXT, status TEXT, description TEXT, lat REAL, lng REAL, reportTime TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT, unit TEXT, stockQty INTEGER DEFAULT 0, reservedQty INTEGER DEFAULT 0, neededQty INTEGER DEFAULT 0, updatedAt TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS allocations (id INTEGER PRIMARY KEY AUTOINCREMENT, itemId INTEGER, zoneId TEXT, quantity INTEGER, status TEXT, createdAt TEXT);''');
-    rawDb.execute('''CREATE TABLE IF NOT EXISTS supply_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,requestId TEXT UNIQUE,itemId INTEGER,qty INTEGER,lat REAL,lng REAL,zoneId TEXT,gridId TEXT,status TEXT,createdAt TEXT);''');
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS supply_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,requestId TEXT UNIQUE,userId TEXT,itemId INTEGER,qty INTEGER,lat REAL,lng REAL,status TEXT,createdAt TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
+
 
     instance._initDefaultAdmin();
     instance.seedAll();
@@ -70,31 +71,20 @@ class DatabaseService {
   }
 
   Future<void> _initDefaultAdmin() async {
-    // 建立一個轄區配置清單
-    final defaultOffices = [
-      {'u': 'admin_puli', 'p': 'puli123', 'z': '埔里鎮公所'},
-      {'u': 'admin_nanan', 'p': '1234', 'z': '南安里'},
-      {'u': 'admin_danan', 'p': '1234', 'z': '大湳里'},
-      {'u': 'admin_piba', 'p': '1234', 'z': '枇杷里'},
-      {'u': 'admin_shuimen', 'p': '1234', 'z': '水門里'},
-    ];
+    final result = await select(
+      "SELECT * FROM admins WHERE username = ?",
+      ["admin_ncnu"],
+    );
 
-    for (var office in defaultOffices) {
-      final result = await select(
-        "SELECT * FROM admins WHERE username = ?", 
-        [office['u']]
+    if (result.isEmpty) {
+      await execute(
+        "INSERT INTO admins (username, password) VALUES (?, ?)",
+        ["admin_ncnu", "1234"],
       );
-      
-      if (result.isEmpty) {
-        await execute(
-          "INSERT INTO admins (username, password, zoneId) VALUES (?, ?, ?)", 
-          [office['u'], office['p'], office['z']]
-        );
-        print("建立轄區管理員: ${office['z']}");
-      }
+
+      print("Default admin created");
     }
   }
-
   // =====================
   // USER 邏輯
   // =====================
@@ -372,27 +362,64 @@ class DatabaseService {
 
   Future<void> insertSupplyRequest(SupplyRequest req) async {
     await execute('''
-      INSERT INTO supply_requests (
-        requestId, itemId, qty,
-        lat, lng, zoneId, gridId,
-        status, createdAt
+      INSERT OR IGNORE INTO supply_requests (
+        requestId,
+        userId,
+        itemId,
+        qty,
+        lat,
+        lng,
+        receiverAdminId,
+        hopCount,
+        status,
+        createdAt,
+        receivedAt
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', [
       req.requestId,
+      req.userId,
       req.itemId,
       req.qty,
       req.lat,
       req.lng,
-      req.zoneId,
-      req.gridId,
+      req.receiverAdminId,
+      req.hopCount,
       req.status,
       req.createdAt.toIso8601String(),
+      req.receivedAt?.toIso8601String(),
     ]);
   }
 
   Future<List<Map<String, Object?>>> getAllRequests() async {
     final result = await select('SELECT * FROM supply_requests ORDER BY createdAt DESC');
+    return result.toList();
+  }
+
+  Future<List<Map<String, Object?>>> getRequestsByAdmin(
+    String receiverAdminId,
+  ) async {
+    final result = await select('''
+      SELECT
+        sr.requestId,
+        sr.userId,
+        sr.itemId,
+        i.name AS itemName,
+        i.unit AS unit,
+        sr.qty,
+        sr.lat,
+        sr.lng,
+        sr.receiverAdminId,
+        sr.hopCount,
+        sr.status,
+        sr.createdAt,
+        sr.receivedAt
+      FROM supply_requests sr
+      JOIN inventory i ON sr.itemId = i.id
+      WHERE sr.receiverAdminId = ?
+      ORDER BY sr.receivedAt DESC
+    ''', [receiverAdminId]);
+
     return result.toList();
   }
 
@@ -420,7 +447,7 @@ class DatabaseService {
       SELECT sr.*, i.name as itemName 
       FROM supply_requests sr
       JOIN inventory i ON sr.itemId = i.id
-      WHERE sr.zoneId = ? 
+      WHERE sr.communityId = ? 
       ORDER BY sr.createdAt DESC
     ''', [zoneId]);
   }
@@ -683,236 +710,71 @@ Future<void> seedAllocations() async {
   }
 
   Future<void> seedSupplyRequests() async {
-
-  final result =
-      await select("SELECT id FROM supply_requests LIMIT 1");
-
-  if (result.isNotEmpty) return;
+    final result = await select("SELECT id FROM supply_requests LIMIT 1");
+    if (result.isNotEmpty) return;
 
     final requests = [
-
-      // 埔里市區（埔里鎮公所）
-      [
-        'REQ001',
-        1,
-        '礦泉水',
-        '食品飲水',
-        '箱',
-        20,
-        23.9660,
-        120.9675,
-        '埔里市區',
-        'PULI_C',
-      ],
-
-      [
-        'REQ002',
-        1,
-        '礦泉水',
-        '食品飲水',
-        '箱',
-        35,
-        23.9652,
-        120.9688,
-        '埔里市區',
-        'PULI_C',
-      ],
-
-      // 埔里北區（埔里國中）
-      [
-        'REQ003',
-        2,
-        '泡麵',
-        '食品飲水',
-        '箱',
-        15,
-        23.9850,
-        120.9700,
-        '埔里北區',
-        'PULI_N',
-      ],
-
-      [
-        'REQ004',
-        6,
-        '口罩',
-        '醫療衛生',
-        '盒',
-        25,
-        23.9885,
-        120.9720,
-        '埔里北區',
-        'PULI_N',
-      ],
-
-      // 埔里南區（埔里國小）
-      [
-        'REQ005',
-        1,
-        '礦泉水',
-        '食品飲水',
-        '箱',
-        50,
-        23.9450,
-        120.9690,
-        '埔里南區',
-        'PULI_S',
-      ],
-
-      [
-        'REQ006',
-        7,
-        '急救包',
-        '醫療衛生',
-        '組',
-        10,
-        23.9420,
-        120.9680,
-        '埔里南區',
-        'PULI_S',
-      ],
-
-      // 埔里東區（埔里消防分隊）
-      [
-        'REQ007',
-        3,
-        '餅乾',
-        '食品飲水',
-        '箱',
-        40,
-        23.9680,
-        120.9900,
-        '埔里東區',
-        'PULI_E',
-      ],
-
-      [
-        'REQ008',
-        8,
-        '退燒藥',
-        '醫療衛生',
-        '盒',
-        12,
-        23.9700,
-        120.9925,
-        '埔里東區',
-        'PULI_E',
-      ],
-
-      // 埔里西區（埔里轉運站）
-      [
-        'REQ009',
-        4,
-        '毛毯',
-        '生活用品',
-        '件',
-        18,
-        23.9670,
-        120.9400,
-        '埔里西區',
-        'PULI_W',
-      ],
-
-      [
-        'REQ010',
-        9,
-        '雨衣',
-        '衣物',
-        '件',
-        30,
-        23.9690,
-        120.9420,
-        '埔里西區',
-        'PULI_W',
-      ],
-
+      ['REQ001', 'U001', 1, 20, 23.9512, 120.9285, 'admin_ncnu', 1],
+      ['REQ002', 'U002', 1, 35, 23.9520, 120.9290, 'admin_ncnu', 2],
+      ['REQ003', 'U003', 2, 15, 23.9505, 120.9278, 'admin_ncnu', 1],
+      ['REQ004', 'U004', 7, 10, 23.9531, 120.9302, 'admin_ncnu', 3],
     ];
 
     for (final r in requests) {
-
       await execute('''
-        INSERT INTO supply_requests (
+        INSERT OR IGNORE INTO supply_requests (
           requestId,
+          userId,
           itemId,
           qty,
           lat,
           lng,
-          zoneId,
-          gridId,
+          receiverAdminId,
+          hopCount,
           status,
-          createdAt
+          createdAt,
+          receivedAt
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ''', [
-
-        r[0], // requestId
-        r[1], // itemId
-        r[5], // qty
-        r[6], // lat
-        r[7], // lng
-        r[8], // zoneId
-        r[9], // gridId
+        r[0],
+        r[1],
+        r[2],
+        r[3],
+        r[4],
+        r[5],
+        r[6],
+        r[7],
         'pending',
         DateTime.now().toIso8601String(),
-
+        DateTime.now().toIso8601String(),
       ]);
     }
 
     print("Seed supply requests created");
   }
+    Future<List<Map<String, Object?>>> getSupplyRequestDetails() async {
+      final result = await select('''
+        SELECT 
+          sr.requestId,
+          sr.itemId,
+          i.name AS itemName,
+          i.unit AS unit,
+          sr.qty,
+          sr.lat,
+          sr.lng,
+          sr.zoneId,
+          sr.gridId,
+          sr.status,
+          sr.createdAt
+        FROM supply_requests sr
+        JOIN inventory i ON sr.itemId = i.id
+        ORDER BY sr.createdAt DESC
+      ''');
 
-  Future<List<Map<String, Object?>>> getSupplyRequestDetails() async {
-    final result = await select('''
-      SELECT 
-        sr.requestId,
-        sr.itemId,
-        i.name AS itemName,
-        i.unit AS unit,
-        sr.qty,
-        sr.lat,
-        sr.lng,
-        sr.zoneId,
-        sr.gridId,
-        sr.status,
-        sr.createdAt
-      FROM supply_requests sr
-      JOIN inventory i ON sr.itemId = i.id
-      ORDER BY sr.createdAt DESC
-    ''');
-
-    return result.toList();
-  }
+      return result.toList();
+    }
   
-  Future<List<Map<String, Object?>>> getRequestsByGrid(
-    String gridId,
-  ) async {
-
-    final result = await select('''
-      SELECT
-        sr.requestId,
-        sr.itemId,
-        i.name AS itemName,
-        i.unit AS unit,
-        sr.qty,
-        sr.lat,
-        sr.lng,
-        sr.zoneId,
-        sr.gridId,
-        sr.status,
-        sr.createdAt
-
-      FROM supply_requests sr
-
-      JOIN inventory i
-      ON sr.itemId = i.id
-
-      WHERE sr.gridId = ?
-
-      ORDER BY sr.createdAt DESC
-    ''', [gridId]);
-
-    return result.toList();
-  }
 
   AppUser _rowToUser(Row row) {
     return AppUser(

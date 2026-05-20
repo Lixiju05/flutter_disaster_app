@@ -5,7 +5,6 @@ import 'dart:math';
 import 'package:admin_server/database/database_service.dart';
 import 'package:admin_server/core/models/healthReport.dart';
 import 'package:admin_server/core/models/supply_request.dart';
-import 'package:admin_server/utils/geo_helper.dart';
 
 
 Future<void> main() async {
@@ -163,23 +162,12 @@ Future<void> handleRequest(HttpRequest request) async {
         await handleAddSupplyRequest(jsonData, request);
         break;
 
-      case 'getRequestSummaryByGrid':
-        await handleGetRequestSummaryByGrid(request);
-        break;
-
-      case 'getHotZones':
-        await handleGetHotZones(request);
-        break;
-
       case 'getSupplyRequestDetails':
         await handleGetSupplyRequestDetails(request);
         break;
 
-      case 'getRequestsByGrid':
-        await handleGetRequestsByGrid(
-          jsonData,
-          request,
-        );
+      case 'getRequestsByAdmin':
+        await handleGetRequestsByAdmin(jsonData, request);
         break;
 
       default:
@@ -467,10 +455,9 @@ Future<void> handleAddSupplyRequest(
 ) async {
   try {
     if (jsonData['requestId'] == null ||
+        jsonData['userId'] == null ||
         jsonData['itemId'] == null ||
-        jsonData['qty'] == null ||
-        jsonData['lat'] == null ||
-        jsonData['lng'] == null) {
+        jsonData['qty'] == null) {
       sendJson(request, 400, {
         "success": false,
         "message": "missing required fields"
@@ -478,59 +465,32 @@ Future<void> handleAddSupplyRequest(
       return;
     }
 
-    final lat = (jsonData['lat'] as num).toDouble();
-    final lng = (jsonData['lng'] as num).toDouble();
-
-    // 自動轉換 gridId / zoneId
-    final gridId = GeoHelper.getGridId(lat, lng);
-    final zoneId = GeoHelper.getZone(lat, lng);
-
     await DatabaseService.instance.insertSupplyRequest(
       SupplyRequest(
         requestId: jsonData['requestId'],
+        userId: jsonData['userId'],
         itemId: jsonData['itemId'],
         qty: jsonData['qty'],
-        lat: lat,
-        lng: lng,
-        zoneId: zoneId,
-        gridId: gridId,
+        lat: (jsonData['lat'] as num?)?.toDouble(),
+        lng: (jsonData['lng'] as num?)?.toDouble(),
+        receiverAdminId: jsonData['receiverAdminId'],
+        hopCount: jsonData['hopCount'] ?? 0,
         status: 'pending',
         createdAt: DateTime.now(),
+        receivedAt: DateTime.now(),
       ),
     );
 
     sendJson(request, 200, {
       "success": true,
-      "message": "request saved",
-      "gridId": gridId,
-      "zoneId": zoneId,
+      "message": "request saved"
     });
   } catch (e) {
-    print("ADD SUPPLY REQUEST ERROR: $e");
-
     sendJson(request, 500, {
       "success": false,
       "message": e.toString(),
     });
   }
-}
-
-Future<void> handleGetRequestSummaryByGrid(HttpRequest request) async {
-  final data = await DatabaseService.instance.getRequestSummaryByGrid();
-
-  sendJson(request, 200, {
-    "success": true,
-    "data": data,
-  });
-}
-
-Future<void> handleGetHotZones(HttpRequest request) async {
-  final data = await DatabaseService.instance.getHotZones();
-
-  sendJson(request, 200, {
-    "success": true,
-    "data": data,
-  });
 }
 
 Future<void> handleGetSupplyRequestDetails(HttpRequest request) async {
@@ -542,17 +502,15 @@ Future<void> handleGetSupplyRequestDetails(HttpRequest request) async {
   });
 }
 
-Future<void> handleGetRequestsByGrid(
+
+Future<void> handleGetRequestsByAdmin(
   Map<String, dynamic> jsonData,
   HttpRequest request,
 ) async {
-
-  final gridId = jsonData['gridId'];
+  final receiverAdminId = jsonData['receiverAdminId'];
 
   final data =
-      await DatabaseService.instance.getRequestsByGrid(
-    gridId,
-  );
+      await DatabaseService.instance.getRequestsByAdmin(receiverAdminId);
 
   sendJson(request, 200, {
     "success": true,
