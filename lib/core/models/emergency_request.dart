@@ -1,119 +1,230 @@
+import 'package:uuid/uuid.dart';
+
+const _uuid = Uuid();
+
 class EmergencyRequest {
-  final String id;
-  final String citizenId;
-  final double latitude;
-  final double longitude;
+
+  /// 緊急事件唯一 ID
+  final String emergencyId;
+
+  /// 使用者 ID
+  final String userId;
+
+  /// 使用者名稱
+  final String userName;
+
+  /// 電話
+  final String phone;
+
+  /// 座標
+  final double lat;
+  final double lng;
+
+  /// 血型
+  final String? bloodType;
+
+  /// 醫療資訊
+  final String? medicalInfo;
+
+  /// sos / medical / trapped / fire
   final String type;
-  final String description;
-  final DateTime createdAt;
-  bool handled;
+
+  /// active / resolved / cancelled
+  final String status;
+
+  /// 哪個管理端收到
+  final String? receiverAdminId;
+
+  /// P2P 跳數
+  final int hopCount;
+
+  /// 發送時間
+  final DateTime sentAt;
+
+  /// 管理端收到時間
+  final DateTime? receivedAt;
 
   EmergencyRequest({
-    required this.id,
-    required this.citizenId,
-    required this.latitude,
-    required this.longitude,
-    required this.type,
-    required this.description,
-    required this.createdAt,
-    this.handled = false,
-  });
+    String? emergencyId,
 
+    required this.userId,
+
+    required this.userName,
+
+    required this.phone,
+
+    required this.lat,
+
+    required this.lng,
+
+    this.bloodType,
+
+    this.medicalInfo,
+
+    this.type = 'sos',
+
+    this.status = 'active',
+
+    this.receiverAdminId,
+
+    this.hopCount = 0,
+
+    DateTime? sentAt,
+
+    this.receivedAt,
+  })  : emergencyId =
+            emergencyId ?? _uuid.v4(),
+        sentAt = sentAt ?? DateTime.now();
+
+  /// JSON → Model
   factory EmergencyRequest.fromJson(
     Map<String, dynamic> json,
   ) {
     return EmergencyRequest(
-      id: (json['id'] ?? json['uuid'] ?? '')
-          .toString(),
+      emergencyId:
+          json['emergencyId']?.toString(),
 
-      citizenId:
-          (json['citizenId'] ??
-                  json['reporterId'] ??
-                  '')
-              .toString(),
+      userId:
+          json['userId']?.toString() ?? '',
 
-      latitude: _toDouble(
-        json['latitude'] ?? json['lat'],
-      ),
+      userName:
+          json['userName']?.toString() ?? '',
 
-      longitude: _toDouble(
-        json['longitude'] ?? json['lng'],
-      ),
+      phone:
+          json['phone']?.toString() ?? '',
 
-      type: (json['type'] ??
-              json['status'] ??
-              'SOS')
-          .toString(),
+      lat:
+          (json['latitude'] as num)
+              .toDouble(),
 
-      description:
-          (json['description'] ?? '')
-              .toString(),
+      lng:
+          (json['longitude'] as num)
+              .toDouble(),
 
-      createdAt:
+      bloodType:
+          json['bloodType']?.toString(),
+
+      medicalInfo:
+          json['medicalInfo']?.toString(),
+
+      type:
+          json['type']?.toString() ?? 'sos',
+
+      status:
+          json['status']?.toString() ??
+              'active',
+
+      receiverAdminId:
+          json['receiverAdminId']
+              ?.toString(),
+
+      hopCount:
+          _toInt(json['hopCount']),
+
+      sentAt:
           DateTime.tryParse(
-            json['createdAt']
+            json['sentAt']
                     ?.toString() ??
                 '',
           ) ??
           DateTime.now(),
 
-      handled:
-          json['handled'] == true ||
-              json['handled'] == 1,
+      receivedAt:
+          json['receivedAt'] == null
+              ? null
+              : DateTime.tryParse(
+                  json['receivedAt']
+                      .toString(),
+                ),
     );
   }
 
+  /// Model → JSON
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
-      'citizenId': citizenId,
-      'latitude': latitude,
-      'longitude': longitude,
+      'emergencyId': emergencyId,
+
+      'userId': userId,
+
+      'userName': userName,
+
+      'phone': phone,
+
+      'latitude': lat,
+
+      'longitude': lng,
+
+      'bloodType': bloodType,
+
+      'medicalInfo': medicalInfo,
+
       'type': type,
-      'description': description,
-      'createdAt':
-          createdAt.toIso8601String(),
-      'handled': handled,
+
+      'status': status,
+
+      'receiverAdminId':
+          receiverAdminId,
+
+      'hopCount': hopCount,
+
+      'sentAt':
+          sentAt.toIso8601String(),
+
+      'receivedAt':
+          receivedAt?.toIso8601String(),
     };
   }
 
   EmergencyRequest copyWith({
-    String? id,
-    String? citizenId,
-    double? latitude,
-    double? longitude,
-    String? type,
-    String? description,
-    DateTime? createdAt,
-    bool? handled,
+    String? status,
+    String? receiverAdminId,
+    int? hopCount,
+    DateTime? receivedAt,
   }) {
     return EmergencyRequest(
-      id: id ?? this.id,
-      citizenId:
-          citizenId ?? this.citizenId,
-      latitude: latitude ?? this.latitude,
-      longitude:
-          longitude ?? this.longitude,
-      type: type ?? this.type,
-      description:
-          description ?? this.description,
-      createdAt:
-          createdAt ?? this.createdAt,
-      handled: handled ?? this.handled,
+      emergencyId: emergencyId,
+
+      userId: userId,
+
+      userName: userName,
+
+      phone: phone,
+
+      lat: lat,
+
+      lng: lng,
+
+      bloodType: bloodType,
+
+      medicalInfo: medicalInfo,
+
+      type: type,
+
+      status: status ?? this.status,
+
+      receiverAdminId:
+          receiverAdminId ??
+              this.receiverAdminId,
+
+      hopCount:
+          hopCount ?? this.hopCount,
+
+      sentAt: sentAt,
+
+      receivedAt:
+          receivedAt ?? this.receivedAt,
     );
   }
 
-  static double _toDouble(dynamic value) {
+  static int _toInt(dynamic value) {
     if (value == null) return 0;
 
-    if (value is double) return value;
+    if (value is int) return value;
 
-    if (value is int) {
-      return value.toDouble();
-    }
+    if (value is num) return value.toInt();
 
     if (value is String) {
-      return double.tryParse(value) ?? 0;
+      return int.tryParse(value) ?? 0;
     }
 
     return 0;

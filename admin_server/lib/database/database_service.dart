@@ -4,6 +4,7 @@ import 'package:admin_server/core/models/healthReport.dart';
 import 'package:admin_server/core/models/admin.dart';
 import 'package:admin_server/core/models/user.dart';
 import 'package:admin_server/core/models/supply_request.dart';
+import 'package:admin_server/core/models/emergency_request.dart';
 
 class DatabaseService {
   final Database _db; // 核心實例變數
@@ -28,11 +29,11 @@ class DatabaseService {
     // 建立所有資料表
     rawDb.execute('''CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE,password TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, phone TEXT, area TEXT, emergencyContactName TEXT, emergencyContactPhone TEXT, emergencyContactRelation TEXT, bloodType TEXT, medicalInfo TEXT, registeredAt TEXT);''');
-    rawDb.execute('''CREATE TABLE IF NOT EXISTS health_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT UNIQUE, reporterId TEXT, name TEXT, phone TEXT, bloodType TEXT, status TEXT, description TEXT, lat REAL, lng REAL, reportTime TEXT);''');
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS health_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT UNIQUE, reporterId TEXT, name TEXT, phone TEXT, bloodType TEXT, status TEXT, description TEXT, lat REAL, lng REAL, reportTime TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT, unit TEXT, stockQty INTEGER DEFAULT 0, reservedQty INTEGER DEFAULT 0, neededQty INTEGER DEFAULT 0, updatedAt TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS allocations (id INTEGER PRIMARY KEY AUTOINCREMENT, itemId INTEGER, zoneId TEXT, quantity INTEGER, status TEXT, createdAt TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS supply_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,requestId TEXT UNIQUE,userId TEXT,itemId INTEGER,qty INTEGER,lat REAL,lng REAL,status TEXT,createdAt TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
-
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS emergency_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,emergencyId TEXT UNIQUE,userId TEXT,userName TEXT,phone TEXT,latitude REAL,longitude REAL,status TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,sentAt TEXT,receivedAt TEXT);''');
 
     instance._initDefaultAdmin();
     instance.seedAll();
@@ -117,10 +118,37 @@ class DatabaseService {
   // =====================
   Future<void> insertHealthReport(HealthReport report) async {
     await execute('''
-      INSERT OR IGNORE INTO health_reports (uuid, reporterId, name, phone, bloodType, status, description, lat, lng, reportTime) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
-      [report.uuid, report.reporterId, report.name, report.phone, report.bloodType, report.status, 
-       report.description, report.lat, report.lng, report.reportTime.toIso8601String()]);
+      INSERT OR IGNORE INTO health_reports (
+        uuid,
+        reporterId,
+        name,
+        phone,
+        bloodType,
+        status,
+        description,
+        lat,
+        lng,
+        reportTime,
+        receiverAdminId,
+        hopCount,
+        receivedAt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', [
+      report.uuid,
+      report.reporterId,
+      report.name,
+      report.phone,
+      report.bloodType,
+      report.status,
+      report.description,
+      report.lat,
+      report.lng,
+      report.reportTime.toIso8601String(),
+      report.receiverAdminId,
+      report.hopCount,
+      report.receivedAt?.toIso8601String(),
+    ]);
   }
 
   Future<List<HealthReport>> getAllReports() async {
@@ -132,6 +160,21 @@ class DatabaseService {
     final result = await select('SELECT * FROM health_reports WHERE name LIKE ? OR status LIKE ? OR description LIKE ? ORDER BY reportTime DESC', 
     ['%$keyword%', '%$keyword%', '%$keyword%']);
     return result.toList();
+  }
+
+  Future<List<HealthReport>> getHealthReportsByAdmin(
+    String receiverAdminId,
+  ) async {
+    final result = await select('''
+      SELECT *
+      FROM health_reports
+      WHERE receiverAdminId = ?
+      ORDER BY receivedAt DESC
+    ''', [receiverAdminId]);
+
+    return result.map((row) {
+      return HealthReport.fromMap(row);
+    }).toList();
   }
 
   // =====================
@@ -441,33 +484,7 @@ class DatabaseService {
     return result.first['zoneId']?.toString();
   }
 
-  // 2. 所有的查詢方法都「強制帶入」zoneId
-  Future<List<Map<String, Object?>>> getRequestsForOffice(String zoneId) async {
-    return await select('''
-      SELECT sr.*, i.name as itemName 
-      FROM supply_requests sr
-      JOIN inventory i ON sr.itemId = i.id
-      WHERE sr.communityId = ? 
-      ORDER BY sr.createdAt DESC
-    ''', [zoneId]);
-  }
 
-  Future<List<Map<String, Object?>>> getRequestSummaryByGrid() async {
-    final result = await select('''
-      SELECT 
-        gridId,
-        zoneId,
-        itemId,
-        SUM(qty) AS totalQty,
-        COUNT(*) AS requestCount
-      FROM supply_requests
-      WHERE status = 'pending'
-      GROUP BY gridId, zoneId, itemId
-      ORDER BY totalQty DESC
-    ''');
-
-    return result.toList();
-  }
   Future<List<Map<String, Object?>>> getHotZones() async {
     final result = await select('''
       SELECT 
@@ -483,6 +500,64 @@ class DatabaseService {
 
     return result.toList();
   }
+  Future<void> insertEmergencyRequest(EmergencyRequest req) async {
+    await execute('''
+      INSERT OR IGNORE INTO emergency_requests (
+        emergencyId,
+        userId,
+        userName,
+        phone,
+        latitude,
+        longitude,
+        bloodType,
+        medicalInfo,
+        type,
+        status,
+        receiverAdminId,
+        hopCount,
+        sentAt,
+        receivedAt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', [
+      req.emergencyId,
+      req.userId,
+      req.userName,
+      req.phone,
+      req.lat,
+      req.lng,
+      req.status,
+      req.receiverAdminId,
+      req.hopCount,
+      req.sentAt.toIso8601String(),
+      req.receivedAt?.toIso8601String(),
+    ]);
+  }
+
+  Future<List<Map<String, Object?>>> getEmergencyRequestsByAdmin(
+    String receiverAdminId,
+  ) async {
+    final result = await select('''
+      SELECT *
+      FROM emergency_requests
+      WHERE receiverAdminId = ?
+      ORDER BY receivedAt DESC
+    ''', [receiverAdminId]);
+
+    return result.toList();
+  }
+
+  Future<void> updateEmergencyStatus(
+    String emergencyId,
+    String status,
+  ) async {
+    await execute('''
+      UPDATE emergency_requests
+      SET status = ?
+      WHERE emergencyId = ?
+    ''', [status, emergencyId]);
+  }
+
   // =====================
   // SEED & HELPERS 
   // =====================
@@ -774,6 +849,132 @@ Future<void> seedAllocations() async {
 
       return result.toList();
     }
+
+  Future<void> seedEmergencyRequests() async {
+
+  final now = DateTime.now();
+
+  final sosData = [
+
+    [
+      'SOS002',
+      'U002',
+      '李小華',
+      '0922333444',
+      23.9520,
+      120.9290,
+      'active',
+      'admin_ncnu',
+      3,
+      now.subtract(Duration(minutes: 20)),
+      now.subtract(Duration(minutes: 12)),
+    ],
+
+    [
+      'SOS003',
+      'U003',
+      '陳志明',
+      '0933555666',
+      23.9505,
+      120.9278,
+      'processing',
+      'admin_ncnu',
+      1,
+      now.subtract(Duration(minutes: 30)),
+      now.subtract(Duration(minutes: 25)),
+    ],
+
+    [
+      'SOS004',
+      'U004',
+      '張雅婷',
+      '0977888999',
+      23.9498,
+      120.9269,
+      'resolved',
+      'admin_ncnu',
+      4,
+      now.subtract(Duration(hours: 1)),
+      now.subtract(Duration(minutes: 50)),
+    ],
+
+    [
+      'SOS005',
+      'U005',
+      '林建宏',
+      '0988777666',
+      23.9531,
+      120.9302,
+      'active',
+      'admin_ncnu',
+      2,
+      now.subtract(Duration(minutes: 8)),
+      now.subtract(Duration(minutes: 5)),
+    ],
+
+    [
+      'SOS006',
+      'U006',
+      '黃美玲',
+      '0955666777',
+      23.9542,
+      120.9310,
+      'active',
+      'admin_ncnu',
+      5,
+      now.subtract(Duration(minutes: 40)),
+      now.subtract(Duration(minutes: 30)),
+    ],
+
+    [
+      'SOS007',
+      'U007',
+      '吳志豪',
+      '0911222333',
+      23.9489,
+      120.9257,
+      'processing',
+      'admin_ncnu',
+      3,
+      now.subtract(Duration(minutes: 18)),
+      now.subtract(Duration(minutes: 14)),
+    ],
+  ];
+
+  for (final s in sosData) {
+
+    await execute('''
+      INSERT OR IGNORE INTO emergency_requests (
+        emergencyId,
+        userId,
+        userName,
+        phone,
+        latitude,
+        longitude,
+        status,
+        receiverAdminId,
+        hopCount,
+        sentAt,
+        receivedAt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', [
+      s[0],
+      s[1],
+      s[2],
+      s[3],
+      s[4],
+      s[5],
+      s[6],
+      s[7],
+      s[8],
+      (s[9] as DateTime).toIso8601String(),
+      (s[10] as DateTime).toIso8601String(),
+    ]);
+  }
+
+  print("Seed emergency requests created");
+}
   
 
   AppUser _rowToUser(Row row) {

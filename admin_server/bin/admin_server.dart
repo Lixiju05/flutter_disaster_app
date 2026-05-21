@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:admin_server/database/database_service.dart';
 import 'package:admin_server/core/models/healthReport.dart';
 import 'package:admin_server/core/models/supply_request.dart';
+import 'package:admin_server/core/models/emergency_request.dart';
 
 
 Future<void> main() async {
@@ -170,6 +171,22 @@ Future<void> handleRequest(HttpRequest request) async {
         await handleGetRequestsByAdmin(jsonData, request);
         break;
 
+      case 'addEmergencyRequest':
+        await handleAddEmergencyRequest(jsonData, request);
+        break;
+
+      case 'getEmergencyRequestsByAdmin':
+        await handleGetEmergencyRequestsByAdmin(jsonData, request);
+        break;
+
+      case 'updateEmergencyStatus':
+        await handleUpdateEmergencyStatus(jsonData, request);
+        break;
+
+      case 'getHealthReportsByAdmin':
+        await handleGetHealthReportsByAdmin(jsonData, request);
+        break;
+
       default:
         sendJson(request, HttpStatus.badRequest, {
           "success": false,
@@ -185,7 +202,6 @@ Future<void> handleRequest(HttpRequest request) async {
     });
   }
 }
-
 
 Future<void> handleHealthReport(
   Map<String, dynamic> jsonData,
@@ -515,5 +531,67 @@ Future<void> handleGetRequestsByAdmin(
   sendJson(request, 200, {
     "success": true,
     "data": data,
+  });
+}
+
+Future<void> handleAddEmergencyRequest(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  await DatabaseService.instance.insertEmergencyRequest(
+    EmergencyRequest.fromJson({
+      ...jsonData,
+      'receivedAt': DateTime.now().toIso8601String(),
+    }),
+  );
+
+  sendJson(request, 200, {
+    "success": true,
+    "message": "emergency request saved",
+  });
+}
+
+Future<void> handleGetEmergencyRequestsByAdmin(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  final receiverAdminId = jsonData['receiverAdminId'];
+
+  final data = await DatabaseService.instance
+      .getEmergencyRequestsByAdmin(receiverAdminId);
+
+  sendJson(request, 200, {
+    "success": true,
+    "data": data,
+  });
+}
+
+Future<void> handleUpdateEmergencyStatus(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  await DatabaseService.instance.updateEmergencyStatus(
+    jsonData['emergencyId'],
+    jsonData['status'],
+  );
+
+  sendJson(request, 200, {
+    "success": true,
+    "message": "emergency status updated",
+  });
+}
+
+Future<void> handleGetHealthReportsByAdmin(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  final receiverAdminId = jsonData['receiverAdminId'];
+
+  final reports = await DatabaseService.instance
+      .getHealthReportsByAdmin(receiverAdminId);
+
+  sendJson(request, 200, {
+    "success": true,
+    "data": reports.map((r) => r.toJson()).toList(),
   });
 }

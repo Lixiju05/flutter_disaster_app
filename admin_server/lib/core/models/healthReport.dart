@@ -9,6 +9,9 @@ class HealthReport {
   final double? lat;         // 緯度（可選）
   final double? lng;         // 經度（可選）
   final DateTime reportTime; // 回報時間
+  final String? receiverAdminId;
+  final int hopCount;
+  final DateTime? receivedAt;
 
   HealthReport({
     required this.uuid,
@@ -21,6 +24,9 @@ class HealthReport {
     this.lat,
     this.lng,
     required this.reportTime,
+    this.receiverAdminId,
+    this.hopCount = 0,
+    this.receivedAt,
   });
 
   /// JSON → Model
@@ -37,6 +43,20 @@ class HealthReport {
       lng: (json['lng'] as num?)?.toDouble(),
       reportTime: DateTime.tryParse(json['reportTime'] ?? '') ??
           DateTime.now(),
+       receiverAdminId:
+          json['receiverAdminId']
+              ?.toString(),
+
+      hopCount:
+          _toInt(json['hopCount']),
+
+      receivedAt:
+          json['receivedAt'] == null
+              ? null
+              : DateTime.tryParse(
+                  json['receivedAt']
+                      .toString(),
+                ),
     );
   }
 
@@ -53,6 +73,11 @@ class HealthReport {
       'lat': lat,
       'lng': lng,
       'reportTime': reportTime.toIso8601String(),
+      'receiverAdminId':
+          receiverAdminId,
+      'hopCount': hopCount,
+      'receivedAt':
+          receivedAt?.toIso8601String(),
     };
   }
 
@@ -72,6 +97,26 @@ class HealthReport {
             map['reportTime']?.toString() ?? '',
           ) ??
           DateTime.now(),
+      receiverAdminId: map['receiverAdminId']?.toString(),
+      hopCount: _toInt(map['hopCount']),
+      receivedAt: map['receivedAt'] == null
+          ? null
+          : DateTime.tryParse(
+              map['receivedAt'].toString(),
+            ),
     );
+  }
+  static int _toInt(dynamic value) {
+    if (value == null) return 0;
+
+    if (value is int) return value;
+
+    if (value is num) return value.toInt();
+
+    if (value is String) {
+      return int.tryParse(value) ?? 0;
+    }
+
+    return 0;
   }
 }
