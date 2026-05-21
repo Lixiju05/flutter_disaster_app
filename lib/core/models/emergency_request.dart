@@ -3,72 +3,28 @@ import 'package:uuid/uuid.dart';
 const _uuid = Uuid();
 
 class EmergencyRequest {
-
-  /// 緊急事件唯一 ID
   final String emergencyId;
-
-  /// 使用者 ID
   final String userId;
-
-  /// 使用者名稱
   final String userName;
-
-  /// 電話
   final String phone;
-
-  /// 座標
   final double lat;
   final double lng;
-
-  /// 血型
-  final String? bloodType;
-
-  /// 醫療資訊
-  final String? medicalInfo;
-
-  /// sos / medical / trapped / fire
-  final String type;
-
-  /// active / resolved / cancelled
   final String status;
-
-  /// 哪個管理端收到
   final String? receiverAdminId;
-
-  /// P2P 跳數
   final int hopCount;
-
-  /// 發送時間
   final DateTime sentAt;
-
-  /// 管理端收到時間
   final DateTime? receivedAt;
 
   EmergencyRequest({
     String? emergencyId,
-
     required this.userId,
-
     required this.userName,
-
     required this.phone,
-
     required this.lat,
-
     required this.lng,
-
-    this.bloodType,
-
-    this.medicalInfo,
-
-    this.type = 'sos',
-
     this.status = 'active',
-
     this.receiverAdminId,
-
     this.hopCount = 0,
-
     DateTime? sentAt,
 
     this.receivedAt,
@@ -100,15 +56,6 @@ class EmergencyRequest {
       lng:
           (json['longitude'] as num)
               .toDouble(),
-
-      bloodType:
-          json['bloodType']?.toString(),
-
-      medicalInfo:
-          json['medicalInfo']?.toString(),
-
-      type:
-          json['type']?.toString() ?? 'sos',
 
       status:
           json['status']?.toString() ??
@@ -143,33 +90,17 @@ class EmergencyRequest {
   Map<String, dynamic> toJson() {
     return {
       'emergencyId': emergencyId,
-
       'userId': userId,
-
       'userName': userName,
-
       'phone': phone,
-
       'latitude': lat,
-
       'longitude': lng,
-
-      'bloodType': bloodType,
-
-      'medicalInfo': medicalInfo,
-
-      'type': type,
-
       'status': status,
-
       'receiverAdminId':
           receiverAdminId,
-
       'hopCount': hopCount,
-
       'sentAt':
           sentAt.toIso8601String(),
-
       'receivedAt':
           receivedAt?.toIso8601String(),
     };
@@ -183,22 +114,11 @@ class EmergencyRequest {
   }) {
     return EmergencyRequest(
       emergencyId: emergencyId,
-
       userId: userId,
-
       userName: userName,
-
       phone: phone,
-
       lat: lat,
-
       lng: lng,
-
-      bloodType: bloodType,
-
-      medicalInfo: medicalInfo,
-
-      type: type,
 
       status: status ?? this.status,
 
