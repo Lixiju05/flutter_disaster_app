@@ -717,18 +717,22 @@ class DatabaseService {
 
   Future<void> seedUsers() async {
     final users = [
-    ['U001', '王小明', '0912345678', '台中'],
-    ['U002', '李小華', '0923456789', '台北'],
-    ['U003', '陳志明', '0934567891', '高雄'],
-    ['U004', '林雅婷', '0945678912', '台南'],
-    ['U005', '黃建豪', '0956789123', '新竹'],
-    ['U006', '張美玲', '0967891234', '彰化'],
-    ['U007', '吳宗翰', '0978912345', '南投'],
-    ['U008', '蔡佩珊', '0989123456', '花蓮'],
-    ['U009', '劉志偉', '0990123456', '宜蘭'],
-    ['U0010', '陳美玲', '0910123456', '桃園'],
+      ['U001', '王小明', '0912345678', '宿舍區'],
+      ['U002', '李小華', '0923456789', '宿舍區'],
 
-  ];
+      ['U003', '陳志明', '0934567891', '教學大樓'],
+      ['U004', '林雅婷', '0945678912', '教學大樓'],
+
+      ['U005', '黃建豪', '0956789123', '圖書館'],
+      ['U006', '張美玲', '0967891234', '圖書館'],
+
+      ['U007', '吳宗翰', '0978912345', '行政大樓'],
+      ['U008', '蔡佩珊', '0989123456', '行政大樓'],
+
+      ['U009', '劉志偉', '0990123456', '學生活動中心'],
+      ['U010', '陳美玲', '0910123456', '操場'],
+    ];
+
 
   for (final u in users) {
     await execute('''
@@ -751,57 +755,57 @@ class DatabaseService {
   Future<void> seedHealthReports() async {
     final reports = [
 
-    [
-      'R001',
-      'U001',
-      '王小明',
-      'safe',
-      '目前安全，在避難所',
-      24.1477,
-      120.6736
-    ],
+  [
+    'R001',
+    'U001',
+    '王小明',
+    'safe',
+    '目前安全，在宿舍區',
+    23.9531,
+    120.9302
+  ],
 
-    [
-      'R002',
-      'U002',
-      '李小華',
-      'injured',
-      '腳受傷，需要醫療協助',
-      25.0330,
-      121.5654
-    ],
+  [
+    'R002',
+    'U002',
+    '李小華',
+    'minor',
+    '腳受傷，需要醫療協助',
+    23.9520,
+    120.9290
+  ],
 
-    [
-      'R003',
-      'U003',
-      '陳志明',
-      'critical',
-      '受困大樓內',
-      22.6273,
-      120.3014
-    ],
+  [
+    'R003',
+    'U003',
+    '陳志明',
+    'critical',
+    '受困教學大樓',
+    23.9505,
+    120.9278
+  ],
 
-    [
-      'R004',
-      'U004',
-      '林雅婷',
-      'safe',
-      '家人平安',
-      23.0000,
-      120.2269
-    ],
+  [
+    'R004',
+    'U004',
+    '林雅婷',
+    'safe',
+    '目前安全',
+    23.9498,
+    120.9269
+  ],
 
-    [
-      'R005',
-      'U005',
-      '黃建豪',
-      'injured',
-      '',
-      24.8138,
-      120.9675
-    ],
+  [
+    'R005',
+    'U005',
+    '黃建豪',
+    'minor',
+    '需要簡單包紮',
+    23.9521,
+    120.9281
+  ],
 
-  ];
+];
 
   for (final r in reports) {
 
@@ -897,7 +901,7 @@ Future<void> seedAllocations() async {
   ''', [
 
     1,
-    '南投避難所',
+    '宿舍區物資站',
     30,
     'reserved',
     DateTime.now().toIso8601String(),
@@ -916,7 +920,7 @@ Future<void> seedAllocations() async {
   ''', [
 
     2,
-    '台中救援站',
+    '教學大樓物資站',
     20,
     'shipped',
     DateTime.now().toIso8601String(),
@@ -972,20 +976,23 @@ Future<void> seedAllocations() async {
   }
     Future<List<Map<String, Object?>>> getSupplyRequestDetails() async {
       final result = await select('''
-        SELECT 
+        SELECT
           sr.requestId,
+          sr.userId,
           sr.itemId,
           i.name AS itemName,
           i.unit AS unit,
           sr.qty,
           sr.lat,
           sr.lng,
-          sr.zoneId,
-          sr.gridId,
+          sr.receiverAdminId,
+          sr.hopCount,
           sr.status,
-          sr.createdAt
+          sr.createdAt,
+          sr.receivedAt
         FROM supply_requests sr
-        JOIN inventory i ON sr.itemId = i.id
+        JOIN inventory i
+        ON sr.itemId = i.id
         ORDER BY sr.createdAt DESC
       ''');
 
