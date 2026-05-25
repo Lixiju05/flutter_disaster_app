@@ -558,6 +558,145 @@ class DatabaseService {
     ''', [status, emergencyId]);
   }
 
+  Future<List<Map<String, dynamic>>> getVictimDashboard(
+  String receiverAdminId,
+) async {
+  final victims = <String, Map<String, dynamic>>{};
+
+  // 1. 健康回報
+  final healthReports = await getHealthReportsByAdmin(receiverAdminId);
+
+  for (final report in healthReports) {
+    victims[report.reporterId] ??= {
+      "userId": report.reporterId,
+      "name": report.name,
+      "phone": report.phone,
+      "healthStatus": null,
+      "healthDescription": null,
+      "hasSOS": false,
+      "sosStatus": null,
+      "supplyRequests": [],
+      "lat": report.lat,
+      "lng": report.lng,
+      "lastUpdatedAt": report.reportTime.toIso8601String(),
+    };
+
+    victims[report.reporterId]!["healthStatus"] = report.status;
+    victims[report.reporterId]!["healthDescription"] = report.description;
+    victims[report.reporterId]!["lat"] = report.lat;
+    victims[report.reporterId]!["lng"] = report.lng;
+    victims[report.reporterId]!["lastUpdatedAt"] =
+        report.reportTime.toIso8601String();
+  }
+
+  // 2. SOS
+  final sosList =
+    await getEmergencyRequestsByAdmin(
+      receiverAdminId,
+    );
+
+  for (final sos in sosList) {
+
+    final userId =
+        sos['userId']?.toString() ?? '';
+
+    victims[userId] ??= {
+      "userId": userId,
+
+      "name":
+          sos['userName']?.toString() ?? '',
+
+      "phone":
+          sos['phone']?.toString() ?? '',
+
+      "healthStatus": null,
+
+      "healthDescription": null,
+
+      "hasSOS": false,
+
+      "sosStatus": null,
+
+      "supplyRequests": [],
+
+      "lat": sos['latitude'],
+
+      "lng": sos['longitude'],
+
+      "lastUpdatedAt":
+          sos['sentAt']?.toString(),
+    };
+
+    victims[userId]!["hasSOS"] = true;
+
+    victims[userId]!["sosStatus"] =
+        sos['status'];
+
+    victims[userId]!["lat"] =
+        sos['latitude'];
+
+    victims[userId]!["lng"] =
+        sos['longitude'];
+
+    victims[userId]!["lastUpdatedAt"] =
+        sos['sentAt']?.toString();
+  }
+
+    // 3. 物資需求
+    final requests = await getRequestsByAdmin(receiverAdminId);
+
+    for (final req in requests) {
+      final userId = req['userId']?.toString() ?? '';
+      if (userId.isEmpty) continue;
+
+      victims[userId] ??= {
+        "userId": userId,
+        "name": "",
+        "phone": "",
+        "healthStatus": null,
+        "healthDescription": null,
+        "hasSOS": false,
+        "sosStatus": null,
+        "supplyRequests": [],
+        "lat": req['lat'],
+        "lng": req['lng'],
+        "lastUpdatedAt": req['receivedAt']?.toString() ??
+            req['createdAt']?.toString(),
+      };
+
+      (victims[userId]!["supplyRequests"] as List).add({
+        "requestId": req['requestId'],
+        "itemId": req['itemId'],
+        "itemName": req['itemName'],
+        "unit": req['unit'],
+        "qty": req['qty'],
+        "status": req['status'],
+      });
+
+      victims[userId]!["lat"] = req['lat'];
+      victims[userId]!["lng"] = req['lng'];
+      victims[userId]!["lastUpdatedAt"] =
+          req['receivedAt']?.toString() ?? req['createdAt']?.toString();
+    }
+
+    final list = victims.values.toList();
+
+    list.sort((a, b) {
+      int priority(Map<String, dynamic> v) {
+        if (v["hasSOS"] == true && v["sosStatus"] == "active") return 0;
+        if (v["healthStatus"] == "critical") return 1;
+        if (v["healthStatus"] == "missing") return 2;
+        if ((v["supplyRequests"] as List).isNotEmpty) return 3;
+        if (v["healthStatus"] == "minor") return 4;
+        return 5;
+      }
+
+      return priority(a).compareTo(priority(b));
+    });
+
+    return list;
+  }
+
   // =====================
   // SEED & HELPERS 
   // =====================
@@ -586,6 +725,9 @@ class DatabaseService {
     ['U006', '張美玲', '0967891234', '彰化'],
     ['U007', '吳宗翰', '0978912345', '南投'],
     ['U008', '蔡佩珊', '0989123456', '花蓮'],
+    ['U009', '劉志偉', '0990123456', '宜蘭'],
+    ['U0010', '陳美玲', '0910123456', '桃園'],
+
   ];
 
   for (final u in users) {
@@ -653,8 +795,8 @@ class DatabaseService {
       'R005',
       'U005',
       '黃建豪',
-      'missing',
-      '失去聯絡超過12小時',
+      'injured',
+      '',
       24.8138,
       120.9675
     ],
