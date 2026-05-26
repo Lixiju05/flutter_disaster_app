@@ -694,65 +694,81 @@ class DatabaseService {
     return list;
   }
 
-  Future<void> dispatchSupplyRequest({
-    required String requestId,
-  }) async {
-    await transaction(() async {
-      final reqResult = await select('''
-        SELECT *
-        FROM supply_requests
-        WHERE requestId = ?
-      ''', [requestId]);
+ Future<Map<String, dynamic>> dispatchSupplyRequest({
+  required String requestId,
+}) async {
+  Map<String, dynamic>? dispatchResult;
 
-      if (reqResult.isEmpty) {
-        throw Exception("Supply request not found");
-      }
+  await transaction(() async {
+    final reqResult = await select('''
+      SELECT *
+      FROM supply_requests
+      WHERE requestId = ?
+    ''', [requestId]);
 
-      final req = reqResult.first;
+    if (reqResult.isEmpty) {
+      throw Exception("Supply request not found");
+    }
 
-      final itemId = req['itemId'] as int;
-      final qty = req['qty'] as int;
-      final status = req['status']?.toString() ?? 'pending';
+    final req = reqResult.first;
 
-      if (status == 'dispatched') {
-        throw Exception("Already dispatched");
-      }
+    final itemId = req['itemId'] as int;
+    final qty = req['qty'] as int;
+    final status = req['status']?.toString() ?? 'pending';
 
-      final itemResult = await select('''
-        SELECT *
-        FROM inventory
-        WHERE id = ?
-      ''', [itemId]);
+    if (status == 'dispatched') {
+      throw Exception("Already dispatched");
+    }
 
-      if (itemResult.isEmpty) {
-        throw Exception("Inventory item not found");
-      }
+    final itemResult = await select('''
+      SELECT *
+      FROM inventory
+      WHERE id = ?
+    ''', [itemId]);
 
-      final item = itemResult.first;
-      final stockQty = item['stockQty'] as int;
+    if (itemResult.isEmpty) {
+      throw Exception("Inventory item not found");
+    }
 
-      if (stockQty < qty) {
-        throw Exception("Not enough stock");
-      }
+    final item = itemResult.first;
 
-      await execute('''
-        UPDATE inventory
-        SET stockQty = stockQty - ?,
-            updatedAt = ?
-        WHERE id = ?
-      ''', [
-        qty,
-        DateTime.now().toIso8601String(),
-        itemId,
-      ]);
+    final stockQty = item['stockQty'] as int;
+    final itemName = item['name']?.toString() ?? '';
+    final unit = item['unit']?.toString() ?? '';
 
-      await execute('''
-        UPDATE supply_requests
-        SET status = 'dispatched'
-        WHERE requestId = ?
-      ''', [requestId]);
-    });
-  }
+    if (stockQty < qty) {
+      throw Exception("Not enough stock");
+    }
+
+    await execute('''
+      UPDATE inventory
+      SET stockQty = stockQty - ?,
+          updatedAt = ?
+      WHERE id = ?
+    ''', [
+      qty,
+      DateTime.now().toIso8601String(),
+      itemId,
+    ]);
+
+    await execute('''
+      UPDATE supply_requests
+      SET status = 'dispatched'
+      WHERE requestId = ?
+    ''', [requestId]);
+
+    dispatchResult = {
+      "requestId": requestId,
+      "itemId": itemId,
+      "itemName": itemName,
+      "unit": unit,
+      "qty": qty,
+      "status": "dispatched",
+    };
+  });
+
+  return dispatchResult!;
+}
 
   // =====================
   // SEED & HELPERS 

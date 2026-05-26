@@ -646,13 +646,14 @@ Future<void> handleDispatchSupplyRequest(
       return;
     }
 
-    await DatabaseService.instance.dispatchSupplyRequest(
+    final result = await DatabaseService.instance.dispatchSupplyRequest(
       requestId: requestId,
     );
 
     sendJson(request, 200, {
       "success": true,
       "message": "supply request dispatched",
+      "data": result,
     });
   } catch (e) {
     sendJson(request, 500, {
