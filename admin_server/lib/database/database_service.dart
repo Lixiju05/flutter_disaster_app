@@ -509,29 +509,26 @@ class DatabaseService {
         phone,
         latitude,
         longitude,
-        bloodType,
-        medicalInfo,
-        type,
         status,
         receiverAdminId,
         hopCount,
         sentAt,
         receivedAt
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', [
-      req.emergencyId,
-      req.userId,
-      req.userName,
-      req.phone,
-      req.lat,
-      req.lng,
-      req.status,
-      req.receiverAdminId,
-      req.hopCount,
-      req.sentAt.toIso8601String(),
-      req.receivedAt?.toIso8601String(),
-    ]);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ''', [
+        req.emergencyId,
+        req.userId,
+        req.userName,
+        req.phone,
+        req.lat,
+        req.lng,
+        req.status,
+        req.receiverAdminId,
+        req.hopCount,
+        req.sentAt.toIso8601String(),
+        req.receivedAt?.toIso8601String(),
+      ]);
   }
 
   Future<List<Map<String, Object?>>> getEmergencyRequestsByAdmin(
@@ -695,6 +692,66 @@ class DatabaseService {
     });
 
     return list;
+  }
+
+  Future<void> dispatchSupplyRequest({
+    required String requestId,
+  }) async {
+    await transaction(() async {
+      final reqResult = await select('''
+        SELECT *
+        FROM supply_requests
+        WHERE requestId = ?
+      ''', [requestId]);
+
+      if (reqResult.isEmpty) {
+        throw Exception("Supply request not found");
+      }
+
+      final req = reqResult.first;
+
+      final itemId = req['itemId'] as int;
+      final qty = req['qty'] as int;
+      final status = req['status']?.toString() ?? 'pending';
+
+      if (status == 'dispatched') {
+        throw Exception("Already dispatched");
+      }
+
+      final itemResult = await select('''
+        SELECT *
+        FROM inventory
+        WHERE id = ?
+      ''', [itemId]);
+
+      if (itemResult.isEmpty) {
+        throw Exception("Inventory item not found");
+      }
+
+      final item = itemResult.first;
+      final stockQty = item['stockQty'] as int;
+
+      if (stockQty < qty) {
+        throw Exception("Not enough stock");
+      }
+
+      await execute('''
+        UPDATE inventory
+        SET stockQty = stockQty - ?,
+            updatedAt = ?
+        WHERE id = ?
+      ''', [
+        qty,
+        DateTime.now().toIso8601String(),
+        itemId,
+      ]);
+
+      await execute('''
+        UPDATE supply_requests
+        SET status = 'dispatched'
+        WHERE requestId = ?
+      ''', [requestId]);
+    });
   }
 
   // =====================
