@@ -712,6 +712,8 @@ class DatabaseService {
 
   await seedSupplyRequests();
 
+  await seedEmergencyRequests();
+
   print("All seed data completed");
 }
 
@@ -1060,34 +1062,7 @@ Future<void> seedAllocations() async {
       now.subtract(Duration(minutes: 8)),
       now.subtract(Duration(minutes: 5)),
     ],
-
-    [
-      'SOS006',
-      'U006',
-      '黃美玲',
-      '0955666777',
-      23.9542,
-      120.9310,
-      'active',
-      'admin_ncnu',
-      5,
-      now.subtract(Duration(minutes: 40)),
-      now.subtract(Duration(minutes: 30)),
-    ],
-
-    [
-      'SOS007',
-      'U007',
-      '吳志豪',
-      '0911222333',
-      23.9489,
-      120.9257,
-      'processing',
-      'admin_ncnu',
-      3,
-      now.subtract(Duration(minutes: 18)),
-      now.subtract(Duration(minutes: 14)),
-    ],
+    
   ];
 
   for (final s in sosData) {
