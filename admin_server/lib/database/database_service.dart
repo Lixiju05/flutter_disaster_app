@@ -29,11 +29,11 @@ class DatabaseService {
     // 建立所有資料表
     rawDb.execute('''CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE,password TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, phone TEXT, area TEXT, emergencyContactName TEXT, emergencyContactPhone TEXT, emergencyContactRelation TEXT, bloodType TEXT, medicalInfo TEXT, registeredAt TEXT);''');
-    rawDb.execute('''CREATE TABLE IF NOT EXISTS health_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT UNIQUE, reporterId TEXT, name TEXT, phone TEXT, bloodType TEXT, status TEXT, description TEXT, lat REAL, lng REAL, reportTime TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS health_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT UNIQUE, reporterId TEXT, name TEXT, phone TEXT, bloodType TEXT, status TEXT, description TEXT, lat REAL, lng REAL,address TEXT, reportTime TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT, unit TEXT, stockQty INTEGER DEFAULT 0, reservedQty INTEGER DEFAULT 0, neededQty INTEGER DEFAULT 0, updatedAt TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS allocations (id INTEGER PRIMARY KEY AUTOINCREMENT, itemId INTEGER, zoneId TEXT, quantity INTEGER, status TEXT, createdAt TEXT);''');
-    rawDb.execute('''CREATE TABLE IF NOT EXISTS supply_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,requestId TEXT UNIQUE,userId TEXT,itemId INTEGER,qty INTEGER,lat REAL,lng REAL,status TEXT,createdAt TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
-    rawDb.execute('''CREATE TABLE IF NOT EXISTS emergency_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,emergencyId TEXT UNIQUE,userId TEXT,userName TEXT,phone TEXT,latitude REAL,longitude REAL,status TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,sentAt TEXT,receivedAt TEXT);''');
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS supply_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,requestId TEXT UNIQUE,userId TEXT,itemId INTEGER,qty INTEGER,lat REAL,lng REAL,address TEXT,status TEXT,createdAt TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS emergency_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,emergencyId TEXT UNIQUE,userId TEXT,userName TEXT,phone TEXT,latitude REAL,longitude REAL,address TEXT,status TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,sentAt TEXT,receivedAt TEXT);''');
 
     instance._initDefaultAdmin();
     instance.seedAll();
@@ -792,20 +792,20 @@ class DatabaseService {
 
   Future<void> seedUsers() async {
     final users = [
-      ['U001', '王小明', '0912345678', '宿舍區'],
-      ['U002', '李小華', '0923456789', '宿舍區'],
+      ['U001', '王小明', '0912345678', '南投縣埔里鎮大學路521號'],
+      ['U002', '李小華', '0923456789', '南投縣埔里鎮大學路560號'],
 
-      ['U003', '陳志明', '0934567891', '教學大樓'],
-      ['U004', '林雅婷', '0945678912', '教學大樓'],
+      ['U003', '陳志明', '0934567891', '南投縣埔里鎮大學路470號'],
+      ['U004', '林雅婷', '0945678912', '南投縣埔里鎮大學路301號'],
 
-      ['U005', '黃建豪', '0956789123', '圖書館'],
-      ['U006', '張美玲', '0967891234', '圖書館'],
+      ['U005', '黃建豪', '0956789123', '南投縣埔里鎮大學路480號'],
+      ['U006', '張美玲', '0967891234', '南投縣埔里鎮大學路500號'],
 
-      ['U007', '吳宗翰', '0978912345', '行政大樓'],
-      ['U008', '蔡佩珊', '0989123456', '行政大樓'],
+      ['U007', '吳宗翰', '0978912345', '南投縣埔里鎮大學路490號'],
+      ['U008', '蔡佩珊', '0989123456', '南投縣埔里鎮大學路502號'],
 
-      ['U009', '劉志偉', '0990123456', '學生活動中心'],
-      ['U010', '陳美玲', '0910123456', '操場'],
+      ['U009', '劉志偉', '0990123456', '南投縣埔里鎮大學路506號'],
+      ['U010', '陳美玲', '0910123456', '南投縣埔里鎮大學路511號'],
     ];
 
 

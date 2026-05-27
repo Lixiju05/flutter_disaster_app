@@ -8,6 +8,7 @@ class HealthReport {
   final String? description; // 補充說明（可選）
   final double? lat;         // 緯度（可選）
   final double? lng;         // 經度（可選）
+  final String? address;
   final DateTime reportTime; // 回報時間
   final String? receiverAdminId;
   final int hopCount;
@@ -23,6 +24,7 @@ class HealthReport {
     this.description,
     this.lat,
     this.lng,
+    this.address,
     required this.reportTime,
     this.receiverAdminId,
     this.hopCount = 0,
@@ -41,6 +43,7 @@ class HealthReport {
       description: json['description'],
       lat: (json['lat'] as num?)?.toDouble(),
       lng: (json['lng'] as num?)?.toDouble(),
+      address: json['address']?.toString(),
       reportTime: DateTime.tryParse(json['reportTime'] ?? '') ??
           DateTime.now(),
        receiverAdminId:
@@ -78,6 +81,7 @@ class HealthReport {
       'hopCount': hopCount,
       'receivedAt':
           receivedAt?.toIso8601String(),
+      'address': address,
     };
   }
 
@@ -93,6 +97,7 @@ class HealthReport {
       description: map['description']?.toString(),
       lat: (map['lat'] as num?)?.toDouble(),
       lng: (map['lng'] as num?)?.toDouble(),
+      address: map['address']?.toString(),
       reportTime: DateTime.tryParse(
             map['reportTime']?.toString() ?? '',
           ) ??

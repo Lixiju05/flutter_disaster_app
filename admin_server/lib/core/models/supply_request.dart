@@ -5,6 +5,7 @@ class SupplyRequest {
   final int qty;
   final double? lat;
   final double? lng;
+  final String? address;
   final String? receiverAdminId;
   final int hopCount;
   final String status;
@@ -18,6 +19,7 @@ class SupplyRequest {
     required this.qty,
     this.lat,
     this.lng,
+    this.address,
     this.receiverAdminId,
     this.hopCount = 0,
     this.status = 'pending',
@@ -33,6 +35,7 @@ class SupplyRequest {
       'qty': qty,
       'lat': lat,
       'lng': lng,
+      'address': address,
       'receiverAdminId': receiverAdminId,
       'hopCount': hopCount,
       'status': status,
@@ -49,6 +52,7 @@ class SupplyRequest {
       qty: _toInt(json['qty']),
       lat: (json['lat'] as num?)?.toDouble(),
       lng: (json['lng'] as num?)?.toDouble(),
+      address: json['address']?.toString(),
       receiverAdminId: json['receiverAdminId']?.toString(),
       hopCount: _toInt(json['hopCount']),
       status: json['status'] ?? 'pending',
