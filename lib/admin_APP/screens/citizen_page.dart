@@ -20,9 +20,9 @@ const Color _kCardBg   = Color(0xFFFFFFFF);
 const Color _kBorder   = Color(0xFFE5E7EB);
 const Color _kBlue     = Color(0xFF2563EB);
 const Color _kGreen    = Color(0xFF16A34A);
-const Color _kOrange   = Color(0xFFF59E0B);
+const Color _kOrange   = Color(0xFFEC6C2D);   // 重傷
 const Color _kRed      = Color(0xFFDC2626);
-const Color _kLime     = Color(0xFF4ADE80);   // 輕傷（螢光綠）
+const Color _kYellow   = Color(0xFFD3CA43);   // 輕傷（落日黃）
 const Color _kTextMain = Color(0xFF0F172A);
 const Color _kTextSub  = Color(0xFF64748B);
 
@@ -209,6 +209,7 @@ class _TotalTab extends StatefulWidget {
 
 class _TotalTabState extends State<_TotalTab> {
   List<HealthReport> _healthReports = [];
+  List<Map<String, dynamic>> _supplyRequests = [];
   late final MapController _mapCtrl;
   LatLng _mapCenter = const LatLng(23.9575, 120.9275); // 暨大
   double _mapZoom   = 14.0;
@@ -219,6 +220,7 @@ class _TotalTabState extends State<_TotalTab> {
     super.initState();
     _mapCtrl = MapController();
     _loadHealthReports();
+    _loadSupplyRequests();
     _loadAdminArea();
   }
 
@@ -277,11 +279,30 @@ class _TotalTabState extends State<_TotalTab> {
     } catch (_) {}
   }
 
+  Future<void> _loadSupplyRequests() async {
+    try {
+      final response = await http.post(
+        Uri.parse(_baseUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: jsonEncode({'type': 'getSupplyRequestDetails'}),
+      ).timeout(const Duration(seconds: 10));
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['success'] == true) {
+        final loaded = List<Map<String, dynamic>>.from(data['data']);
+        if (mounted) setState(() => _supplyRequests = loaded.where((r) => r['status'] == 'pending').toList());
+      }
+    } catch (_) {}
+  }
+
   // ── 狀態工具 ────────────────────────────────────────────────
   String _normStatus(String s) {
     final st = s.trim().toLowerCase();
     if (st == 'safe'     || st == '安全') return 'safe';
-    if (st == 'injured'  || st == '輕傷' || st == '轻伤') return 'injured';
+    if (st == 'injured'  || st == 'minor' || st == '輕傷' || st == '轻伤') return 'injured';
     if (st == 'critical' || st == '重傷' || st == '重伤') return 'critical';
     return st;
   }
@@ -312,7 +333,7 @@ class _TotalTabState extends State<_TotalTab> {
     switch (status) {
       case 'sos':           return _kRed;
       case 'critical':      return _kOrange;
-      case 'injured':       return _kLime;
+      case 'injured':       return _kYellow;
       case 'safe':          return _kGreen;
       case 'health_report': return const Color(0xFF0891B2);
       default:              return _kBlue;
@@ -335,25 +356,27 @@ class _TotalTabState extends State<_TotalTab> {
   Widget build(BuildContext context) {
     final citizenVm = context.watch<CitizenViewmodel>();
     final emVm      = context.watch<EmergencyViewModel>();
-    final supplyVm  = context.watch<AdminSupplyViewModel>();
 
     final citizens    = citizenVm.citizens;
     final total       = citizens.length;
     final sosCount    = emVm.emergencies
         .where((e) => e.status != 'resolved')
         .length;
+    // 有 active SOS 的 userId 集合，用來排除重複計算
+    final sosIds = emVm.emergencies
+        .where((e) => e.status != 'resolved')
+        .map((e) => e.userId)
+        .toSet();
     final critical = _healthReports
-        .where((r) => _normStatus(r.status) == 'critical')
+        .where((r) => _normStatus(r.status) == 'critical' && !sosIds.contains(r.reporterId))
         .length;
     final injured = _healthReports
-        .where((r) => _normStatus(r.status) == 'injured')
+        .where((r) => _normStatus(r.status) == 'injured' && !sosIds.contains(r.reporterId))
         .length;
     final safe = _healthReports
-        .where((r) => _normStatus(r.status) == 'safe')
+        .where((r) => _normStatus(r.status) == 'safe' && !sosIds.contains(r.reporterId))
         .length;
-    final supplyNeed = supplyVm.supplies
-        .where((s) => s.neededQty > s.stockQty)
-        .length;
+    final supplyNeed = _supplyRequests.length;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
@@ -377,12 +400,10 @@ class _TotalTabState extends State<_TotalTab> {
                 _buildExtraSection('健康回報', 'health_report',
                     const Color(0xFF0891B2), Icons.favorite_border_rounded, citizens, emVm),
                 const SizedBox(height: 12),
-                _buildExtraSection('物資需求', 'unknown',
-                    _kBlue, Icons.inventory_2_outlined, citizens, emVm),
+                _buildSupplySection(),
               ],
               if (_filter == 'supply') ...[
-                _buildExtraSection('物資需求', 'unknown',
-                    _kBlue, Icons.inventory_2_outlined, citizens, emVm),
+                _buildSupplySection(),
               ],
             ],
           ),
@@ -413,7 +434,7 @@ class _TotalTabState extends State<_TotalTab> {
         _divider(),
         _tapCell(Icons.warning_amber_rounded, '$critical', '重傷',    _kOrange, 'critical'),
         _divider(),
-        _tapCell(Icons.healing_rounded,       '$injured',  '輕傷',    _kLime,   'injured'),
+        _tapCell(Icons.healing_rounded,       '$injured',  '輕傷',    _kYellow,   'injured'),
         _divider(),
         _tapCell(Icons.verified_user_rounded, '$safe',     '安全',    _kGreen,  'safe'),
         _divider(),
@@ -460,51 +481,48 @@ class _TotalTabState extends State<_TotalTab> {
   Widget _buildMap(List<Citizen> citizens, EmergencyViewModel emVm) {
     final markers = <Marker>[];
 
-    // 健康狀態標記（只顯示 重傷/輕傷/安全，不含健康回報）
+    // SOS 人員 userId 集合 — 其健康回報釘只顯示為 SOS 紅釘，不重複顯示
+    final sosIds = emVm.emergencies
+        .where((e) => e.status != 'resolved')
+        .map((e) => e.userId)
+        .toSet();
+
+    // 健康狀態標記（重傷/輕傷/安全；有 active SOS 的人略過）
     for (final r in _healthReports) {
       if (r.lat == null || r.lng == null) continue;
+      if (sosIds.contains(r.reporterId)) continue;
       final status = _normStatus(r.status);
       if (status != 'critical' && status != 'injured' && status != 'safe') continue;
       final color  = _statusColor(status);
-      markers.add(_buildMarker(
-        LatLng(r.lat!, r.lng!),
-        r.name,
-        color,
-        status == 'critical'
-            ? Icons.warning_amber_rounded
-            : status == 'safe'
-                ? Icons.verified_user_rounded
-                : Icons.healing_rounded,
+      markers.add(Marker(
+        point: LatLng(r.lat!, r.lng!),
+        width: 36, height: 44,
+        child: _pinMarker(color),
       ));
     }
 
-    // SOS 標記（紅色）
+    // SOS 標記（紅色圖釘）
     for (final e in emVm.emergencies) {
       if (e.status == 'resolved') continue;
       if (e.lat == 0 && e.lng == 0) continue;
       markers.add(Marker(
         point: LatLng(e.lat, e.lng),
-        width: 36, height: 36,
-        child: Container(
-          decoration: BoxDecoration(
-            color: _kRed.withValues(alpha: .15),
-            shape: BoxShape.circle,
-            border: Border.all(color: _kRed, width: 2),
-          ),
-          child: const Icon(Icons.sos_rounded,
-              color: _kRed, size: 18),
-        ),
+        width: 36, height: 44,
+        child: _pinMarker(_kRed),
       ));
     }
 
-    // 未有健康回報的災民 → 藍色
-    final reportedIds =
-        _healthReports.map((r) => r.reporterId).toSet();
-    for (final c in citizens) {
-      if (reportedIds.contains(c.id)) continue;
-      if (c.latitude == 0 && c.longitude == 0) continue;
-      markers.add(_buildMarker(
-          LatLng(c.latitude, c.longitude), c.name, _kBlue, null));
+    // 物資需求 → 藍色圖釘
+    for (final req in _supplyRequests) {
+      final lat = (req['lat'] as num?)?.toDouble();
+      final lng = (req['lng'] as num?)?.toDouble();
+      if (lat == null || lng == null) continue;
+      if (lat == 0 && lng == 0) continue;
+      markers.add(Marker(
+        point: LatLng(lat, lng),
+        width: 36, height: 44,
+        child: _pinMarker(_kBlue),
+      ));
     }
 
     return Container(
@@ -563,7 +581,7 @@ class _TotalTabState extends State<_TotalTab> {
                   children: [
                 _legendItem('SOS',    _kRed),
                 _legendItem('重傷',   _kOrange),
-                _legendItem('輕傷',   _kLime),
+                _legendItem('輕傷',   _kYellow),
                 _legendItem('安全',   _kGreen),
                 _legendItem('物資需求', _kBlue),
               ]),
@@ -574,7 +592,7 @@ class _TotalTabState extends State<_TotalTab> {
             right: 10,
             top: 10,
             child: Column(children: [
-              _mapBtn(Icons.refresh_rounded, _kBlue, _loadHealthReports),
+              _mapBtn(Icons.refresh_rounded, _kBlue, () { _loadHealthReports(); _loadSupplyRequests(); }),
               const SizedBox(height: 4),
               _mapBtn(Icons.add, _kTextMain,
                   () => _mapCtrl.move(_mapCtrl.camera.center, _mapCtrl.camera.zoom + 1)),
@@ -591,29 +609,20 @@ class _TotalTabState extends State<_TotalTab> {
     );
   }
 
-  Marker _buildMarker(
-      LatLng point, String name, Color color, IconData? icon) {
-    return Marker(
-      point: point,
-      width: 32, height: 32,
-      child: Container(
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: .15),
-          shape: BoxShape.circle,
-          border: Border.all(color: color, width: 1.8),
+  Widget _pinMarker(Color color) {
+    return Stack(
+      alignment: Alignment.topCenter,
+      children: [
+        Icon(Icons.location_on, color: color, size: 36,
+          shadows: [Shadow(color: color.withValues(alpha: 0.4), blurRadius: 6)]),
+        Positioned(
+          top: 4,
+          child: Container(
+            width: 14, height: 14,
+            decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+          ),
         ),
-        child: icon != null
-            ? Icon(icon, color: color, size: 14)
-            : Center(
-                child: Text(
-                  name.isNotEmpty ? name[0] : '?',
-                  style: TextStyle(
-                      color: color,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800),
-                ),
-              ),
-      ),
+      ],
     );
   }
 
@@ -621,11 +630,7 @@ class _TotalTabState extends State<_TotalTab> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Container(
-            width: 8,
-            height: 8,
-            decoration:
-                BoxDecoration(color: color, shape: BoxShape.circle)),
+        Icon(Icons.location_on, color: color, size: 14),
         const SizedBox(width: 5),
         Text(label,
             style: const TextStyle(
@@ -658,7 +663,7 @@ class _TotalTabState extends State<_TotalTab> {
     const allGroups = [
       ('SOS',  'sos',      _kRed,    Icons.sos_rounded),
       ('重傷', 'critical', _kOrange, Icons.warning_amber_rounded),
-      ('輕傷', 'injured',  _kLime,   Icons.healing_rounded),
+      ('輕傷', 'injured',  _kYellow,   Icons.healing_rounded),
       ('安全', 'safe',     _kGreen,  Icons.verified_user_rounded),
     ];
     final groups = _filter == 'all'
@@ -710,6 +715,89 @@ class _TotalTabState extends State<_TotalTab> {
           const Padding(padding: EdgeInsets.all(16), child: Text('暫無資料', style: TextStyle(color: _kTextSub)))
         else
           Column(children: _buildGroupedItems(citizens, emVm, groups)),
+      ]),
+    );
+  }
+
+  // ── 物資需求區塊（顯示實際送出物資申請的人）─────────────────
+  Widget _buildSupplySection() {
+    final Map<String, List<Map<String, dynamic>>> userReqs = {};
+    for (final req in _supplyRequests) {
+      final uid = req['userId']?.toString() ?? '';
+      if (uid.isEmpty) continue;
+      userReqs.putIfAbsent(uid, () => []).add(req);
+    }
+    final entries = userReqs.entries.toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: _kCardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _kBorder),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .03), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+          decoration: BoxDecoration(
+            color: _kBlue.withValues(alpha: .05),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(13)),
+            border: const Border(bottom: BorderSide(color: _kBorder)),
+          ),
+          child: Row(children: [
+            Container(
+              width: 30, height: 30,
+              decoration: BoxDecoration(color: _kBlue.withValues(alpha: .12), borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.inventory_2_outlined, color: _kBlue, size: 15),
+            ),
+            const SizedBox(width: 10),
+            const Text('物資需求', style: TextStyle(color: _kBlue, fontSize: 14, fontWeight: FontWeight.w700)),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(color: _kBlue.withValues(alpha: .12), borderRadius: BorderRadius.circular(99)),
+              child: Text('${entries.length}', style: const TextStyle(color: _kBlue, fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
+          ]),
+        ),
+        if (entries.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            child: Text('目前無物資需求人員', style: TextStyle(color: _kTextSub, fontSize: 12)),
+          )
+        else
+          for (int i = 0; i < entries.length; i++) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              decoration: BoxDecoration(
+                border: i == entries.length - 1
+                    ? null
+                    : Border(bottom: BorderSide(color: _kBorder.withValues(alpha: .5), width: .8)),
+              ),
+              child: Row(children: [
+                Container(width: 3, height: 36, decoration: BoxDecoration(color: _kBlue, borderRadius: BorderRadius.circular(99))),
+                const SizedBox(width: 12),
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(color: _kBlue.withValues(alpha: .10), borderRadius: BorderRadius.circular(10)),
+                  child: Center(child: Text(
+                    entries[i].key.isNotEmpty ? entries[i].key[0].toUpperCase() : '?',
+                    style: const TextStyle(color: _kBlue, fontSize: 13, fontWeight: FontWeight.w700),
+                  )),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(entries[i].key, style: const TextStyle(color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w600)),
+                  Text(
+                    entries[i].value.map((r) => '${r['itemName'] ?? '物資'}×${r['qty']}${r['unit'] ?? ''}').join('、'),
+                    style: const TextStyle(color: _kTextSub, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ])),
+              ]),
+            ),
+          ],
       ]),
     );
   }
@@ -879,6 +967,8 @@ class _TotalTabState extends State<_TotalTab> {
                   Text(c.id, style: const TextStyle(color: _kTextSub, fontSize: 11)),
                 ]),
               ),
+              const SizedBox(width: 8),
+              _detailButton(color, () => _showCitizenDetail(c, emVm)),
             ]),
           ));
         }
@@ -887,6 +977,189 @@ class _TotalTabState extends State<_TotalTab> {
     }
     return items;
   }
+
+  // ── 市民詳情 Dialog ────────────────────────────────────────
+  void _showCitizenDetail(Citizen c, EmergencyViewModel emVm) {
+    final report   = _reportFor(c.id);
+    final sosList  = emVm.emergencies
+        .where((e) => e.userId == c.id && e.status != 'resolved')
+        .toList();
+    final sos      = sosList.isEmpty ? null : sosList.first;
+    final supplies = _supplyRequests
+        .where((r) => r['userId']?.toString() == c.id)
+        .toList();
+
+    final status = _citizenStatus(c, emVm);
+    final color  = _statusColor(status);
+    final label  = _statusLabel(status);
+
+    const statusIcons = <String, IconData>{
+      'sos':      Icons.sos_rounded,
+      'critical': Icons.warning_amber_rounded,
+      'injured':  Icons.healing_rounded,
+      'safe':     Icons.verified_user_rounded,
+    };
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: .35),
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: 480,
+          constraints: const BoxConstraints(maxHeight: 580),
+          decoration: BoxDecoration(
+            color: _kCardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _kBorder),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            // 標題
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 12, 14),
+              child: Row(children: [
+                Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(
+                      color: color.withValues(alpha: .10),
+                      borderRadius: BorderRadius.circular(11)),
+                  child: Icon(
+                      statusIcons[status] ?? Icons.person_outline,
+                      color: color, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(c.name,
+                      style: const TextStyle(
+                          color: _kTextMain, fontSize: 17,
+                          fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 3),
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 3),
+                      decoration: BoxDecoration(
+                          color: color.withValues(alpha: .08),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                              color: color.withValues(alpha: .2))),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Container(width: 6, height: 6,
+                            decoration: BoxDecoration(
+                                color: color, shape: BoxShape.circle)),
+                        const SizedBox(width: 4),
+                        Text(label,
+                            style: TextStyle(color: color,
+                                fontSize: 11, fontWeight: FontWeight.w700)),
+                      ]),
+                    ),
+                    const SizedBox(width: 8),
+                    Text('ID：${c.id}',
+                        style: const TextStyle(
+                            color: _kTextSub, fontSize: 12)),
+                  ]),
+                ])),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, color: _kTextSub, size: 18),
+                ),
+              ]),
+            ),
+            const Divider(height: 1, color: _kBorder),
+            // 詳情內容
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  if (report != null) ...[
+                    _dialogSectionHeader('健康回報'),
+                    _dialogInfoRow('狀態',
+                        _translateCitizenStatus(_normStatus(report.status))),
+                    _dialogInfoRow('電話',
+                        report.phone.isNotEmpty ? report.phone : '未填寫'),
+                    _dialogInfoRow('血型',
+                        report.bloodType?.isNotEmpty == true
+                            ? report.bloodType!
+                            : '未填寫'),
+                    _dialogInfoRow('回報時間', _fmtDt(report.reportTime)),
+                    _dialogInfoRow('地點',
+                        report.address?.isNotEmpty == true
+                            ? report.address!
+                            : (report.lat != null
+                                ? '${report.lat!.toStringAsFixed(5)}, '
+                                  '${report.lng!.toStringAsFixed(5)}'
+                                : '未知')),
+                    if (report.description?.trim().isNotEmpty == true)
+                      _dialogInfoRow('症狀說明', report.description!),
+                    const SizedBox(height: 4),
+                  ],
+                  if (sos != null) ...[
+                    _dialogSectionHeader('SOS 求救'),
+                    _dialogInfoRow('狀態', _sosStatusText(sos.status)),
+                    _dialogInfoRow('發送時間', _fmtDt(sos.sentAt)),
+                    _dialogInfoRow('地址',
+                        sos.address?.isNotEmpty == true
+                            ? sos.address!
+                            : '未提供'),
+                    if (sos.lat != 0 && sos.lng != 0)
+                      _dialogInfoRow('座標',
+                          '${sos.lat.toStringAsFixed(5)}, '
+                          '${sos.lng.toStringAsFixed(5)}'),
+                    const SizedBox(height: 4),
+                  ],
+                  if (supplies.isNotEmpty) ...[
+                    _dialogSectionHeader('物資需求'),
+                    for (final s in supplies)
+                      _dialogInfoRow(
+                          s['itemName']?.toString() ?? '物資',
+                          '${s['qty']}${s['unit'] ?? ''}'),
+                    const SizedBox(height: 4),
+                  ],
+                  if (report == null && sos == null && supplies.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(
+                        child: Text('此用戶尚無詳細資料',
+                            style: TextStyle(
+                                color: _kTextSub, fontSize: 13)),
+                      ),
+                    ),
+                ]),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  String _translateCitizenStatus(String s) {
+    switch (s) {
+      case 'safe':     return '安全';
+      case 'injured':  return '輕傷';
+      case 'critical': return '重傷';
+      default:         return s;
+    }
+  }
+
+  String _sosStatusText(String s) {
+    switch (s) {
+      case 'active':     return '待處理';
+      case 'processing': return '處理中';
+      case 'resolved':   return '已完成';
+      default:           return s;
+    }
+  }
+
+  static String _fmtDt(DateTime t) =>
+      '${t.year}/${t.month.toString().padLeft(2, '0')}/'
+      '${t.day.toString().padLeft(2, '0')} '
+      '${t.hour.toString().padLeft(2, '0')}:'
+      '${t.minute.toString().padLeft(2, '0')}';
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -1218,46 +1491,237 @@ class _SosTabState extends State<_SosTab> {
                       color: _kTextSub, fontSize: 11)),
             ]),
             const SizedBox(height: 5),
-            _AddressWidget(
-                lat: e.lat,
-                lng: e.lng,
-                onMapTap: () => _openMap(e.lat, e.lng)),
+            Row(children: [
+              const Icon(Icons.location_on_outlined, color: _kTextSub, size: 13),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  e.address?.isNotEmpty == true ? e.address! : '位置未提供',
+                  style: const TextStyle(color: _kTextSub, fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (e.lat != 0 && e.lng != 0) ...[
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () => _openMap(e.lat, e.lng),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _kBlue.withValues(alpha: .06),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: _kBlue.withValues(alpha: .18)),
+                    ),
+                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.map_outlined, color: _kBlue, size: 11),
+                      SizedBox(width: 3),
+                      Text('地圖', style: TextStyle(color: _kBlue, fontSize: 10, fontWeight: FontWeight.w600)),
+                    ]),
+                  ),
+                ),
+              ],
+            ]),
           ]),
         ),
-        if (!isHandled) ...[
-          const SizedBox(width: 10),
-          GestureDetector(
-            onTap: () => _confirmHandle(e, vm),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 13, vertical: 9),
-              decoration: BoxDecoration(
-                color: isOverdue
-                    ? _kRed.withValues(alpha: .10)
-                    : _kGreen.withValues(alpha: .10),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _detailButton(_kBlue, () => _showSosDetail(e)),
+            if (!isHandled) ...[
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: () => _confirmHandle(e, vm),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 13, vertical: 9),
+                  decoration: BoxDecoration(
                     color: isOverdue
-                        ? _kRed.withValues(alpha: .35)
-                        : _kGreen.withValues(alpha: .35)),
-              ),
-              child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                Icon(Icons.check_rounded,
-                    color: isOverdue ? _kRed : _kGreen,
-                    size: 14),
-                const SizedBox(width: 5),
-                Text('標記已處理',
-                    style: TextStyle(
+                        ? _kRed.withValues(alpha: .10)
+                        : _kGreen.withValues(alpha: .10),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: isOverdue
+                            ? _kRed.withValues(alpha: .35)
+                            : _kGreen.withValues(alpha: .35)),
+                  ),
+                  child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                    Icon(Icons.check_rounded,
                         color: isOverdue ? _kRed : _kGreen,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700)),
+                        size: 14),
+                    const SizedBox(width: 5),
+                    Text('標記已處理',
+                        style: TextStyle(
+                            color: isOverdue ? _kRed : _kGreen,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700)),
+                  ]),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ]),
+    );
+  }
+
+  // ── SOS 詳情 Dialog ────────────────────────────────────────
+  void _showSosDetail(EmergencyRequest e) {
+    final isHandled  = e.status == 'resolved';
+    final color      = isHandled ? _kGreen : _kOrange;
+    final statusText = e.status == 'active'
+        ? '待處理'
+        : e.status == 'processing'
+            ? '處理中'
+            : '已完成';
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withValues(alpha: .35),
+      builder: (_) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: 480,
+          constraints: const BoxConstraints(maxHeight: 540),
+          decoration: BoxDecoration(
+            color: _kCardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _kBorder),
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            // 標題
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 12, 14),
+              child: Row(children: [
+                Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(
+                      color: color.withValues(alpha: .10),
+                      borderRadius: BorderRadius.circular(11)),
+                  child: Icon(
+                      isHandled
+                          ? Icons.check_circle_outline_rounded
+                          : Icons.sos_rounded,
+                      color: color, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text(
+                      e.userName.isNotEmpty ? e.userName : '用戶 ${e.userId}',
+                      style: const TextStyle(
+                          color: _kTextMain, fontSize: 17,
+                          fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 3),
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 9, vertical: 3),
+                      decoration: BoxDecoration(
+                          color: color.withValues(alpha: .08),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                              color: color.withValues(alpha: .2))),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Container(width: 6, height: 6,
+                            decoration: BoxDecoration(
+                                color: color, shape: BoxShape.circle)),
+                        const SizedBox(width: 4),
+                        Text(statusText,
+                            style: TextStyle(color: color,
+                                fontSize: 11, fontWeight: FontWeight.w700)),
+                      ]),
+                    ),
+                    const SizedBox(width: 8),
+                    Text('ID：${e.userId}',
+                        style: const TextStyle(
+                            color: _kTextSub, fontSize: 12)),
+                  ]),
+                ])),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, color: _kTextSub, size: 18),
+                ),
               ]),
             ),
-          ),
-        ],
-      ]),
+            const Divider(height: 1, color: _kBorder),
+            // 詳情內容
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  _dialogSectionHeader('基本資訊'),
+                  _dialogInfoRow('用戶 ID', e.userId),
+                  _dialogInfoRow('姓名',
+                      e.userName.isNotEmpty ? e.userName : '未填寫'),
+                  _dialogInfoRow('電話',
+                      e.phone.isNotEmpty ? e.phone : '未填寫'),
+                  _dialogInfoRow('SOS 編號', e.emergencyId),
+                  const SizedBox(height: 4),
+                  _dialogSectionHeader('事件資訊'),
+                  _dialogInfoRow('狀態', statusText),
+                  _dialogInfoRow('跳點數', '${e.hopCount}'),
+                  _dialogInfoRow('發送時間', _fullTime(e.sentAt)),
+                  if (e.receivedAt != null)
+                    _dialogInfoRow('接收時間', _fullTime(e.receivedAt!)),
+                  const SizedBox(height: 4),
+                  _dialogSectionHeader('位置資訊'),
+                  _dialogInfoRow('地址',
+                      e.address?.isNotEmpty == true
+                          ? e.address!
+                          : '未提供'),
+                  if (e.lat != 0 && e.lng != 0)
+                    _dialogInfoRow('座標',
+                        '${e.lat.toStringAsFixed(5)}, '
+                        '${e.lng.toStringAsFixed(5)}'),
+                  if (e.lat != 0 && e.lng != 0) ...[
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: GestureDetector(
+                        onTap: () {
+                          Navigator.pop(context);
+                          _openMap(e.lat, e.lng);
+                        },
+                        child: Container(
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 11),
+                          decoration: BoxDecoration(
+                            color: _kBlue.withValues(alpha: .06),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: _kBlue.withValues(alpha: .2)),
+                          ),
+                          child: const Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.center,
+                              children: [
+                            Icon(Icons.map_outlined,
+                                color: _kBlue, size: 16),
+                            SizedBox(width: 6),
+                            Text('打開地圖',
+                                style: TextStyle(
+                                    color: _kBlue,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600)),
+                          ]),
+                        ),
+                      ),
+                    ),
+                  ],
+                ]),
+              ),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 
@@ -1437,6 +1901,68 @@ Widget _iconBtn(
         child: Icon(icon, color: color, size: 16),
       ),
     );
+
+// ── Dialog 共用元件 ────────────────────────────────────────────
+Widget _dialogInfoRow(String label, String value) {
+  return Container(
+    width: double.infinity,
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF8FAFC),
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: _kBorder),
+    ),
+    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SizedBox(
+        width: 78,
+        child: Text(label,
+            style: const TextStyle(color: _kTextSub, fontSize: 12, fontWeight: FontWeight.w500)),
+      ),
+      Expanded(
+        child: Text(value.isEmpty ? '未填寫' : value,
+            style: const TextStyle(color: _kTextMain, fontSize: 13, fontWeight: FontWeight.w600)),
+      ),
+    ]),
+  );
+}
+
+Widget _dialogSectionHeader(String label) {
+  return Padding(
+    padding: const EdgeInsets.only(top: 4, bottom: 8),
+    child: Row(children: [
+      Container(
+          width: 3, height: 14,
+          decoration: BoxDecoration(
+              color: _kBlue, borderRadius: BorderRadius.circular(99))),
+      const SizedBox(width: 7),
+      Text(label,
+          style: const TextStyle(
+              color: _kTextMain, fontSize: 13, fontWeight: FontWeight.w700)),
+    ]),
+  );
+}
+
+Widget _detailButton(Color color, VoidCallback onTap) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .06),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: color.withValues(alpha: .2)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.visibility_outlined, color: color, size: 13),
+        const SizedBox(width: 4),
+        Text('詳情',
+            style: TextStyle(
+                color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+      ]),
+    ),
+  );
+}
 
 // ════════════════════════════════════════════════════════════════
 //  地址顯示元件

@@ -905,7 +905,7 @@ class DatabaseService {
   for (final r in reports) {
 
     await execute('''
-      INSERT OR IGNORE INTO health_reports (
+      INSERT OR REPLACE INTO health_reports (
         uuid,
         reporterId,
         name,
@@ -1098,6 +1098,7 @@ Future<void> seedAllocations() async {
 
   final now = DateTime.now();
 
+  // [emergencyId, userId, userName, phone, lat, lng, address, status, receiverAdminId, hopCount, sentAt, receivedAt]
   final sosData = [
 
     [
@@ -1107,6 +1108,7 @@ Future<void> seedAllocations() async {
       '0922333444',
       23.9520,
       120.9290,
+      '南投縣埔里鎮大學路560號',
       'active',
       'admin_ncnu',
       3,
@@ -1121,6 +1123,7 @@ Future<void> seedAllocations() async {
       '0933555666',
       23.9505,
       120.9278,
+      '南投縣埔里鎮大學路470號',
       'processing',
       'admin_ncnu',
       1,
@@ -1131,10 +1134,11 @@ Future<void> seedAllocations() async {
     [
       'SOS004',
       'U004',
-      '張雅婷',
+      '林雅婷',
       '0977888999',
       23.9498,
       120.9269,
+      '南投縣埔里鎮大學路301號',
       'resolved',
       'admin_ncnu',
       4,
@@ -1145,36 +1149,38 @@ Future<void> seedAllocations() async {
     [
       'SOS005',
       'U005',
-      '林建宏',
+      '黃建豪',
       '0988777666',
       23.9531,
       120.9302,
+      '南投縣埔里鎮大學路480號',
       'active',
       'admin_ncnu',
       2,
       now.subtract(Duration(minutes: 8)),
       now.subtract(Duration(minutes: 5)),
     ],
-    
+
   ];
 
   for (final s in sosData) {
 
     await execute('''
-      INSERT OR IGNORE INTO emergency_requests (
+      INSERT OR REPLACE INTO emergency_requests (
         emergencyId,
         userId,
         userName,
         phone,
         latitude,
         longitude,
+        address,
         status,
         receiverAdminId,
         hopCount,
         sentAt,
         receivedAt
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', [
       s[0],
       s[1],
@@ -1185,8 +1191,9 @@ Future<void> seedAllocations() async {
       s[6],
       s[7],
       s[8],
-      (s[9] as DateTime).toIso8601String(),
+      s[9],
       (s[10] as DateTime).toIso8601String(),
+      (s[11] as DateTime).toIso8601String(),
     ]);
   }
 
