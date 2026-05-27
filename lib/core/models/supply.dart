@@ -4,6 +4,7 @@ class SupplyItem {
   final String category;
   final String unit;
   final int stockQty;
+  final int reservedQty;
   final int neededQty;
 
   const SupplyItem({
@@ -12,19 +13,22 @@ class SupplyItem {
     required this.category,
     required this.unit,
     required this.stockQty,
+    required this.reservedQty,
     required this.neededQty,
   });
 
+  int get availableQty => stockQty - reservedQty;
+
   int get shortageQty {
-    final shortage = neededQty - stockQty;
+    final shortage = neededQty - availableQty;
     return shortage > 0 ? shortage : 0;
   }
 
-  bool get isLowStock => stockQty < neededQty;
+  bool get isLowStock => availableQty < neededQty;
 
   double get stockRate {
     if (neededQty <= 0) return 1.0;
-    return stockQty / neededQty;
+    return availableQty / neededQty;
   }
 
   factory SupplyItem.fromJson(Map<String, dynamic> json) {
@@ -34,6 +38,7 @@ class SupplyItem {
       category: (json['category'] ?? '').toString(),
       unit: (json['unit'] ?? '').toString(),
       stockQty: _toInt(json['stockQty'] ?? json['totalQuantity']),
+      reservedQty: _toInt(json['reservedQty']),
       neededQty: _toInt(json['neededQty']),
     );
   }
@@ -45,6 +50,7 @@ class SupplyItem {
       'category': category,
       'unit': unit,
       'stockQty': stockQty,
+      'reservedQty': reservedQty,
       'neededQty': neededQty,
     };
   }
@@ -59,6 +65,7 @@ class SupplyItem {
     String? category,
     String? unit,
     int? stockQty,
+    int? reservedQty,
     int? neededQty,
   }) {
     return SupplyItem(
@@ -67,6 +74,7 @@ class SupplyItem {
       category: category ?? this.category,
       unit: unit ?? this.unit,
       stockQty: stockQty ?? this.stockQty,
+      reservedQty: reservedQty ?? this.reservedQty,
       neededQty: neededQty ?? this.neededQty,
     );
   }

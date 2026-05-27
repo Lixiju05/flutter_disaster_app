@@ -434,6 +434,7 @@ Future<void> handleAllocate(
 //查allocation
 Future<void> handleGetAllocations(HttpRequest request) async {
   final data =await DatabaseService.instance.getAllocations();
+  print("DEBUG allocations: $data");
 
   sendJson(request, 200, {
     "success": true,

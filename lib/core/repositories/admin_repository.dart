@@ -1,26 +1,32 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/citizen.dart';
 import '../models/emergency_request.dart';
-import '../models/supply.dart'; // 確保這裡面的類別叫 SupplyItem
+import '../models/supply.dart';
 
 class AdminRepository {
- 
-  final String _baseUrl = 'https://delphine-eisteddfodic-afflictively.ngrok-free.dev';
+  final String _baseUrl =
+      'https://delphine-eisteddfodic-afflictively.ngrok-free.dev';
 
-  /// 取得庫存列表 (從後端資料庫)
+  Future<String> _getAdminId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('adminId') ?? 'admin_ncnu';
+  }
+
+  /// 取得庫存列表
   Future<List<SupplyItem>> getAdminSupplies() async {
     try {
       final response = await http.post(
         Uri.parse(_baseUrl),
-        body: jsonEncode({"type": "getAllInventory"}),
+        body: jsonEncode({"type": "getInventory"}),
       );
-
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
+        final data = jsonDecode(response.body);
         if (data['success'] == true) {
-          final List list = data['data'];
-          return list.map((item) => SupplyItem.fromJson(item)).toList();
+          return (data['data'] as List)
+              .map((item) => SupplyItem.fromJson(item))
+              .toList();
         }
       }
       return [];
@@ -33,22 +39,59 @@ class AdminRepository {
   /// 取得求救列表
   Future<List<EmergencyRequest>> getEmergencies() async {
     try {
+      final adminId = await _getAdminId();
       final response = await http.post(
         Uri.parse(_baseUrl),
-        body: jsonEncode({"type": "getAllReports"}),
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: jsonEncode({
+          "type": "getEmergencyRequestsByAdmin",
+          "receiverAdminId": adminId,
+        }),
       );
-
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
+        final data = jsonDecode(response.body);
         if (data['success'] == true) {
-          final List list = data['data'];
-          return list.map((e) => EmergencyRequest.fromJson(e)).toList();
+          return (data['data'] as List)
+              .map((e) => EmergencyRequest.fromJson(e))
+              .toList();
         }
       }
       return [];
     } catch (e) {
       print('Fetch emergencies error: $e');
       return [];
+    }
+  }
+
+  /// 更新 SOS 狀態
+  Future<bool> updateEmergencyStatus({
+    required String emergencyId,
+    required String status,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(_baseUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: jsonEncode({
+          "type": "updateEmergencyStatus",
+          "emergencyId": emergencyId,
+          "status": status,
+        }),
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['success'] == true;
+      }
+      return false;
+    } catch (e) {
+      print('Update emergency status error: $e');
+      return false;
     }
   }
 
@@ -59,12 +102,12 @@ class AdminRepository {
         Uri.parse(_baseUrl),
         body: jsonEncode({"type": "getAllUsers"}),
       );
-
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
+        final data = jsonDecode(response.body);
         if (data['success'] == true) {
-          final List list = data['data'];
-          return list.map((c) => Citizen.fromJson(c)).toList();
+          return (data['data'] as List)
+              .map((c) => Citizen.fromJson(c))
+              .toList();
         }
       }
       return [];
@@ -90,7 +133,6 @@ class AdminRepository {
           "quantity": qty,
         }),
       );
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['success'] == true;
@@ -102,7 +144,6 @@ class AdminRepository {
     }
   }
 
-  
   Future<bool> addInventory({
     required String name,
     required String category,
@@ -114,7 +155,7 @@ class AdminRepository {
       final response = await http.post(
         Uri.parse(_baseUrl),
         body: jsonEncode({
-          "type": "addItem", 
+          "type": "addItem",
           "name": name,
           "category": category,
           "unit": unit,
@@ -122,7 +163,6 @@ class AdminRepository {
           "neededQty": neededQty,
         }),
       );
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['success'] == true;
@@ -133,9 +173,9 @@ class AdminRepository {
       return false;
     }
   }
-/// 更新物資庫存 (補貨) - 修改後
+
   Future<bool> updateStock({
-    required int itemId, 
+    required int itemId,
     required int additionalQty,
   }) async {
     try {
@@ -147,7 +187,6 @@ class AdminRepository {
           "qty": additionalQty,
         }),
       );
-      // ... 其餘邏輯不變 ...
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['success'] == true;
@@ -157,9 +196,9 @@ class AdminRepository {
       return false;
     }
   }
-  /// 更新物資需求量 (Needed Qty)
+
   Future<bool> updateNeeded({
-    required int itemId, 
+    required int itemId,
     required int neededQty,
   }) async {
     try {
@@ -171,7 +210,6 @@ class AdminRepository {
           "neededQty": neededQty,
         }),
       );
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['success'] == true;
@@ -182,19 +220,16 @@ class AdminRepository {
       return false;
     }
   }
-  /// 取得所有已分配/已出貨紀錄
+
   Future<List<Map<String, dynamic>>> getAllocations() async {
     try {
       final response = await http.post(
         Uri.parse(_baseUrl),
-        body: jsonEncode({"type": "getAllAllocations"}), // 確保後端 switch 有處理這個
+        body: jsonEncode({"type": "getAllAllocations"}),
       );
-
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
+        final data = jsonDecode(response.body);
         if (data['success'] == true) {
-          // 因為分配紀錄通常包含多個 Table 的 Join (物資名、區域等)
-          // 這裡直接回傳原始 List<Map> 供 UI 使用，或是你可以建立一個 AllocationModel
           return List<Map<String, dynamic>>.from(data['data']);
         }
       }
@@ -204,16 +239,15 @@ class AdminRepository {
       return [];
     }
   }
-  /// 取得所有出貨紀錄 (已離開倉庫)
+
   Future<List<Map<String, dynamic>>> getDispatches() async {
     try {
       final response = await http.post(
         Uri.parse(_baseUrl),
-        body: jsonEncode({"type": "getAllDispatches"}), // 對應後端 type
+        body: jsonEncode({"type": "getAllDispatches"}),
       );
-
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
+        final data = jsonDecode(response.body);
         if (data['success'] == true) {
           return List<Map<String, dynamic>>.from(data['data']);
         }
@@ -224,23 +258,21 @@ class AdminRepository {
       return [];
     }
   }
-  /// 執行出貨動作
-  /// 將特定分配紀錄的狀態改為「已出貨」
+
   Future<bool> dispatch({
     required int dispatchId,
-    required String status, // 例如 'shipped' 或 'completed'
+    required String status,
   }) async {
     try {
       final response = await http.post(
         Uri.parse(_baseUrl),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
-          "type": "updateDispatchStatus", // 確保後端 switch 處理這個 type
+          "type": "updateDispatchStatus",
           "dispatchId": dispatchId,
           "status": status,
         }),
       );
-
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         return data['success'] == true;
@@ -251,4 +283,4 @@ class AdminRepository {
       return false;
     }
   }
-} 
+}

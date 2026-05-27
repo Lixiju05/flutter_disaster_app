@@ -24,8 +24,8 @@ class HealthReportRepository extends ChangeNotifier {
         bloodType: 'O',
         status: '安全', 
         description: '目前安全，已在避難所。',
-          lat: 23.951178, // 暨大
-        lng: 120.930978,
+          lat: 23.9577, // 暨大
+        lng: 120.9308,
         reportTime: DateTime.now().subtract(const Duration(minutes: 10)),
       ),
       HealthReport(
