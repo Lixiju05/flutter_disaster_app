@@ -9,6 +9,7 @@ class EmergencyRequest {
   final String phone;
   final double lat;
   final double lng;
+  final String? address;
   final String status;
   final String? receiverAdminId;
   final int hopCount;
@@ -22,6 +23,7 @@ class EmergencyRequest {
     required this.phone,
     required this.lat,
     required this.lng,
+    this.address,
     this.status = 'active',
     this.receiverAdminId,
     this.hopCount = 0,
@@ -56,6 +58,9 @@ class EmergencyRequest {
       lng:
           (json['longitude'] as num?)
               ?.toDouble() ?? 0.0,
+
+      address:
+          json['address']?.toString(),
 
       status:
           json['status']?.toString() ??

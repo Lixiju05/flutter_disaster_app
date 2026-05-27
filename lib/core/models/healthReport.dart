@@ -1,13 +1,18 @@
 class HealthReport {
-  final String reporterId;   // 回報者 ID
-  final String name;         // 回報者姓名
-  final String phone;        // 聯絡電話
-  final String? bloodType;   // 血型（可選）
-  final String status;       // 健康狀態：'安全' / '輕傷' / '重傷'
-  final String? description; // 補充說明（可選）
-  final double? lat;         // 緯度（可選）
-  final double? lng;         // 經度（可選）
-  final DateTime reportTime; // 回報時間
+  final String reporterId;
+  final String name;
+  final String phone;
+  final String? bloodType;
+  final String status;
+  final String? description;
+  final double? lat;
+  final double? lng;
+  final String? address;
+  final DateTime reportTime;
+  final String? uuid;
+  final String? receiverAdminId;
+  final int hopCount;
+  final DateTime? receivedAt;
 
   HealthReport({
     required this.reporterId,
@@ -18,7 +23,12 @@ class HealthReport {
     this.description,
     this.lat,
     this.lng,
+    this.address,
     required this.reportTime,
+    this.uuid,
+    this.receiverAdminId,
+    this.hopCount = 0,
+    this.receivedAt,
   });
 
   Map<String, dynamic> toJson() => {
@@ -30,18 +40,28 @@ class HealthReport {
         'description': description,
         'lat': lat,
         'lng': lng,
+        'address': address,
         'reportTime': reportTime.toIso8601String(),
       };
 
   factory HealthReport.fromJson(Map<String, dynamic> json) => HealthReport(
-        reporterId: json['reporterId'] as String,
-        name: json['name'] as String,
-        phone: json['phone'] as String,
-        bloodType: json['bloodType'] as String?,
-        status: json['status'] as String,
-        description: json['description'] as String?,
+        reporterId: json['reporterId']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        phone: json['phone']?.toString() ?? '',
+        bloodType: json['bloodType']?.toString(),
+        status: json['status']?.toString() ?? '',
+        description: json['description']?.toString(),
         lat: (json['lat'] as num?)?.toDouble(),
         lng: (json['lng'] as num?)?.toDouble(),
-        reportTime: DateTime.parse(json['reportTime'] as String),
+        address: json['address']?.toString(),
+        reportTime: DateTime.tryParse(json['reportTime']?.toString() ?? '') ?? DateTime.now(),
+        uuid: json['uuid']?.toString(),
+        receiverAdminId: json['receiverAdminId']?.toString(),
+        hopCount: (json['hopCount'] as num?)?.toInt() ?? 0,
+        receivedAt: json['receivedAt'] == null ? null : DateTime.tryParse(json['receivedAt'].toString()),
+      );
+
+  factory HealthReport.fromMap(Map<String, Object?> map) => HealthReport.fromJson(
+        map.map((k, v) => MapEntry(k, v)),
       );
 }

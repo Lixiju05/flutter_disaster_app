@@ -919,7 +919,7 @@ class DatabaseService {
   for (final r in reports) {
 
     await execute('''
-      INSERT OR IGNORE INTO health_reports (
+      INSERT OR REPLACE INTO health_reports (
         uuid,
         reporterId,
         name,
@@ -1114,6 +1114,7 @@ Future<void> seedAllocations() async {
 
   final now = DateTime.now();
 
+  // [emergencyId, userId, userName, phone, lat, lng, address, status, receiverAdminId, hopCount, sentAt, receivedAt]
   final sosData = [
 
     [
@@ -1175,13 +1176,13 @@ Future<void> seedAllocations() async {
       now.subtract(Duration(minutes: 8)),
       now.subtract(Duration(minutes: 5)),
     ],
-    
+
   ];
 
   for (final s in sosData) {
 
     await execute('''
-      INSERT OR IGNORE INTO emergency_requests (
+      INSERT OR REPLACE INTO emergency_requests (
         emergencyId,
         userId,
         userName,

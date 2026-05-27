@@ -512,91 +512,109 @@ class _UserManagementPageState extends State<UserManagementPage> {
     final isLast =
         globalIndex == _currentPage * _pageSize + _pagedUsers.length - 1;
 
-    return InkWell(
-      onTap: () => _showUserDetail(user),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          border: isLast
-              ? null
-              : Border(
-                  bottom: BorderSide(
-                      color: _kBorder.withValues(alpha: .6), width: 0.8)),
-        ),
-        child: Row(children: [
-          // 頭像 + 姓名
-          Expanded(
-            flex: 5,
-            child: Row(children: [
-              _buildAvatar(name),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(
-                    name.isEmpty ? '未填寫' : name,
-                    style: const TextStyle(
-                      color: _kTextMain,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (area.isNotEmpty)
-                    Text(
-                      area,
-                      style: const TextStyle(
-                          color: _kTextSub, fontSize: 11),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ]),
-              ),
-            ]),
-          ),
-          // ID
-          Expanded(
-            flex: 3,
-            child: Text(
-              id.isEmpty ? '—' : id,
-              style: const TextStyle(
-                color: _kTextSub,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          // 電話
-          Expanded(
-            flex: 4,
-            child: Row(children: [
-              Icon(Icons.phone_outlined,
-                  size: 13,
-                  color: phone.isEmpty
-                      ? _kTextSub.withValues(alpha: .35)
-                      : _kTextSub.withValues(alpha: .6)),
-              const SizedBox(width: 5),
-              Flexible(
-                child: Text(
-                  phone.isEmpty ? '未填寫' : phone,
-                  style: TextStyle(
-                    color: phone.isEmpty
-                        ? _kTextSub.withValues(alpha: .4)
-                        : _kTextSub,
-                    fontSize: 13,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : Border(
+                bottom: BorderSide(
+                    color: _kBorder.withValues(alpha: .6), width: 0.8)),
+      ),
+      child: Row(children: [
+        // 頭像 + 姓名
+        Expanded(
+          flex: 5,
+          child: Row(children: [
+            _buildAvatar(name),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(
+                  name.isEmpty ? '未填寫' : name,
+                  style: const TextStyle(
+                    color: _kTextMain,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ]),
+                if (area.isNotEmpty)
+                  Text(
+                    area,
+                    style: const TextStyle(
+                        color: _kTextSub, fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ]),
+            ),
+          ]),
+        ),
+        // ID
+        Expanded(
+          flex: 3,
+          child: Text(
+            id.isEmpty ? '—' : id,
+            style: const TextStyle(
+              color: _kTextSub,
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(width: 4),
-          const Icon(Icons.chevron_right_rounded, size: 16, color: _kBorder),
+        ),
+        // 電話
+        Expanded(
+          flex: 4,
+          child: Row(children: [
+            Icon(Icons.phone_outlined,
+                size: 13,
+                color: phone.isEmpty
+                    ? _kTextSub.withValues(alpha: .35)
+                    : _kTextSub.withValues(alpha: .6)),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(
+                phone.isEmpty ? '未填寫' : phone,
+                style: TextStyle(
+                  color: phone.isEmpty
+                      ? _kTextSub.withValues(alpha: .4)
+                      : _kTextSub,
+                  fontSize: 13,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ]),
+        ),
+        const SizedBox(width: 8),
+        _actionBtn(() => _showUserDetail(user)),
+      ]),
+    );
+  }
+
+  Widget _actionBtn(VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: _kBlue.withValues(alpha: .06),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _kBlue.withValues(alpha: .2)),
+        ),
+        child: const Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.visibility_outlined, color: _kBlue, size: 13),
+          SizedBox(width: 4),
+          Text('詳情',
+              style: TextStyle(
+                  color: _kBlue, fontSize: 11, fontWeight: FontWeight.w600)),
         ]),
       ),
     );

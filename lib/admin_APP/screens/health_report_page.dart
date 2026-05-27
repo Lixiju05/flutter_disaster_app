@@ -13,8 +13,9 @@ const Color _kCardBg2  = Color(0xFFF8FAFC);
 const Color _kBorder   = Color(0xFFE5E7EB);
 const Color _kBlue     = Color(0xFF2563EB);
 const Color _kGreen    = Color(0xFF16A34A);
-const Color _kOrange   = Color(0xFFF59E0B);
-const Color _kRed      = Color(0xFFDC2626);
+const Color _kCritical = Color(0xFFEC6C2D);   // 重傷（橘色）
+const Color _kOrange   = Color(0xFFD3CA43);   // 輕傷（落日黃）
+const Color _kRed      = Color(0xFFDC2626);   // 錯誤 / 緊急警示
 const Color _kTextMain = Color(0xFF0F172A);
 const Color _kTextSub  = Color(0xFF64748B);
 
@@ -327,7 +328,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
       child: Row(children: [
         _tapCell('全部回報', '$total', Icons.apps_rounded, _kBlue, 'all'),
         _vDivider(),
-        _tapCell('重傷', '$critical', Icons.warning_amber_rounded, _kRed, 'critical'),
+        _tapCell('重傷', '$critical', Icons.warning_amber_rounded, _kCritical, 'critical'),
         _vDivider(),
         _tapCell('輕傷', '$injured', Icons.healing_rounded, _kOrange, 'injured'),
         _vDivider(),
@@ -400,7 +401,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
 
     return [
       if (critical.isNotEmpty) ...[
-        _sectionHeader('重傷', _kRed, critical.length),
+        _sectionHeader('重傷', _kCritical, critical.length),
         ...critical.map(_buildReportCard),
       ],
       if (injured.isNotEmpty) ...[
@@ -876,7 +877,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
     switch (_normalizeStatus(status)) {
       case 'safe':     return _kGreen;
       case 'injured':  return _kOrange;
-      case 'critical': return _kRed;
+      case 'critical': return _kCritical;
       default:         return _kBlue;
     }
   }
@@ -893,7 +894,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
   String _normalizeStatus(String status) {
     final s = status.trim().toLowerCase();
     if (s == 'safe'     || s == '安全') return 'safe';
-    if (s == 'injured'  || s == '輕傷' || s == '轻伤') return 'injured';
+    if (s == 'injured'  || s == 'minor' || s == '輕傷' || s == '轻伤') return 'injured';
     if (s == 'critical' || s == '重傷' || s == '重伤') return 'critical';
     return s;
   }
@@ -913,14 +914,8 @@ class _HealthReportPageState extends State<HealthReportPage> {
       '${t.minute.toString().padLeft(2, '0')}';
 
   String _locationName(HealthReport r) {
+    if (r.address?.isNotEmpty == true) return r.address!;
     if (r.lat == null || r.lng == null) return '未知地點';
-    final lat = r.lat!, lng = r.lng!;
-    if ((lat - 23.9577).abs() < 0.01 &&
-        (lng - 120.9308).abs() < 0.01) { return '暨大'; }
-    if ((lat - 23.966667).abs() < 0.01 &&
-        (lng - 120.966667).abs() < 0.01) { return '埔里'; }
-    if ((lat - 23.866664).abs() < 0.02 &&
-        (lng - 120.916664).abs() < 0.02) { return '日月潭'; }
-    return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
+    return '${r.lat!.toStringAsFixed(5)}, ${r.lng!.toStringAsFixed(5)}';
   }
 }
