@@ -187,6 +187,17 @@ Future<void> handleRequest(HttpRequest request) async {
         await handleGetHealthReportsByAdmin(jsonData, request);
         break;
 
+      case 'getVictimDashboard':
+        await handleGetVictimDashboard(
+          jsonData,
+          request,
+        );
+        break;
+
+      case 'dispatchSupplyRequest':
+        await handleDispatchSupplyRequest(jsonData, request);
+        break;
+
       default:
         sendJson(request, HttpStatus.badRequest, {
           "success": false,
@@ -595,4 +606,60 @@ Future<void> handleGetHealthReportsByAdmin(
     "success": true,
     "data": reports.map((r) => r.toJson()).toList(),
   });
+}
+
+Future<void> handleGetVictimDashboard(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+
+  final receiverAdminId =
+      jsonData['receiverAdminId'];
+
+  final data =
+      await DatabaseService.instance
+          .getVictimDashboard(
+            receiverAdminId,
+          );
+
+  sendJson(
+    request,
+    200,
+    {
+      "success": true,
+      "data": data,
+    },
+  );
+}
+
+Future<void> handleDispatchSupplyRequest(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  try {
+    final requestId = jsonData['requestId'];
+
+    if (requestId == null) {
+      sendJson(request, 400, {
+        "success": false,
+        "message": "missing requestId",
+      });
+      return;
+    }
+
+    final result = await DatabaseService.instance.dispatchSupplyRequest(
+      requestId: requestId,
+    );
+
+    sendJson(request, 200, {
+      "success": true,
+      "message": "supply request dispatched",
+      "data": result,
+    });
+  } catch (e) {
+    sendJson(request, 500, {
+      "success": false,
+      "message": e.toString(),
+    });
+  }
 }

@@ -29,11 +29,11 @@ class DatabaseService {
     // 建立所有資料表
     rawDb.execute('''CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE,password TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, phone TEXT, area TEXT, emergencyContactName TEXT, emergencyContactPhone TEXT, emergencyContactRelation TEXT, bloodType TEXT, medicalInfo TEXT, registeredAt TEXT);''');
-    rawDb.execute('''CREATE TABLE IF NOT EXISTS health_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT UNIQUE, reporterId TEXT, name TEXT, phone TEXT, bloodType TEXT, status TEXT, description TEXT, lat REAL, lng REAL, reportTime TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS health_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT UNIQUE, reporterId TEXT, name TEXT, phone TEXT, bloodType TEXT, status TEXT, description TEXT, lat REAL, lng REAL,address TEXT, reportTime TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT, unit TEXT, stockQty INTEGER DEFAULT 0, reservedQty INTEGER DEFAULT 0, neededQty INTEGER DEFAULT 0, updatedAt TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS allocations (id INTEGER PRIMARY KEY AUTOINCREMENT, itemId INTEGER, zoneId TEXT, quantity INTEGER, status TEXT, createdAt TEXT);''');
-    rawDb.execute('''CREATE TABLE IF NOT EXISTS supply_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,requestId TEXT UNIQUE,userId TEXT,itemId INTEGER,qty INTEGER,lat REAL,lng REAL,status TEXT,createdAt TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
-    rawDb.execute('''CREATE TABLE IF NOT EXISTS emergency_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,emergencyId TEXT UNIQUE,userId TEXT,userName TEXT,phone TEXT,latitude REAL,longitude REAL,status TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,sentAt TEXT,receivedAt TEXT);''');
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS supply_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,requestId TEXT UNIQUE,userId TEXT,itemId INTEGER,qty INTEGER,lat REAL,lng REAL,address TEXT,status TEXT,createdAt TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS emergency_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,emergencyId TEXT UNIQUE,userId TEXT,userName TEXT,phone TEXT,latitude REAL,longitude REAL,address TEXT,status TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,sentAt TEXT,receivedAt TEXT);''');
 
     instance._initDefaultAdmin();
     instance.seedAll();
@@ -529,29 +529,26 @@ class DatabaseService {
         phone,
         latitude,
         longitude,
-        bloodType,
-        medicalInfo,
-        type,
         status,
         receiverAdminId,
         hopCount,
         sentAt,
         receivedAt
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', [
-      req.emergencyId,
-      req.userId,
-      req.userName,
-      req.phone,
-      req.lat,
-      req.lng,
-      req.status,
-      req.receiverAdminId,
-      req.hopCount,
-      req.sentAt.toIso8601String(),
-      req.receivedAt?.toIso8601String(),
-    ]);
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ''', [
+        req.emergencyId,
+        req.userId,
+        req.userName,
+        req.phone,
+        req.lat,
+        req.lng,
+        req.status,
+        req.receiverAdminId,
+        req.hopCount,
+        req.sentAt.toIso8601String(),
+        req.receivedAt?.toIso8601String(),
+      ]);
   }
 
   Future<List<Map<String, Object?>>> getEmergencyRequestsByAdmin(
@@ -578,6 +575,221 @@ class DatabaseService {
     ''', [status, emergencyId]);
   }
 
+  Future<List<Map<String, dynamic>>> getVictimDashboard(
+  String receiverAdminId,
+) async {
+  final victims = <String, Map<String, dynamic>>{};
+
+  // 1. 健康回報
+  final healthReports = await getHealthReportsByAdmin(receiverAdminId);
+
+  for (final report in healthReports) {
+    victims[report.reporterId] ??= {
+      "userId": report.reporterId,
+      "name": report.name,
+      "phone": report.phone,
+      "healthStatus": null,
+      "healthDescription": null,
+      "hasSOS": false,
+      "sosStatus": null,
+      "supplyRequests": [],
+      "lat": report.lat,
+      "lng": report.lng,
+      "lastUpdatedAt": report.reportTime.toIso8601String(),
+    };
+
+    victims[report.reporterId]!["healthStatus"] = report.status;
+    victims[report.reporterId]!["healthDescription"] = report.description;
+    victims[report.reporterId]!["lat"] = report.lat;
+    victims[report.reporterId]!["lng"] = report.lng;
+    victims[report.reporterId]!["lastUpdatedAt"] =
+        report.reportTime.toIso8601String();
+  }
+
+  // 2. SOS
+  final sosList =
+    await getEmergencyRequestsByAdmin(
+      receiverAdminId,
+    );
+
+  for (final sos in sosList) {
+
+    final userId =
+        sos['userId']?.toString() ?? '';
+
+    victims[userId] ??= {
+      "userId": userId,
+
+      "name":
+          sos['userName']?.toString() ?? '',
+
+      "phone":
+          sos['phone']?.toString() ?? '',
+
+      "healthStatus": null,
+
+      "healthDescription": null,
+
+      "hasSOS": false,
+
+      "sosStatus": null,
+
+      "supplyRequests": [],
+
+      "lat": sos['latitude'],
+
+      "lng": sos['longitude'],
+
+      "lastUpdatedAt":
+          sos['sentAt']?.toString(),
+    };
+
+    victims[userId]!["hasSOS"] = true;
+
+    victims[userId]!["sosStatus"] =
+        sos['status'];
+
+    victims[userId]!["lat"] =
+        sos['latitude'];
+
+    victims[userId]!["lng"] =
+        sos['longitude'];
+
+    victims[userId]!["lastUpdatedAt"] =
+        sos['sentAt']?.toString();
+  }
+
+    // 3. 物資需求
+    final requests = await getRequestsByAdmin(receiverAdminId);
+
+    for (final req in requests) {
+      final userId = req['userId']?.toString() ?? '';
+      if (userId.isEmpty) continue;
+
+      victims[userId] ??= {
+        "userId": userId,
+        "name": "",
+        "phone": "",
+        "healthStatus": null,
+        "healthDescription": null,
+        "hasSOS": false,
+        "sosStatus": null,
+        "supplyRequests": [],
+        "lat": req['lat'],
+        "lng": req['lng'],
+        "lastUpdatedAt": req['receivedAt']?.toString() ??
+            req['createdAt']?.toString(),
+      };
+
+      (victims[userId]!["supplyRequests"] as List).add({
+        "requestId": req['requestId'],
+        "itemId": req['itemId'],
+        "itemName": req['itemName'],
+        "unit": req['unit'],
+        "qty": req['qty'],
+        "status": req['status'],
+      });
+
+      victims[userId]!["lat"] = req['lat'];
+      victims[userId]!["lng"] = req['lng'];
+      victims[userId]!["lastUpdatedAt"] =
+          req['receivedAt']?.toString() ?? req['createdAt']?.toString();
+    }
+
+    final list = victims.values.toList();
+
+    list.sort((a, b) {
+      int priority(Map<String, dynamic> v) {
+        if (v["hasSOS"] == true && v["sosStatus"] == "active") return 0;
+        if (v["healthStatus"] == "critical") return 1;
+        if (v["healthStatus"] == "missing") return 2;
+        if ((v["supplyRequests"] as List).isNotEmpty) return 3;
+        if (v["healthStatus"] == "minor") return 4;
+        return 5;
+      }
+
+      return priority(a).compareTo(priority(b));
+    });
+
+    return list;
+  }
+
+ Future<Map<String, dynamic>> dispatchSupplyRequest({
+  required String requestId,
+}) async {
+  Map<String, dynamic>? dispatchResult;
+
+  await transaction(() async {
+    final reqResult = await select('''
+      SELECT *
+      FROM supply_requests
+      WHERE requestId = ?
+    ''', [requestId]);
+
+    if (reqResult.isEmpty) {
+      throw Exception("Supply request not found");
+    }
+
+    final req = reqResult.first;
+
+    final itemId = req['itemId'] as int;
+    final qty = req['qty'] as int;
+    final status = req['status']?.toString() ?? 'pending';
+
+    if (status == 'dispatched') {
+      throw Exception("Already dispatched");
+    }
+
+    final itemResult = await select('''
+      SELECT *
+      FROM inventory
+      WHERE id = ?
+    ''', [itemId]);
+
+    if (itemResult.isEmpty) {
+      throw Exception("Inventory item not found");
+    }
+
+    final item = itemResult.first;
+
+    final stockQty = item['stockQty'] as int;
+    final itemName = item['name']?.toString() ?? '';
+    final unit = item['unit']?.toString() ?? '';
+
+    if (stockQty < qty) {
+      throw Exception("Not enough stock");
+    }
+
+    await execute('''
+      UPDATE inventory
+      SET stockQty = stockQty - ?,
+          updatedAt = ?
+      WHERE id = ?
+    ''', [
+      qty,
+      DateTime.now().toIso8601String(),
+      itemId,
+    ]);
+
+    await execute('''
+      UPDATE supply_requests
+      SET status = 'dispatched'
+      WHERE requestId = ?
+    ''', [requestId]);
+
+    dispatchResult = {
+      "requestId": requestId,
+      "itemId": itemId,
+      "itemName": itemName,
+      "unit": unit,
+      "qty": qty,
+      "status": "dispatched",
+    };
+  });
+
+  return dispatchResult!;
+}
+
   // =====================
   // SEED & HELPERS 
   // =====================
@@ -593,20 +805,29 @@ class DatabaseService {
 
   await seedSupplyRequests();
 
+  await seedEmergencyRequests();
+
   print("All seed data completed");
 }
 
   Future<void> seedUsers() async {
     final users = [
-    ['U001', '王小明', '0912345678', '台中'],
-    ['U002', '李小華', '0923456789', '台北'],
-    ['U003', '陳志明', '0934567891', '高雄'],
-    ['U004', '林雅婷', '0945678912', '台南'],
-    ['U005', '黃建豪', '0956789123', '新竹'],
-    ['U006', '張美玲', '0967891234', '彰化'],
-    ['U007', '吳宗翰', '0978912345', '南投'],
-    ['U008', '蔡佩珊', '0989123456', '花蓮'],
-  ];
+      ['U001', '王小明', '0912345678', '南投縣埔里鎮大學路521號'],
+      ['U002', '李小華', '0923456789', '南投縣埔里鎮大學路560號'],
+
+      ['U003', '陳志明', '0934567891', '南投縣埔里鎮大學路470號'],
+      ['U004', '林雅婷', '0945678912', '南投縣埔里鎮大學路301號'],
+
+      ['U005', '黃建豪', '0956789123', '南投縣埔里鎮大學路480號'],
+      ['U006', '張美玲', '0967891234', '南投縣埔里鎮大學路500號'],
+
+      ['U007', '吳宗翰', '0978912345', '南投縣埔里鎮大學路490號'],
+      ['U008', '蔡佩珊', '0989123456', '南投縣埔里鎮大學路502號'],
+
+      ['U009', '劉志偉', '0990123456', '南投縣埔里鎮大學路506號'],
+      ['U010', '陳美玲', '0910123456', '南投縣埔里鎮大學路511號'],
+    ];
+
 
   for (final u in users) {
     await execute('''
@@ -629,57 +850,57 @@ class DatabaseService {
   Future<void> seedHealthReports() async {
     final reports = [
 
-    [
-      'R001',
-      'U001',
-      '王小明',
-      'safe',
-      '目前安全，在避難所',
-      24.1477,
-      120.6736
-    ],
+  [
+    'R001',
+    'U001',
+    '王小明',
+    'safe',
+    '目前安全，在宿舍區',
+    23.9531,
+    120.9302
+  ],
 
-    [
-      'R002',
-      'U002',
-      '李小華',
-      'injured',
-      '腳受傷，需要醫療協助',
-      25.0330,
-      121.5654
-    ],
+  [
+    'R002',
+    'U002',
+    '李小華',
+    'minor',
+    '腳受傷，需要醫療協助',
+    23.9520,
+    120.9290
+  ],
 
-    [
-      'R003',
-      'U003',
-      '陳志明',
-      'critical',
-      '受困大樓內',
-      22.6273,
-      120.3014
-    ],
+  [
+    'R003',
+    'U003',
+    '陳志明',
+    'critical',
+    '受困教學大樓',
+    23.9505,
+    120.9278
+  ],
 
-    [
-      'R004',
-      'U004',
-      '林雅婷',
-      'safe',
-      '家人平安',
-      23.0000,
-      120.2269
-    ],
+  [
+    'R004',
+    'U004',
+    '林雅婷',
+    'safe',
+    '目前安全',
+    23.9498,
+    120.9269
+  ],
 
-    [
-      'R005',
-      'U005',
-      '黃建豪',
-      'missing',
-      '失去聯絡超過12小時',
-      24.8138,
-      120.9675
-    ],
+  [
+    'R005',
+    'U005',
+    '黃建豪',
+    'minor',
+    '需要簡單包紮',
+    23.9521,
+    120.9281
+  ],
 
-  ];
+];
 
   for (final r in reports) {
 
@@ -775,7 +996,7 @@ Future<void> seedAllocations() async {
   ''', [
 
     1,
-    '南投避難所',
+    '宿舍區物資站',
     30,
     'reserved',
     DateTime.now().toIso8601String(),
@@ -794,7 +1015,7 @@ Future<void> seedAllocations() async {
   ''', [
 
     2,
-    '台中救援站',
+    '教學大樓物資站',
     20,
     'shipped',
     DateTime.now().toIso8601String(),
@@ -850,20 +1071,23 @@ Future<void> seedAllocations() async {
   }
     Future<List<Map<String, Object?>>> getSupplyRequestDetails() async {
       final result = await select('''
-        SELECT 
+        SELECT
           sr.requestId,
+          sr.userId,
           sr.itemId,
           i.name AS itemName,
           i.unit AS unit,
           sr.qty,
           sr.lat,
           sr.lng,
-          sr.zoneId,
-          sr.gridId,
+          sr.receiverAdminId,
+          sr.hopCount,
           sr.status,
-          sr.createdAt
+          sr.createdAt,
+          sr.receivedAt
         FROM supply_requests sr
-        JOIN inventory i ON sr.itemId = i.id
+        JOIN inventory i
+        ON sr.itemId = i.id
         ORDER BY sr.createdAt DESC
       ''');
 
@@ -931,34 +1155,7 @@ Future<void> seedAllocations() async {
       now.subtract(Duration(minutes: 8)),
       now.subtract(Duration(minutes: 5)),
     ],
-
-    [
-      'SOS006',
-      'U006',
-      '黃美玲',
-      '0955666777',
-      23.9542,
-      120.9310,
-      'active',
-      'admin_ncnu',
-      5,
-      now.subtract(Duration(minutes: 40)),
-      now.subtract(Duration(minutes: 30)),
-    ],
-
-    [
-      'SOS007',
-      'U007',
-      '吳志豪',
-      '0911222333',
-      23.9489,
-      120.9257,
-      'processing',
-      'admin_ncnu',
-      3,
-      now.subtract(Duration(minutes: 18)),
-      now.subtract(Duration(minutes: 14)),
-    ],
+    
   ];
 
   for (final s in sosData) {

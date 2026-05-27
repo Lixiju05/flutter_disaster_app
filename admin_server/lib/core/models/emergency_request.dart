@@ -6,6 +6,7 @@ class EmergencyRequest {
   final String phone;
   final double lat;
   final double lng;
+  final String? address;
   final String status;
   final String? receiverAdminId;
   final int hopCount;
@@ -19,6 +20,7 @@ class EmergencyRequest {
     required this.phone,
     required this.lat,
     required this.lng,
+    this.address,
     this.status = 'active',
     this.receiverAdminId,
     this.hopCount = 0,
@@ -34,6 +36,7 @@ class EmergencyRequest {
       phone: json['phone']?.toString() ?? '',
       lat: (json['latitude'] as num?)?.toDouble() ?? 0,
       lng: (json['longitude'] as num?)?.toDouble() ?? 0,
+      address: json['address']?.toString(),
       status: json['status']?.toString() ?? 'active',
       receiverAdminId: json['receiverAdminId']?.toString(),
       hopCount: _toInt(json['hopCount']),
@@ -62,6 +65,7 @@ class EmergencyRequest {
       'hopCount': hopCount,
       'sentAt': sentAt.toIso8601String(),
       'receivedAt': receivedAt?.toIso8601String(),
+      'address': address,
     };
   }
 
