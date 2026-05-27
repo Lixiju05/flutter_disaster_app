@@ -339,8 +339,18 @@ class DatabaseService {
   //查allocation
   Future<List<Map<String, Object?>>> getAllocations() async {
     final result = await select('''
-      SELECT * FROM allocations
-      ORDER BY createdAt DESC
+      SELECT
+        a.id        AS allocationId,
+        a.itemId    AS itemId,
+        a.zoneId    AS zoneId,
+        a.quantity  AS qty,
+        a.status    AS status,
+        a.createdAt AS createdAt,
+        i.name      AS itemName,
+        i.unit      AS unit
+      FROM allocations a
+      LEFT JOIN inventory i ON a.itemId = i.id
+      ORDER BY a.createdAt DESC
     ''');
     return result.toList();
   }
@@ -396,9 +406,19 @@ class DatabaseService {
   //查daispatch
   Future<List<Map<String, Object?>>> getDispatches() async {
     final result = await select('''
-      SELECT * FROM allocations
-      WHERE status = 'shipped'
-      ORDER BY createdAt DESC
+      SELECT
+        a.id        AS allocationId,
+        a.itemId    AS itemId,
+        a.zoneId    AS zoneId,
+        a.quantity  AS qty,
+        a.status    AS status,
+        a.createdAt AS createdAt,
+        i.name      AS itemName,
+        i.unit      AS unit
+      FROM allocations a
+      LEFT JOIN inventory i ON a.itemId = i.id
+      WHERE a.status = 'shipped'
+      ORDER BY a.createdAt DESC
     ''');
     return result.toList();
   }

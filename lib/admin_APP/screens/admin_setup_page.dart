@@ -4,6 +4,7 @@ import 'dashboard_page.dart';
 
 // ── 支援的地區清單 ────────────────────────────────────────
 const List<Map<String, String>> kAreaList = [
+  {'name': '暨大', 'keywords': '暨大,暨南,埔里,南投'},
   {'name': '埔里鎮', 'keywords': '南投,埔里,國姓,魚池,仁愛,信義,水里,鹿谷'},
   {'name': '南投市', 'keywords': '南投,埔里,國姓,魚池,仁愛,信義,水里,鹿谷'},
   {'name': '台中市', 'keywords': '台中,大甲,豐原,清水,梧棲,沙鹿,大肚,烏日,霧峰,太平,大里'},

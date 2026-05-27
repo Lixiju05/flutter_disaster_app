@@ -15,21 +15,19 @@ const Color _kBlue     = Color(0xFF2563EB);
 const Color _kGreen    = Color(0xFF16A34A);
 const Color _kOrange   = Color(0xFFF59E0B);
 const Color _kRed      = Color(0xFFDC2626);
-const Color _kPurple   = Color(0xFF7C3AED);
 const Color _kTextMain = Color(0xFF0F172A);
 const Color _kTextSub  = Color(0xFF64748B);
 
 class HealthReportPage extends StatefulWidget {
-  const HealthReportPage({super.key});
+  const HealthReportPage({super.key, this.showSearch = false});
+  final bool showSearch;
 
   @override
   State<HealthReportPage> createState() => _HealthReportPageState();
 }
 
 class _HealthReportPageState extends State<HealthReportPage> {
-  final TextEditingController _searchController = TextEditingController();
   Timer? _refreshTimer;
-  Timer? _searchTimer;
 
   List<HealthReport> _allReports = [];
   List<HealthReport> _reports    = [];
@@ -37,7 +35,8 @@ class _HealthReportPageState extends State<HealthReportPage> {
   bool   _isLoading    = false;
   String _errorMessage = '';
   String _filter       = 'all';
-  String _keyword      = '';
+  String _searchQuery  = '';
+  final  TextEditingController _searchCtrl = TextEditingController();
 
   static const String _baseUrl =
       'https://delphine-eisteddfodic-afflictively.ngrok-free.dev';
@@ -55,8 +54,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
   @override
   void dispose() {
     _refreshTimer?.cancel();
-    _searchTimer?.cancel();
-    _searchController.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -102,14 +100,6 @@ class _HealthReportPageState extends State<HealthReportPage> {
   }
 
   // ── 篩選 ─────────────────────────────────────────────
-  void _onSearchChanged(String v) {
-    _searchTimer?.cancel();
-    _searchTimer = Timer(const Duration(milliseconds: 280), () {
-      setState(() => _keyword = v.trim().toLowerCase());
-      _applyFilters();
-    });
-  }
-
   void _applyFilters() {
     List<HealthReport> result = List.from(_allReports);
     if (_filter != 'all') {
@@ -117,16 +107,11 @@ class _HealthReportPageState extends State<HealthReportPage> {
           .where((r) => _normalizeStatus(r.status) == _filter)
           .toList();
     }
-    if (_keyword.isNotEmpty) {
+    final q = _searchQuery.trim().toLowerCase();
+    if (q.isNotEmpty) {
       result = result.where((r) {
-        final ns = _normalizeStatus(r.status);
-        return r.name.toLowerCase().contains(_keyword) ||
-            r.reporterId.toLowerCase().contains(_keyword) ||
-            r.phone.toLowerCase().contains(_keyword) ||
-            (r.description ?? '').toLowerCase().contains(_keyword) ||
-            _locationName(r).toLowerCase().contains(_keyword) ||
-            ns.contains(_keyword) ||
-            _translateStatus(ns).contains(_keyword);
+        return r.name.toLowerCase().contains(q) ||
+               r.reporterId.toLowerCase().contains(q);
       }).toList();
     }
     if (mounted) setState(() => _reports = result);
@@ -140,6 +125,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
     final safeCount     = _allReports.where((r) => _normalizeStatus(r.status) == 'safe').length;
     final injuredCount  = _allReports.where((r) => _normalizeStatus(r.status) == 'injured').length;
     final criticalCount = _allReports.where((r) => _normalizeStatus(r.status) == 'critical').length;
+    final urgentCount   = injuredCount + criticalCount;
 
     return Container(
       color: _kBg,
@@ -148,55 +134,160 @@ class _HealthReportPageState extends State<HealthReportPage> {
             ? const Center(child: CircularProgressIndicator(color: _kBlue))
             : _errorMessage.isNotEmpty
                 ? _buildError()
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildTopBar(),
-                        const SizedBox(height: 16),
-                        _buildStatsRow(
-                          total: _allReports.length,
-                          safe: safeCount,
-                          injured: injuredCount,
-                          critical: criticalCount,
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── 固定頂部（不隨清單滾動）──────────────
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (widget.showSearch) _buildPageHeader(urgentCount),
+                            if (widget.showSearch) const SizedBox(height: 12),
+                            _buildStatsRow(
+                              total: _allReports.length,
+                              safe: safeCount,
+                              injured: injuredCount,
+                              critical: criticalCount,
+                              onRefresh: widget.showSearch ? null : _loadReports,
+                            ),
+                            if (widget.showSearch) ...[
+                              const SizedBox(height: 10),
+                              _buildSearchBar(),
+                              const SizedBox(height: 6),
+                              _buildResultCount(),
+                            ],
+                            const SizedBox(height: 10),
+                          ],
                         ),
-                        const SizedBox(height: 14),
-                        _buildSearchBar(),
-                        const SizedBox(height: 10),
-                        _buildFilterRow(),
-                        const SizedBox(height: 14),
-                        if (_allReports.isEmpty)
-                          _buildEmpty('目前沒有健康回報資料')
-                        else if (_reports.isEmpty)
-                          _buildEmpty('沒有符合條件的資料')
-                        else
-                          ..._reports.map(_buildReportCard),
-                      ],
-                    ),
+                      ),
+                      // ── 可滾動清單 ──────────────────────────
+                      Expanded(
+                        child: _allReports.isEmpty
+                            ? _buildEmpty('目前沒有健康回報資料')
+                            : _reports.isEmpty
+                                ? _buildEmpty('沒有符合條件的資料')
+                                : ListView(
+                                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
+                                    children: _filter == 'all'
+                                        ? _buildGroupedCards()
+                                        : _reports.map(_buildReportCard).toList(),
+                                  ),
+                      ),
+                    ],
                   ),
       ),
     );
   }
 
-  // ── 頂部列 ────────────────────────────────────────────
-  Widget _buildTopBar() {
-    return Row(children: [
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: const [
-        Text('健康回報',
-            style: TextStyle(
-                color: _kTextMain,
-                fontSize: 28,
-                fontWeight: FontWeight.w800)),
-        SizedBox(height: 2),
-        Text('HEALTH REPORT CENTER',
-            style: TextStyle(
-                color: _kTextSub, fontSize: 12, letterSpacing: 1.4)),
+  // ── 搜尋列 ───────────────────────────────────────────
+  Widget _buildSearchBar() {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: _kCardBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _kBorder),
+      ),
+      child: Row(children: [
+        const SizedBox(width: 12),
+        const Icon(Icons.search_rounded, color: _kTextSub, size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: TextField(
+            controller: _searchCtrl,
+            style: const TextStyle(fontSize: 13, color: _kTextMain),
+            decoration: const InputDecoration(
+              hintText: '搜尋姓名 / ID…',
+              hintStyle: TextStyle(color: _kTextSub, fontSize: 13),
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+            onChanged: (v) {
+              setState(() => _searchQuery = v);
+              _applyFilters();
+            },
+          ),
+        ),
+        if (_searchQuery.isNotEmpty)
+          GestureDetector(
+            onTap: () {
+              _searchCtrl.clear();
+              setState(() => _searchQuery = '');
+              _applyFilters();
+            },
+            child: const Padding(
+              padding: EdgeInsets.all(8),
+              child: Icon(Icons.close_rounded, color: _kTextSub, size: 15),
+            ),
+          )
+        else
+          const SizedBox(width: 8),
       ]),
-      const SizedBox(width: 14),
-      _pill('只讀模式', _kPurple),
+    );
+  }
+
+  // ── 完整頁面標題（管理員側欄使用）──────────────────────
+  Widget _buildPageHeader(int urgentCount) {
+    return Row(children: [
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('健康回報',
+            style: TextStyle(color: _kTextMain, fontSize: 26, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 1),
+        const Text('HEALTH REPORT MANAGEMENT',
+            style: TextStyle(color: _kTextSub, fontSize: 11, letterSpacing: 1.3)),
+      ]),
+      const SizedBox(width: 12),
+      if (urgentCount > 0)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+          decoration: BoxDecoration(
+            color: _kRed.withValues(alpha: .08),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: _kRed.withValues(alpha: .18)),
+          ),
+          child: Text('傷患 $urgentCount 件',
+              style: const TextStyle(color: _kRed, fontSize: 10, fontWeight: FontWeight.w700)),
+        ),
       const Spacer(),
-      InkWell(
+      GestureDetector(
+        onTap: _loadReports,
+        child: Container(
+          width: 34, height: 34,
+          decoration: BoxDecoration(
+            color: _kCardBg,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: _kBorder),
+          ),
+          child: const Icon(Icons.refresh_rounded, color: _kBlue, size: 16),
+        ),
+      ),
+    ]);
+  }
+
+  // ── 搜尋結果筆數提示 ─────────────────────────────────
+  Widget _buildResultCount() {
+    final q = _searchQuery.trim();
+    final isFiltered = _filter != 'all' || q.isNotEmpty;
+    if (!isFiltered) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(left: 2),
+      child: Text(
+        q.isNotEmpty
+            ? '搜尋「$q」：共 ${_reports.length} 筆'
+            : '篩選結果：共 ${_reports.length} 筆',
+        style: const TextStyle(color: _kTextSub, fontSize: 12),
+      ),
+    );
+  }
+
+  // ── 頂部重新整理按鈕（災民管理使用）──────────────────────
+  Widget _buildTopBar() {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: InkWell(
         borderRadius: BorderRadius.circular(10),
         onTap: () => _loadReports(),
         child: Container(
@@ -210,171 +301,153 @@ class _HealthReportPageState extends State<HealthReportPage> {
               color: _kBlue, size: 18),
         ),
       ),
-    ]);
+    );
   }
 
-  // ── 統計卡片 ─────────────────────────────────────────
+  // ── 統計卡片（連排可點擊）──────────────────────────────
   Widget _buildStatsRow({
     required int total,
     required int safe,
     required int injured,
     required int critical,
+    VoidCallback? onRefresh,
   }) {
-    return Row(children: [
-      Expanded(child: _statCard('全部回報', '$total',
-          Icons.apps_rounded, _kBlue, 'all')),
-      const SizedBox(width: 12),
-      Expanded(child: _statCard('安全', '$safe',
-          Icons.verified_user_rounded, _kGreen, 'safe')),
-      const SizedBox(width: 12),
-      Expanded(child: _statCard('輕傷', '$injured',
-          Icons.healing_rounded, _kOrange, 'injured')),
-      const SizedBox(width: 12),
-      Expanded(child: _statCard('重傷', '$critical',
-          Icons.warning_amber_rounded, _kRed, 'critical')),
-    ]);
-  }
-
-  Widget _statCard(String label, String value, IconData icon,
-      Color color, String filter) {
-    final sel = _filter == filter;
-    return InkWell(
-      borderRadius: BorderRadius.circular(14),
-      onTap: () {
-        setState(() => _filter = filter);
-        _applyFilters();
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: _kCardBg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: sel ? color.withOpacity(.4) : _kBorder,
-              width: sel ? 1.5 : 0.5),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(.035),
-                blurRadius: 12,
-                offset: const Offset(0, 4)),
-          ],
-        ),
-        child: Row(children: [
-          Container(
-            width: 42, height: 42,
-            decoration: BoxDecoration(
-                color: color.withOpacity(.10),
-                borderRadius: BorderRadius.circular(11)),
-            child: Icon(icon, color: color, size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-              Text(value,
-                  style: TextStyle(
-                      color: sel ? color : _kTextMain,
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      height: 1)),
-              const SizedBox(height: 4),
-              Text(label,
-                  style: const TextStyle(
-                      color: _kTextSub, fontSize: 12)),
-            ]),
-          ),
-          if (sel)
-            Icon(Icons.check_circle_rounded,
-                color: color, size: 16),
-        ]),
-      ),
-    );
-  }
-
-  // ── 搜尋列 ────────────────────────────────────────────
-  Widget _buildSearchBar() {
     return Container(
-      height: 46,
       decoration: BoxDecoration(
         color: _kCardBg,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: _kBorder),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: .028),
+              blurRadius: 6,
+              offset: const Offset(0, 2)),
+        ],
       ),
-      child: TextField(
-        controller: _searchController,
-        onChanged: _onSearchChanged,
-        style: const TextStyle(color: _kTextMain, fontSize: 14),
-        decoration: InputDecoration(
-          hintText: '搜尋姓名 / 狀態 / 電話 / ID / 地點...',
-          hintStyle:
-              const TextStyle(color: _kTextSub, fontSize: 14),
-          prefixIcon: const Icon(Icons.search,
-              color: _kTextSub, size: 18),
-          suffixIcon: _keyword.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.close_rounded,
-                      color: _kTextSub, size: 17),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() => _keyword = '');
-                    _applyFilters();
-                  })
-              : null,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16, vertical: 13),
+      child: Row(children: [
+        _tapCell('全部回報', '$total', Icons.apps_rounded, _kBlue, 'all'),
+        _vDivider(),
+        _tapCell('重傷', '$critical', Icons.warning_amber_rounded, _kRed, 'critical'),
+        _vDivider(),
+        _tapCell('輕傷', '$injured', Icons.healing_rounded, _kOrange, 'injured'),
+        _vDivider(),
+        _tapCell('安全', '$safe', Icons.verified_user_rounded, _kGreen, 'safe'),
+        if (onRefresh != null) ...[
+          _vDivider(),
+          SizedBox(
+            width: 44,
+            child: IconButton(
+              onPressed: onRefresh,
+              icon: const Icon(Icons.refresh_rounded, color: _kBlue, size: 17),
+              padding: EdgeInsets.zero,
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
+
+  Widget _tapCell(String label, String value, IconData icon, Color color, String filter) {
+    final sel = _filter == filter;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() => _filter = filter);
+          _applyFilters();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: sel ? color.withValues(alpha: .06) : Colors.transparent,
+          ),
+          child: Row(children: [
+            Container(
+              width: 32, height: 32,
+              decoration: BoxDecoration(
+                  color: color.withValues(alpha: .10),
+                  borderRadius: BorderRadius.circular(8)),
+              child: Icon(icon, color: color, size: 16),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value,
+                    style: TextStyle(
+                        color: sel ? color : _kTextMain,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1)),
+                Text(label,
+                    style: const TextStyle(color: _kTextSub, fontSize: 11)),
+              ],
+            )),
+            if (sel) Icon(Icons.check_circle_rounded, color: color, size: 14),
+          ]),
         ),
       ),
     );
   }
 
-  // ── 篩選 Tab ─────────────────────────────────────────
-  Widget _buildFilterRow() {
-    return Row(children: [
-      _filterChip('全部', 'all',      _kBlue),
-      const SizedBox(width: 8),
-      _filterChip('安全', 'safe',     _kGreen),
-      const SizedBox(width: 8),
-      _filterChip('輕傷', 'injured',  _kOrange),
-      const SizedBox(width: 8),
-      _filterChip('重傷', 'critical', _kRed),
-      const Spacer(),
-      Text('共 ${_reports.length} 筆',
-          style: const TextStyle(
-              color: _kTextSub, fontSize: 13)),
-    ]);
+  Widget _vDivider() => Container(width: 1, height: 28, color: _kBorder);
+
+  // ── 分組顯示（全部模式）────────────────────────────────
+  List<Widget> _buildGroupedCards() {
+    final critical = _reports.where((r) => _normalizeStatus(r.status) == 'critical').toList();
+    final injured  = _reports.where((r) => _normalizeStatus(r.status) == 'injured').toList();
+    final safe     = _reports.where((r) => _normalizeStatus(r.status) == 'safe').toList();
+
+    return [
+      if (critical.isNotEmpty) ...[
+        _sectionHeader('重傷', _kRed, critical.length),
+        ...critical.map(_buildReportCard),
+      ],
+      if (injured.isNotEmpty) ...[
+        _sectionHeader('輕傷', _kOrange, injured.length),
+        ...injured.map(_buildReportCard),
+      ],
+      if (safe.isNotEmpty) ...[
+        _sectionHeader('安全', _kGreen, safe.length),
+        ...safe.map(_buildReportCard),
+      ],
+    ];
   }
 
-  Widget _filterChip(
-      String label, String filter, Color color) {
-    final sel = _filter == filter;
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () {
-        setState(() => _filter = filter);
-        _applyFilters();
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(
-            horizontal: 13, vertical: 8),
-        decoration: BoxDecoration(
-          color: sel ? color.withOpacity(.08) : _kCardBg,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-              color:
-                  sel ? color.withOpacity(.4) : _kBorder),
+  Widget _sectionHeader(String label, Color color, int count) {
+    return Container(
+      margin: const EdgeInsets.only(top: 4, bottom: 10),
+      child: Row(children: [
+        Container(
+          width: 4, height: 18,
+          decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(99)),
         ),
-        child: Text(label,
+        const SizedBox(width: 8),
+        Text(label,
             style: TextStyle(
-                color: sel ? color : _kTextSub,
-                fontSize: 13,
-                fontWeight: sel
-                    ? FontWeight.w700
-                    : FontWeight.w500)),
-      ),
+                color: color,
+                fontSize: 15,
+                fontWeight: FontWeight.w700)),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: 8, vertical: 2),
+          decoration: BoxDecoration(
+              color: color.withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(999)),
+          child: Text('$count 筆',
+              style: TextStyle(
+                  color: color,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600)),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Divider(
+                color: color.withValues(alpha: .2), thickness: 1)),
+      ]),
     );
   }
 
@@ -391,7 +464,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
         border: Border.all(color: _kBorder),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(.035),
+              color: Colors.black.withValues(alpha: .035),
               blurRadius: 12,
               offset: const Offset(0, 4)),
         ],
@@ -411,10 +484,10 @@ class _HealthReportPageState extends State<HealthReportPage> {
         Container(
           width: 48, height: 48,
           decoration: BoxDecoration(
-              color: color.withOpacity(.10),
+              color: color.withValues(alpha: .10),
               borderRadius: BorderRadius.circular(13),
               border:
-                  Border.all(color: color.withOpacity(.2))),
+                  Border.all(color: color.withValues(alpha: .2))),
           child: Icon(_statusIcon(r.status),
               color: color, size: 24),
         ),
@@ -493,7 +566,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
     final color = _statusColor(r.status);
     showDialog(
       context: context,
-      barrierColor: Colors.black.withOpacity(.35),
+      barrierColor: Colors.black.withValues(alpha: .35),
       builder: (_) => Dialog(
         backgroundColor: Colors.transparent,
         child: Container(
@@ -511,7 +584,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
                 Container(
                   width: 42, height: 42,
                   decoration: BoxDecoration(
-                      color: color.withOpacity(.10),
+                      color: color.withValues(alpha: .10),
                       borderRadius: BorderRadius.circular(11)),
                   child: Icon(_statusIcon(r.status),
                       color: color, size: 22),
@@ -591,12 +664,12 @@ class _HealthReportPageState extends State<HealthReportPage> {
                         padding: const EdgeInsets.symmetric(
                             vertical: 11),
                         decoration: BoxDecoration(
-                          color: _kBlue.withOpacity(.06),
+                          color: _kBlue.withValues(alpha: .06),
                           borderRadius:
                               BorderRadius.circular(8),
                           border: Border.all(
                               color: _kBlue
-                                  .withOpacity(.2)),
+                                  .withValues(alpha: .2)),
                         ),
                         child: const Row(
                             mainAxisAlignment:
@@ -666,13 +739,13 @@ class _HealthReportPageState extends State<HealthReportPage> {
         decoration: BoxDecoration(
           color: _kCardBg,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _kRed.withOpacity(.2)),
+          border: Border.all(color: _kRed.withValues(alpha: .2)),
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 52, height: 52,
             decoration: BoxDecoration(
-                color: _kRed.withOpacity(.08),
+                color: _kRed.withValues(alpha: .08),
                 shape: BoxShape.circle),
             child: const Icon(Icons.error_outline,
                 color: _kRed, size: 26),
@@ -690,7 +763,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
             style: OutlinedButton.styleFrom(
                 foregroundColor: _kBlue,
                 side: BorderSide(
-                    color: _kBlue.withOpacity(.4))),
+                    color: _kBlue.withValues(alpha: .4))),
           ),
         ]),
       ),
@@ -708,7 +781,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
         Container(
           width: 52, height: 52,
           decoration: BoxDecoration(
-              color: _kTextSub.withOpacity(.06),
+              color: _kTextSub.withValues(alpha: .06),
               shape: BoxShape.circle),
           child: const Icon(Icons.inbox_outlined,
               size: 26, color: _kTextSub),
@@ -733,10 +806,10 @@ class _HealthReportPageState extends State<HealthReportPage> {
         padding: const EdgeInsets.symmetric(
             horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: color.withOpacity(.06),
+          color: color.withValues(alpha: .06),
           borderRadius: BorderRadius.circular(8),
           border:
-              Border.all(color: color.withOpacity(.2)),
+              Border.all(color: color.withValues(alpha: .2)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Icon(icon, color: color, size: 14),
@@ -758,9 +831,9 @@ class _HealthReportPageState extends State<HealthReportPage> {
       padding:
           const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-          color: color.withOpacity(.08),
+          color: color.withValues(alpha: .08),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withOpacity(.2))),
+          border: Border.all(color: color.withValues(alpha: .2))),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Container(
             width: 6, height: 6,
@@ -782,10 +855,10 @@ class _HealthReportPageState extends State<HealthReportPage> {
       padding: const EdgeInsets.symmetric(
           horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
-          color: color.withOpacity(.06),
+          color: color.withValues(alpha: .06),
           borderRadius: BorderRadius.circular(7),
           border:
-              Border.all(color: color.withOpacity(.18))),
+              Border.all(color: color.withValues(alpha: .18))),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
         Icon(icon, size: 12, color: color),
         const SizedBox(width: 4),
@@ -795,22 +868,6 @@ class _HealthReportPageState extends State<HealthReportPage> {
                 fontSize: 11,
                 fontWeight: FontWeight.w500)),
       ]),
-    );
-  }
-
-  static Widget _pill(String text, Color color) {
-    return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-          color: color.withOpacity(.08),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withOpacity(.18))),
-      child: Text(text,
-          style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w700)),
     );
   }
 
@@ -858,12 +915,12 @@ class _HealthReportPageState extends State<HealthReportPage> {
   String _locationName(HealthReport r) {
     if (r.lat == null || r.lng == null) return '未知地點';
     final lat = r.lat!, lng = r.lng!;
-    if ((lat - 23.951178).abs() < 0.01 &&
-        (lng - 120.930978).abs() < 0.01) return '暨大';
+    if ((lat - 23.9577).abs() < 0.01 &&
+        (lng - 120.9308).abs() < 0.01) { return '暨大'; }
     if ((lat - 23.966667).abs() < 0.01 &&
-        (lng - 120.966667).abs() < 0.01) return '埔里';
+        (lng - 120.966667).abs() < 0.01) { return '埔里'; }
     if ((lat - 23.866664).abs() < 0.02 &&
-        (lng - 120.916664).abs() < 0.02) return '日月潭';
-    return '其他地點';
+        (lng - 120.916664).abs() < 0.02) { return '日月潭'; }
+    return '${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}';
   }
 }

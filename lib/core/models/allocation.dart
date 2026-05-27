@@ -28,7 +28,7 @@ class AllocationItem {
       itemId:       _toInt(json['itemId']),
       itemName:     (json['itemName'] ?? json['name'] ?? '').toString(),
       zoneId:       (json['zoneId'] ?? '').toString(),
-      qty:          _toInt(json['qty']),
+      qty:          _toInt(json['qty'] ?? json['quantity']),
       unit:         (json['unit'] ?? '').toString(),
       createdAt:    (json['createdAt'] ?? '').toString(),
       status:       (json['status'] ?? 'reserved').toString(), // ← 原来读 dispatched，改成读 status

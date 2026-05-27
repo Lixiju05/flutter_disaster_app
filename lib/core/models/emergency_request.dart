@@ -50,12 +50,12 @@ class EmergencyRequest {
           json['phone']?.toString() ?? '',
 
       lat:
-          (json['latitude'] as num)
-              .toDouble(),
+          (json['latitude'] as num?)
+              ?.toDouble() ?? 0.0,
 
       lng:
-          (json['longitude'] as num)
-              .toDouble(),
+          (json['longitude'] as num?)
+              ?.toDouble() ?? 0.0,
 
       status:
           json['status']?.toString() ??

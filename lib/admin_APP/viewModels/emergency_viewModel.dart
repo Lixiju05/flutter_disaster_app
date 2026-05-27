@@ -33,11 +33,21 @@ class EmergencyViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void markHandled(EmergencyRequest emergency) {
-    final index = _emergencies.indexWhere((e) => e.id == emergency.id);
-    if (index != -1) {
-      _emergencies[index].handled = true; // 現在可以直接賦值了
-      notifyListeners();
+  Future<void> markHandled(EmergencyRequest emergency) async {
+    try {
+      final success = await _repository.updateEmergencyStatus(
+        emergencyId: emergency.emergencyId,
+        status: 'resolved',
+      );
+      if (success) {
+        final index = _emergencies.indexWhere((e) => e.emergencyId == emergency.emergencyId);
+        if (index != -1) {
+         _emergencies[index] = _emergencies[index].copyWith(status: 'resolved');
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      print('Mark handled error: $e');
     }
   }
 }

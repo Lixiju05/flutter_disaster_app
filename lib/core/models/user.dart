@@ -1,31 +1,43 @@
 import 'dart:math';
 
 class AppUser {
-  final String id;                       // 系統產生的 User ID
-  final String name;                     // 姓名
-  final String phone;                    // 手機號碼
-  final String area;                     // 居住區域
-  final String emergencyContactName;     // 緊急聯絡人姓名
-  final String emergencyContactPhone;    // 緊急聯絡人電話
-  final String emergencyContactRelation; // 與緊急聯絡人關係
-  final String? bloodType;              // 血型（可選）
-  final String? medicalInfo;            // 慢性病 / 藥物過敏（可選）
-  final DateTime registeredAt;           // 註冊時間
+  final String id;
+  final String name;
+  final String phone;
+  final String area;
+  final String village;
+
+  final String emergencyContactName;
+  final String emergencyContactPhone;
+  final String emergencyContactRelation;
+  final String? bloodType;
+  final String? medicalInfo;
+
+  final double latitude;
+  final double longitude;
+  final bool online;
+  final DateTime? lastSync;
+
+  final DateTime registeredAt;
 
   AppUser({
     required this.id,
     required this.name,
     required this.phone,
     required this.area,
+    required this.village,
     required this.emergencyContactName,
     required this.emergencyContactPhone,
     required this.emergencyContactRelation,
     this.bloodType,
     this.medicalInfo,
+    required this.latitude,
+    required this.longitude,
+    required this.online,
+    this.lastSync,
     required this.registeredAt,
   });
 
-  /// 產生唯一 User ID
   static String generateId() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     final rand = Random();
@@ -33,29 +45,54 @@ class AppUser {
     return 'UID-$code';
   }
 
+  factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
+        id: (json['id'] ?? '').toString(),
+        name: (json['name'] ?? '').toString(),
+        phone: (json['phone'] ?? '').toString(),
+        area: (json['area'] ?? '').toString(),
+        village: (json['village'] ?? '').toString(),
+
+        emergencyContactName:
+            (json['emergencyContactName'] ?? '').toString(),
+        emergencyContactPhone:
+            (json['emergencyContactPhone'] ?? '').toString(),
+        emergencyContactRelation:
+            (json['emergencyContactRelation'] ?? '').toString(),
+
+        bloodType: json['bloodType']?.toString(),
+        medicalInfo: json['medicalInfo']?.toString(),
+
+        latitude: double.tryParse((json['latitude'] ?? '0').toString()) ?? 0,
+        longitude: double.tryParse((json['longitude'] ?? '0').toString()) ?? 0,
+
+        online: json['online'] == true ||
+            json['online'].toString() == '1' ||
+            json['online'].toString() == 'true',
+
+        lastSync: json['lastSync'] == null || json['lastSync'].toString().isEmpty
+            ? null
+            : DateTime.tryParse(json['lastSync'].toString()),
+
+        registeredAt: json['registeredAt'] == null
+            ? DateTime.now()
+            : DateTime.tryParse(json['registeredAt'].toString()) ?? DateTime.now(),
+      );
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
         'phone': phone,
         'area': area,
+        'village': village,
         'emergencyContactName': emergencyContactName,
         'emergencyContactPhone': emergencyContactPhone,
         'emergencyContactRelation': emergencyContactRelation,
         'bloodType': bloodType,
         'medicalInfo': medicalInfo,
+        'latitude': latitude,
+        'longitude': longitude,
+        'online': online,
+        'lastSync': lastSync?.toIso8601String(),
         'registeredAt': registeredAt.toIso8601String(),
       };
-
-  factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
-        id: json['id'] as String,
-        name: json['name'] as String,
-        phone: json['phone'] as String,
-        area: json['area'] as String,
-        emergencyContactName: json['emergencyContactName'] as String,
-        emergencyContactPhone: json['emergencyContactPhone'] as String,
-        emergencyContactRelation: json['emergencyContactRelation'] as String,
-        bloodType: json['bloodType'] as String?,
-        medicalInfo: json['medicalInfo'] as String?,
-        registeredAt: DateTime.parse(json['registeredAt'] as String),
-      );
 }
