@@ -837,7 +837,8 @@ class DatabaseService {
     'safe',
     '目前安全，在宿舍區',
     23.9531,
-    120.9302
+    120.9302,
+    '南投縣埔里鎮大學路521號'
   ],
 
   [
@@ -847,7 +848,8 @@ class DatabaseService {
     'minor',
     '腳受傷，需要醫療協助',
     23.9520,
-    120.9290
+    120.9290,
+    '南投縣埔里鎮大學路560號'
   ],
 
   [
@@ -857,7 +859,9 @@ class DatabaseService {
     'critical',
     '受困教學大樓',
     23.9505,
-    120.9278
+    120.9278,
+    '南投縣埔里鎮大學路470號'
+
   ],
 
   [
@@ -867,7 +871,9 @@ class DatabaseService {
     'safe',
     '目前安全',
     23.9498,
-    120.9269
+    120.9269,
+    '南投縣埔里鎮大學路301號'
+
   ],
 
   [
@@ -877,7 +883,9 @@ class DatabaseService {
     'minor',
     '需要簡單包紮',
     23.9521,
-    120.9281
+    120.9281,
+    '南投縣埔里鎮大學路480號'
+
   ],
 
 ];
@@ -893,6 +901,7 @@ class DatabaseService {
         description,
         lat,
         lng,
+        address,
         reportTime
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -905,6 +914,7 @@ class DatabaseService {
       r[4],
       r[5],
       r[6],
+      r[7],
       DateTime.now().toIso8601String(),
 
     ]);
@@ -1087,6 +1097,7 @@ Future<void> seedAllocations() async {
       '0922333444',
       23.9520,
       120.9290,
+      '南投縣埔里鎮大學路560號',
       'active',
       'admin_ncnu',
       3,
@@ -1101,6 +1112,7 @@ Future<void> seedAllocations() async {
       '0933555666',
       23.9505,
       120.9278,
+      '南投縣埔里鎮大學路470號',
       'processing',
       'admin_ncnu',
       1,
@@ -1115,6 +1127,7 @@ Future<void> seedAllocations() async {
       '0977888999',
       23.9498,
       120.9269,
+      '南投縣埔里鎮大學路301號',
       'resolved',
       'admin_ncnu',
       4,
@@ -1129,6 +1142,7 @@ Future<void> seedAllocations() async {
       '0988777666',
       23.9531,
       120.9302,
+      '南投縣埔里鎮大學路480號',
       'active',
       'admin_ncnu',
       2,
@@ -1148,6 +1162,7 @@ Future<void> seedAllocations() async {
         phone,
         latitude,
         longitude,
+        address,
         status,
         receiverAdminId,
         hopCount,
@@ -1165,8 +1180,9 @@ Future<void> seedAllocations() async {
       s[6],
       s[7],
       s[8],
-      (s[9] as DateTime).toIso8601String(),
+      s[9],
       (s[10] as DateTime).toIso8601String(),
+      (s[11] as DateTime).toIso8601String(),
     ]);
   }
 
@@ -1200,6 +1216,7 @@ Future<void> seedAllocations() async {
       description: row['description']?.toString() ?? '',
       lat: (row['lat'] as num?)?.toDouble(),
       lng: (row['lng'] as num?)?.toDouble(),
+      address: row['address']?.toString() ?? '',
       reportTime: DateTime.tryParse(row['reportTime']?.toString() ?? '') ?? DateTime.now(),
     );
   }
