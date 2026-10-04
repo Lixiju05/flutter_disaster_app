@@ -6,6 +6,7 @@ import 'package:admin_server/database/database_service.dart';
 import 'package:admin_server/core/models/healthReport.dart';
 import 'package:admin_server/core/models/supply_request.dart';
 import 'package:admin_server/core/models/emergency_request.dart';
+import 'package:admin_server/services/supply/supply_request_service.dart';
 
 
 Future<void> main() async {
@@ -190,12 +191,16 @@ Future<void> handleRequest(HttpRequest request) async {
       case 'getVictimDashboard':
         await handleGetVictimDashboard(
           jsonData,
-          request,
+          request,      
         );
         break;
 
       case 'dispatchSupplyRequest':
         await handleDispatchSupplyRequest(jsonData, request);
+        break;
+      
+      case 'claimSupplyRequest':
+        await handleClaimSupplyRequest(request, jsonData);
         break;
 
       default:
@@ -661,5 +666,64 @@ Future<void> handleDispatchSupplyRequest(
       "success": false,
       "message": e.toString(),
     });
+  }
+}
+
+Future<void> handleClaimSupplyRequest(
+  HttpRequest request,
+  Map<String, dynamic> data,
+) async {
+  try {
+    final requestId = data['requestId']?.toString();
+    final volunteerId = data['volunteerId']?.toString();
+
+    // 檢查必要資料
+    if (requestId == null ||
+        requestId.isEmpty ||
+        volunteerId == null ||
+        volunteerId.isEmpty) {
+      sendJson(
+        request,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'message': 'requestId 和 volunteerId 為必填',
+        },
+      );
+      return;
+    }
+
+    // 建立 Service
+    final service = SupplyRequestService(
+      DatabaseService.instance,
+    );
+
+    // 執行認領
+    await service.claimSupplyRequest(
+      requestId: requestId,
+      volunteerId: volunteerId,
+    );
+
+    // 成功
+    sendJson(
+      request,
+      HttpStatus.ok,
+      {
+        'success': true,
+        'message': '認領成功',
+        'requestId': requestId,
+        'volunteerId': volunteerId,
+      },
+    );
+  } catch (e) {
+    // 失敗
+    sendJson(
+      request,
+      HttpStatus.badRequest,
+      {
+        'success': false,
+        'message': e.toString(),
+      },
+    );
   }
 }

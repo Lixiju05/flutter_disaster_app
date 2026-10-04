@@ -7,10 +7,12 @@ class SupplyRequest {
   final double? lng;
   final String? address;
   final String? receiverAdminId;
+  final String? volunteerId;
   final int hopCount;
   final String status;
   final DateTime createdAt;
   final DateTime? receivedAt;
+  final DateTime? claimedAt;
 
   SupplyRequest({
     required this.requestId,
@@ -25,6 +27,8 @@ class SupplyRequest {
     this.status = 'pending',
     required this.createdAt,
     this.receivedAt,
+    this.volunteerId,
+    this.claimedAt,
   });
 
   Map<String, dynamic> toJson() {
@@ -37,11 +41,14 @@ class SupplyRequest {
       'lng': lng,
       'address': address,
       'receiverAdminId': receiverAdminId,
+      'volunteerId': volunteerId,
       'hopCount': hopCount,
       'status': status,
       'createdAt': createdAt.toIso8601String(),
       'receivedAt': receivedAt?.toIso8601String(),
+      'claimedAt': claimedAt?.toIso8601String(),
     };
+
   }
 
   factory SupplyRequest.fromJson(Map<String, dynamic> json) {
@@ -54,12 +61,16 @@ class SupplyRequest {
       lng: (json['lng'] as num?)?.toDouble(),
       address: json['address']?.toString(),
       receiverAdminId: json['receiverAdminId']?.toString(),
+      volunteerId: json['volunteerId']?.toString(),
       hopCount: _toInt(json['hopCount']),
       status: json['status'] ?? 'pending',
       createdAt: DateTime.tryParse(json['createdAt'] ?? '') ?? DateTime.now(),
       receivedAt: json['receivedAt'] == null
           ? null
           : DateTime.tryParse(json['receivedAt']),
+      claimedAt: json['claimedAt'] == null
+          ? null
+          : DateTime.tryParse(json['claimedAt']),
     );
   }
 

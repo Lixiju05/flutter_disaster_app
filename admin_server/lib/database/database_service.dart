@@ -34,11 +34,40 @@ class DatabaseService {
     rawDb.execute('''CREATE TABLE IF NOT EXISTS allocations (id INTEGER PRIMARY KEY AUTOINCREMENT, itemId INTEGER, zoneId TEXT, quantity INTEGER, status TEXT, createdAt TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS supply_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,requestId TEXT UNIQUE,userId TEXT,itemId INTEGER,qty INTEGER,lat REAL,lng REAL,address TEXT,status TEXT,createdAt TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
     rawDb.execute('''CREATE TABLE IF NOT EXISTS emergency_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,emergencyId TEXT UNIQUE,userId TEXT,userName TEXT,phone TEXT,latitude REAL,longitude REAL,address TEXT,status TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,sentAt TEXT,receivedAt TEXT);''');
+    _addSupplyRequestColumns(rawDb);
 
     instance._initDefaultAdmin();
     instance.seedAll();
 
     print('Database ready');
+  }
+
+  static void _addSupplyRequestColumns(Database db) {
+    final columns = db.select(
+      "PRAGMA table_info(supply_requests)"
+    );
+
+    final columnNames = columns
+      .map((row) => row['name'].toString())
+      .toSet();
+
+    if (!columnNames.contains('volunteerId')) {
+      db.execute('''
+        ALTER TABLE supply_requests
+        ADD COLUMN volunteerId TEXT
+      ''');
+
+      print('Added volunteerId to supply_requests');
+    }
+
+    if (!columnNames.contains('claimedAt')) {
+      db.execute('''
+        ALTER TABLE supply_requests
+        ADD COLUMN claimedAt TEXT
+      ''');
+
+      print('Added claimedAt to supply_requests');
+    }
   }
 
   // --- 工具方法 ---
