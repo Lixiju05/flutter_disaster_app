@@ -13,6 +13,7 @@ import 'package:flutter_disaster_app/admin_APP/viewModels/emergency_viewmodel.da
 import 'package:flutter_disaster_app/admin_APP/viewModels/supply_viewmodel.dart';
 import 'package:flutter_disaster_app/admin_APP/screens/health_report_page.dart';
 import 'package:flutter_disaster_app/core/models/emergency_request.dart';
+import 'package:flutter_disaster_app/core/api_config.dart';
 
 // ── 色系 ────────────────────────────────────────────────────────
 const Color _kBg       = Color(0xFFF5F7FA);
@@ -26,8 +27,7 @@ const Color _kYellow   = Color(0xFFD3CA43);   // 輕傷（落日黃）
 const Color _kTextMain = Color(0xFF0F172A);
 const Color _kTextSub  = Color(0xFF64748B);
 
-const String _baseUrl =
-    'https://delphine-eisteddfodic-afflictively.ngrok-free.dev';
+const String _baseUrl = ApiConfig.baseUrl;
 
 // ── 地址快取 ────────────────────────────────────────────────────
 final Map<String, String> _addressCache = {};
@@ -357,7 +357,18 @@ class _TotalTabState extends State<_TotalTab> {
     final citizenVm = context.watch<CitizenViewmodel>();
     final emVm      = context.watch<EmergencyViewModel>();
 
-    final citizens    = citizenVm.citizens;
+    final allCitizens = citizenVm.citizens;
+    // 有 SOS、健康回報、物資需求 任一者的 userId 聯集
+    final activeIds = <String>{
+      ...emVm.emergencies.map((e) => e.userId),
+      ..._healthReports.map((r) => r.reporterId),
+      ..._supplyRequests
+          .map((r) => r['userId']?.toString() ?? '')
+          .where((id) => id.isNotEmpty),
+    };
+    final citizens = allCitizens
+        .where((c) => activeIds.contains(c.id))
+        .toList();
     final total       = citizens.length;
     final sosCount    = emVm.emergencies
         .where((e) => e.status != 'resolved')
@@ -396,9 +407,6 @@ class _TotalTabState extends State<_TotalTab> {
                 _buildCitizenList(citizens, citizenVm, emVm),
               ],
               if (_filter == 'all') ...[
-                const SizedBox(height: 12),
-                _buildExtraSection('健康回報', 'health_report',
-                    const Color(0xFF0891B2), Icons.favorite_border_rounded, citizens, emVm),
                 const SizedBox(height: 12),
                 _buildSupplySection(),
               ],
@@ -552,7 +560,7 @@ class _TotalTabState extends State<_TotalTab> {
             children: [
               TileLayer(
                 urlTemplate:
-                    'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                    'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}',  // 國土測繪中心 台灣通用電子地圖（免費、免金鑰）,
                 userAgentPackageName:
                     'com.example.flutter_disaster_app',
               ),

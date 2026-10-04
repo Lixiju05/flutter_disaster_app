@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dashboard_page.dart';
-import 'register_page.dart';
-import 'admin_setup_page.dart';
+import 'volunteer_page.dart';
+import 'package:flutter_disaster_app/core/api_config.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -13,29 +13,17 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
+class _LoginPageState extends State<LoginPage> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   bool _obscurePassword = true;
   bool _isLoading = false;
 
-  late AnimationController _fadeCtrl;
-  late Animation<double> _fadeAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _fadeCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
-    _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut);
-    _fadeCtrl.forward();
-  }
-
   @override
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
-    _fadeCtrl.dispose();
     super.dispose();
   }
 
@@ -52,7 +40,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
     try {
       final response = await http.post(
-        Uri.parse('https://delphine-eisteddfodic-afflictively.ngrok-free.dev'),
+        Uri.parse(ApiConfig.baseUrl),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -72,25 +60,18 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
       if (data['success'] == true) {
         _showSnack('登入成功', isError: false);
 
-        // 檢查是否已設定管理員資訊
+        // 帳號由各地區／社區統一發放，登入後直接進 dashboard
         final prefs = await SharedPreferences.getInstance();
-        final adminName = prefs.getString('adminName') ?? '';
+        await prefs.setString('adminId', (data['username'] ?? username).toString());
+        // 後端帳號若有設定負責地區（zoneId），就以帳號的地區為準
+        final zone = data['zoneId']?.toString() ?? '';
+        if (zone.isNotEmpty) await prefs.setString('adminArea', zone);
 
         if (!mounted) return;
-
-        if (adminName.isEmpty) {
-          // 第一次登入，進入設定頁
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const AdminSetupPage()),
-          );
-        } else {
-          // 已設定，直接進 dashboard
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const DashboardPage()),
-          );
-        }
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const DashboardPage()),
+        );
       } else {
         _showSnack(data['message'] ?? '帳號或密碼錯誤', isError: true);
       }
@@ -104,9 +85,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
   void _showSnack(String msg, {required bool isError}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      backgroundColor: isError
-          ? const Color(0xFFFF3333).withOpacity(.9)
-          : const Color(0xFF00D09C).withOpacity(.9),
+      backgroundColor: isError ? kRed : kGreen,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -118,304 +97,227 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isNarrow = screenWidth < 1100;
+    final isWide = MediaQuery.of(context).size.width >= 900;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF020C18),
-      body: Stack(children: [
-        // ── 背景網格 ──────────────────────────────────────
-        Positioned.fill(child: CustomPaint(painter: _GridBgPainter())),
-        // ── 背景光暈 ──────────────────────────────────────
-        Positioned(top: -200, left: -200,
-          child: Container(width: 600, height: 600,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(colors: [
-                const Color(0xFF1A6EFF).withOpacity(.18), Colors.transparent,
-              ]),
-            ),
-          ),
-        ),
-        Positioned(bottom: -150, right: -150,
-          child: Container(width: 500, height: 500,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(colors: [
-                const Color(0xFF00C8FF).withOpacity(.12), Colors.transparent,
-              ]),
-            ),
-          ),
-        ),
-        // ── 主體 ──────────────────────────────────────────
-        SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnim,
-            child: isNarrow
-                ? Center(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(24),
-                      child: _buildCard(),
-                    ),
-                  )
-                : Row(children: [
-                    Expanded(flex: 6, child: _buildLeftPanel()),
-                    Expanded(flex: 5,
-                      child: Center(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-                          child: _buildCard(),
-                        ),
-                      ),
-                    ),
-                  ]),
-          ),
-        ),
-      ]),
+      backgroundColor: kBg,
+      body: isWide
+          ? Row(children: [
+              SizedBox(width: 380, child: _buildSidePanel()),
+              Expanded(child: Center(child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: _buildLoginCard(),
+              ))),
+            ])
+          : Column(children: [
+              _buildTopBar(),
+              Expanded(child: Center(child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: _buildLoginCard(),
+              ))),
+            ]),
     );
   }
 
-  // ── 左側說明欄 ────────────────────────────────────────
-  Widget _buildLeftPanel() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 70, vertical: 50),
+  // ── Logo（與指揮中心側邊欄相同）──────────────────────────
+  Widget _logo() => Row(children: [
+        Container(
+          width: 40, height: 40,
+          decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.15),
+              borderRadius: BorderRadius.circular(12)),
+          child: const Icon(Icons.shield_outlined, color: Colors.white, size: 22),
+        ),
+        const SizedBox(width: 12),
+        const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('災難管理系統',
+              style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+          SizedBox(height: 2),
+          Text('EMERGENCY COMMAND',
+              style: TextStyle(color: kSidebarTextSub, fontSize: 11, letterSpacing: 1.1)),
+        ]),
+      ]);
+
+  // ── 左側面板（寬螢幕）：沿用側邊欄樣式 ─────────────────────
+  Widget _buildSidePanel() {
+    return Container(
+      color: kSidebarBg,
+      child: SafeArea(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
+            decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: kSidebarBorder))),
+            child: _logo(),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(18, 24, 18, 8),
+            child: Text('系統功能',
+                style: TextStyle(color: kSidebarTextSub, fontSize: 11,
+                    fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+          ),
+          _feature(Icons.accessibility_new_rounded, '災民資訊與救援狀態追蹤'),
+          _feature(Icons.warning_amber_rounded, '緊急事件回報與處理'),
+          _feature(Icons.inventory_2_outlined, '救援物資調度與分配'),
+          _feature(Icons.favorite_border_rounded, '健康回報彙整'),
+          const Spacer(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
+            child: Text('帳號由各地區／社區統一發放，\n如需帳號請洽系統管理單位。',
+                style: TextStyle(color: kSidebarTextSub.withOpacity(.8),
+                    fontSize: 12, height: 1.6)),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _feature(IconData icon, String text) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+        child: Row(children: [
+          Icon(icon, color: kSidebarTextSub, size: 19),
+          const SizedBox(width: 12),
+          Text(text, style: const TextStyle(color: Colors.white, fontSize: 14)),
+        ]),
+      );
+
+  // ── 上方深藍列（窄螢幕）─────────────────────────────────
+  Widget _buildTopBar() => Container(
+        width: double.infinity,
+        color: kSidebarBg,
+        padding: EdgeInsets.fromLTRB(18, MediaQuery.of(context).padding.top + 16, 18, 16),
+        child: _logo(),
+      );
+
+  // ── 登入卡片（與指揮中心白色卡片相同）────────────────────
+  Widget _buildLoginCard() {
+    return Container(
+      width: 400,
+      padding: const EdgeInsets.fromLTRB(28, 28, 28, 24),
+      decoration: BoxDecoration(
+        color: kCardBg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: kBorder),
+      ),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 系統標籤
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFF00C8FF).withOpacity(.08),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: const Color(0xFF00C8FF).withOpacity(.25)),
-            ),
-            child: const Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.wifi_tethering, color: Color(0xFF00C8FF), size: 14),
-              SizedBox(width: 8),
-              Text('Disaster Admin Control Center',
-                  style: TextStyle(color: Color(0xFF00C8FF), fontSize: 12,
-                      fontWeight: FontWeight.w600, letterSpacing: .5)),
-            ]),
+          const Text('管理員登入',
+              style: TextStyle(color: kTextMain, fontSize: 24, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 2),
+          const Text('ADMIN LOGIN',
+              style: TextStyle(color: kTextSub, fontSize: 11, letterSpacing: 1.3)),
+          const SizedBox(height: 24),
+          _label('帳號'),
+          _input(
+            controller: _usernameController,
+            hint: '請輸入帳號',
+            icon: Icons.person_outline_rounded,
           ),
-          const SizedBox(height: 28),
-          const Text('防災後台\n管理系統',
-              style: TextStyle(fontSize: 52, fontWeight: FontWeight.bold,
-                  color: Colors.white, height: 1.15)),
-          const SizedBox(height: 6),
-          Container(width: 60, height: 3,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                  colors: [Color(0xFF1A6EFF), Color(0xFF00C8FF)]),
-              borderRadius: BorderRadius.circular(2),
+          const SizedBox(height: 16),
+          _label('密碼'),
+          _input(
+            controller: _passwordController,
+            hint: '請輸入密碼',
+            icon: Icons.lock_outline_rounded,
+            obscure: _obscurePassword,
+            onSubmitted: (_) {
+              if (!_isLoading) _handleLogin();
+            },
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                color: kTextSub, size: 18,
+              ),
+              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
             ),
           ),
           const SizedBox(height: 24),
-          const SizedBox(
-            width: 580,
-            child: Text(
-              '集中管理災民資訊、物資調度、健康回報與緊急事件，協助管理員在災害發生時快速掌握現況、整合資源並提升整體應變效率。',
-              style: TextStyle(fontSize: 16, color: Color(0xFF7E9CC0), height: 1.8),
+          SizedBox(
+            width: double.infinity, height: 46,
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _handleLogin,
+              style: ElevatedButton.styleFrom(
+                elevation: 0,
+                backgroundColor: kBlue,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: kBlue.withOpacity(.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: _isLoading
+                  ? const SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text('登入',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             ),
           ),
-          const SizedBox(height: 40),
-          _featureItem(Icons.groups_rounded,      '災民資訊管理與救援狀態追蹤', const Color(0xFF00C8FF)),
-          _featureItem(Icons.warning_amber_rounded,'緊急事件回報與即時處理',     const Color(0xFFFFB020)),
-          _featureItem(Icons.inventory_2_rounded,  '救援物資調度與分配管理',     const Color(0xFF00D09C)),
-          const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFB020).withOpacity(.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFFFB020).withOpacity(.25)),
+          const SizedBox(height: 20),
+          const Row(children: [
+            Expanded(child: Divider(color: kBorder)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 10),
+              child: Text('義工', style: TextStyle(color: kTextSub, fontSize: 12)),
             ),
-            child: const Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.wifi_off_rounded, color: Color(0xFFFFB020), size: 18),
-              SizedBox(width: 10),
-              Text('支援離線通報情境，提升災害期間資訊整合能力',
-                  style: TextStyle(color: Color(0xFFFFB020), fontSize: 14)),
-            ]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _featureItem(IconData icon, String text, Color color) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(children: [
-        Container(
-          width: 42, height: 42,
-          decoration: BoxDecoration(
-            color: color.withOpacity(.10),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(.25)),
-          ),
-          child: Icon(icon, color: color, size: 20),
-        ),
-        const SizedBox(width: 14),
-        Text(text, style: const TextStyle(color: Color(0xFFB0C8E0), fontSize: 15)),
-      ]),
-    );
-  }
-
-  // ── 登入卡片 ──────────────────────────────────────────
-  Widget _buildCard() {
-    return Container(
-      width: 460,
-      padding: const EdgeInsets.symmetric(horizontal: 34, vertical: 36),
-      decoration: BoxDecoration(
-        color: const Color(0xFF071828),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF1A4A6E)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF00C8FF).withOpacity(.08),
-            blurRadius: 40, offset: const Offset(0, 16),
-          ),
-        ],
-      ),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        // 圖示
-        Container(
-          width: 72, height: 72,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-                colors: [Color(0xFF1A6EFF), Color(0xFF00C8FF)]),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [BoxShadow(
-                color: const Color(0xFF00C8FF).withOpacity(.3),
-                blurRadius: 20, spreadRadius: 2)],
-          ),
-          child: const Icon(Icons.admin_panel_settings_rounded,
-              size: 36, color: Colors.white),
-        ),
-        const SizedBox(height: 20),
-        const Text('管理員登入',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold,
-                color: Colors.white)),
-        const SizedBox(height: 8),
-        const Text('請輸入帳號與密碼以進入系統後台',
-            style: TextStyle(fontSize: 13, color: Color(0xFF3E5872))),
-        const SizedBox(height: 30),
-        // 帳號
-        _inputField(
-          controller: _usernameController,
-          hint: '請輸入帳號',
-          icon: Icons.person_rounded,
-        ),
-        const SizedBox(height: 16),
-        // 密碼
-        _inputField(
-          controller: _passwordController,
-          hint: '請輸入密碼',
-          icon: Icons.lock_rounded,
-          obscure: _obscurePassword,
-          suffixIcon: IconButton(
-            icon: Icon(
-              _obscurePassword ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-              color: const Color(0xFF3E5872), size: 18,
-            ),
-            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-          ),
-        ),
-        const SizedBox(height: 28),
-        // 登入按鈕
-        SizedBox(
-          width: double.infinity, height: 54,
-          child: ElevatedButton(
-            onPressed: _isLoading ? null : _handleLogin,
-            style: ElevatedButton.styleFrom(
-              elevation: 0,
-              backgroundColor: const Color(0xFF1A6EFF),
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: const Color(0xFF1A6EFF).withOpacity(.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            child: _isLoading
-                ? const SizedBox(width: 22, height: 22,
-                    child: CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2))
-                : const Text('登入管理後台',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700,
-                        letterSpacing: .5)),
-          ),
-        ),
-        const SizedBox(height: 14),
-        TextButton(
-          onPressed: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const RegisterPage())),
-          child: const Text('還沒有帳號？點我註冊',
-              style: TextStyle(fontSize: 14, color: Color(0xFF00C8FF),
-                  fontWeight: FontWeight.w600)),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0A2035),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: const Color(0xFF0E2A40)),
-          ),
-          child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(Icons.info_outline_rounded, size: 15, color: Color(0xFF3E5872)),
-            SizedBox(width: 8),
-            Expanded(
-              child: Text('目前登入使用後端 API 驗證，請使用後端提供的帳號密碼登入',
-                  style: TextStyle(color: Color(0xFF3E5872), fontSize: 12),
-                  textAlign: TextAlign.center),
-            ),
+            Expanded(child: Divider(color: kBorder)),
           ]),
-        ),
-      ]),
+          const SizedBox(height: 16),
+          // 義工 Demo 入口（正式版改成掃收容中心 QR Code 進入）
+          SizedBox(
+            width: double.infinity, height: 44,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const VolunteerPage())),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: kTextMain,
+                side: const BorderSide(color: kBorder),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: const Icon(Icons.volunteer_activism_outlined, size: 18, color: kGreen),
+              label: const Text('義工 Demo（A收容中心）',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _inputField({
+  Widget _label(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text(text,
+            style: const TextStyle(color: kTextMain, fontSize: 13, fontWeight: FontWeight.w600)),
+      );
+
+  Widget _input({
     required TextEditingController controller,
     required String hint,
     required IconData icon,
     bool obscure = false,
     Widget? suffixIcon,
+    ValueChanged<String>? onSubmitted,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFF0A2035),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF1A4A6E)),
-      ),
-      child: TextField(
-        controller: controller,
-        obscureText: obscure,
-        style: const TextStyle(color: Colors.white, fontSize: 14),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: const TextStyle(color: Color(0xFF3E5872), fontSize: 14),
-          prefixIcon: Icon(icon, color: const Color(0xFF3E5872), size: 18),
-          suffixIcon: suffixIcon,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 16),
-        ),
+    OutlineInputBorder border(Color c) => OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: c),
+        );
+    return TextField(
+      controller: controller,
+      obscureText: obscure,
+      onSubmitted: onSubmitted,
+      style: const TextStyle(color: kTextMain, fontSize: 14),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: const TextStyle(color: kTextSub, fontSize: 14),
+        prefixIcon: Icon(icon, color: kTextSub, size: 18),
+        suffixIcon: suffixIcon,
+        filled: true,
+        fillColor: kCardBg2,
+        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        enabledBorder: border(kBorder),
+        focusedBorder: border(kBlue),
       ),
     );
   }
-}
-
-// ── 背景網格畫家 ──────────────────────────────────────────
-class _GridBgPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final p = Paint()
-      ..color = const Color(0xFF00C8FF).withOpacity(.03)
-      ..strokeWidth = .5;
-    for (double x = 0; x < size.width; x += 40)
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
-    for (double y = 0; y < size.height; y += 40)
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), p);
-  }
-  @override bool shouldRepaint(covariant CustomPainter _) => false;
 }

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../../core/models/healthReport.dart';
 import 'full_map_page.dart';
+import 'package:flutter_disaster_app/core/api_config.dart';
 
 // ── 色系（與 dashboard 統一）────────────────────────────
 const Color _kBg       = Color(0xFFF5F7FA);
@@ -39,8 +40,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
   String _searchQuery  = '';
   final  TextEditingController _searchCtrl = TextEditingController();
 
-  static const String _baseUrl =
-      'https://delphine-eisteddfodic-afflictively.ngrok-free.dev';
+  static const String _baseUrl = ApiConfig.baseUrl;
 
   @override
   void initState() {

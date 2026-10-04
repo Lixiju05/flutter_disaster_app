@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 
 import 'package:flutter_disaster_app/core/models/supply.dart';
 import 'package:flutter_disaster_app/core/models/allocation.dart';
+import 'package:flutter_disaster_app/core/api_config.dart';
 
 class SupplyPage extends StatefulWidget {
   const SupplyPage({super.key});
@@ -14,8 +15,7 @@ class SupplyPage extends StatefulWidget {
 
 class _SupplyPageState extends State<SupplyPage>
     with SingleTickerProviderStateMixin {
-  static const String _baseUrl =
-      'https://delphine-eisteddfodic-afflictively.ngrok-free.dev';
+  static const String _baseUrl = ApiConfig.baseUrl;
 
   late final TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
@@ -117,7 +117,7 @@ class _SupplyPageState extends State<SupplyPage>
 
   Future<bool> updateStock({required int itemId, required int additionalQty}) async {
     try {
-      final data = await _post({'type': 'updateStock', 'itemId': itemId, 'additionalQty': additionalQty});
+      final data = await _post({'type': 'updateStock', 'itemId': itemId, 'qty': additionalQty});
       if (data['success'] == true) { await loadSupplies(); return true; }
       return false;
     } catch (e) { return false; }
@@ -129,6 +129,18 @@ class _SupplyPageState extends State<SupplyPage>
       if (data['success'] == true) { await loadSupplies(); return true; }
       return false;
     } catch (e) { return false; }
+  }
+
+  /// 刪除物資：回傳後端訊息（使用中的物資後端會拒絕刪除）
+  Future<({bool success, String message})> deleteSupply(int itemId) async {
+    try {
+      final data = await _post({'type': 'deleteInventory', 'itemId': itemId});
+      final ok = data['success'] == true;
+      if (ok) await loadSupplies();
+      return (success: ok, message: data['message']?.toString() ?? '');
+    } catch (e) {
+      return (success: false, message: 'API 連線失敗：$e');
+    }
   }
 
   // ── 分配 API ──────────────────────────────────────────────
@@ -214,7 +226,10 @@ class _SupplyPageState extends State<SupplyPage>
       final data = await _post({'type': 'getSupplyRequestDetails'});
       if (data['success'] == true) {
         final all = List<Map<String, dynamic>>.from(data['data']);
-        setState(() => _supplyRequests = all.where((r) => r['status'] == 'pending').toList());
+        // pending（待認領）＋ claimed（義工已認領）都顯示
+        setState(() => _supplyRequests = all
+            .where((r) => r['status'] == 'pending' || r['status'] == 'claimed')
+            .toList());
       } else {
         setState(() => _requestsError = '載入失敗');
       }
@@ -453,7 +468,7 @@ class _SupplyPageState extends State<SupplyPage>
               _th('預留', flex: 1),
               _th('尚缺', flex: 1),
               _th('狀態', flex: 2),
-              _th('操作', flex: 2),
+              _th('操作', flex: 3),
             ]),
           ),
           ...items.asMap().entries.map((entry) {
@@ -507,7 +522,7 @@ class _SupplyPageState extends State<SupplyPage>
               color: isLow ? _red : const Color(0xFF94A3B8)))),
           Expanded(flex: 2, child: _statusBadge(statusLabel, statusColor)),
           Expanded(
-            flex: 2,
+            flex: 3,
             child: Row(children: [
               _rowIconBtn(icon: Icons.add, color: _green, tooltip: '補貨',
                 onTap: () => _showUpdateStockDialog(item)),
@@ -521,6 +536,9 @@ class _SupplyPageState extends State<SupplyPage>
                 tooltip: '分配',
                 onTap: item.availableQty > 0 ? () => _showAllocateDialog(item) : null,
               ),
+              const SizedBox(width: 6),
+              _rowIconBtn(icon: Icons.delete_outline, color: _red, tooltip: '刪除',
+                onTap: () => _confirmDeleteSupply(item)),
             ]),
           ),
         ],
@@ -580,7 +598,7 @@ class _SupplyPageState extends State<SupplyPage>
         padding: const EdgeInsets.all(16),
         children: [
           if (hasReqs) ...[
-            const Text('待配送需求',
+            const Text('物資需求',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
             const SizedBox(height: 10),
             ..._supplyRequests.map((r) => _requestCard(r)),
@@ -603,6 +621,13 @@ class _SupplyPageState extends State<SupplyPage>
     final itemName = req['itemName']?.toString() ?? '物資 #${req['itemId']}';
     final qty      = (req['qty'] as num?)?.toInt() ?? 0;
     final unit     = req['unit']?.toString() ?? '';
+    final claimed  = req['status'] == 'claimed';
+    final volunteerId = req['volunteerId']?.toString();
+    final address  = req['address']?.toString();
+    final location = (address != null && address.isNotEmpty)
+        ? address
+        : (req['lat'] != null ? '${req['lat']}, ${req['lng']}' : '未提供');
+    final color    = claimed ? _green : _orange;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -610,15 +635,15 @@ class _SupplyPageState extends State<SupplyPage>
       decoration: BoxDecoration(
         color: _card,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _orange.withValues(alpha: 0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
             CircleAvatar(
-              backgroundColor: _orange.withValues(alpha: 0.1),
-              child: Icon(Icons.inbox_outlined, color: _orange),
+              backgroundColor: color.withValues(alpha: 0.1),
+              child: Icon(claimed ? Icons.volunteer_activism : Icons.inbox_outlined, color: color),
             ),
             const SizedBox(width: 12),
             Expanded(child: Column(
@@ -631,8 +656,14 @@ class _SupplyPageState extends State<SupplyPage>
                   style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
               ],
             )),
-            _statusBadge('待配送', _orange),
+            _statusBadge(claimed ? '已認領' : '待認領', color),
           ]),
+          const SizedBox(height: 10),
+          _requestInfoRow(Icons.location_on_outlined, '需求地點', location),
+          _requestInfoRow(Icons.home_work_outlined, '負責據點', 'A收容中心'),
+          if (claimed)
+            _requestInfoRow(Icons.badge_outlined, '認領義工', volunteerId ?? '—'),
+          if (!claimed) ...[
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
@@ -643,8 +674,22 @@ class _SupplyPageState extends State<SupplyPage>
               label: const Text('配送'),
             ),
           ),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _requestInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(children: [
+        Icon(icon, size: 15, color: const Color(0xFF64748B)),
+        const SizedBox(width: 6),
+        Text('$label：', style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+        Expanded(child: Text(value,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A)))),
+      ]),
     );
   }
 
@@ -1135,6 +1180,30 @@ class _SupplyPageState extends State<SupplyPage>
           labelText: label,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         ),
+      ),
+    );
+  }
+
+  void _confirmDeleteSupply(SupplyItem item) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('刪除物資'),
+        content: Text('確定要刪除「${item.name}」嗎？\n刪除後會從後端資料庫移除，無法復原。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: _red, foregroundColor: Colors.white),
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final result = await deleteSupply(item.itemId);
+              _snack(result.success
+                  ? '已刪除「${item.name}」'
+                  : '刪除失敗：${result.message}', result.success);
+            },
+            child: const Text('刪除'),
+          ),
+        ],
       ),
     );
   }

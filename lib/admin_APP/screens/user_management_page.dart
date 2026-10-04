@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'admin_setup_page.dart' show kAreaList;
+import 'package:flutter_disaster_app/core/api_config.dart';
 
 // ── 色系 ────────────────────────────────────────────────────────
 const Color _kBg       = Color(0xFFF5F7FA);
@@ -15,8 +16,7 @@ const Color _kTextMain = Color(0xFF0F172A);
 const Color _kTextSub  = Color(0xFF64748B);
 const Color _kRed      = Color(0xFFDC2626);
 
-const String _umBaseUrl =
-    'https://delphine-eisteddfodic-afflictively.ngrok-free.dev';
+const String _umBaseUrl = ApiConfig.baseUrl;
 
 
 class UserManagementPage extends StatefulWidget {

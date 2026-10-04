@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart'  as ll ;
 import 'package:flutter_disaster_app/core/models/emergency_request.dart';
+import 'package:flutter_disaster_app/core/api_config.dart';
 
 import 'citizen_page.dart';
 import 'emergency_page.dart';
@@ -20,7 +21,6 @@ import '../viewModels/weather_viewmodel.dart';
 import '../viewModels/citizen_viewmodel.dart';
 import '../viewModels/supply_viewmodel.dart';
 import '../viewModels/emergency_viewmodel.dart';
-import 'admin_setup_page.dart';
 import 'area_data.dart';
 
 // ══════════════════════════════════════════════════════════
@@ -76,13 +76,20 @@ class AlertRadarNode {
 }
 
 const Map<String, List<double>> kAreaCenterLatLng = {
-  '花莲县': [23.9871, 121.6015], '南投縣': [23.9609, 120.9718],
-  '台北市': [25.0330, 121.5654], '高雄市': [22.6273, 120.3014],
-  '台中市': [24.1477, 120.6736], '台南市': [22.9999, 120.2269],
-  '新北市': [25.0169, 121.4627], '桃园市': [24.9937, 121.3010],
-  '宜兰县': [24.7021, 121.7377], '台东县': [22.7972, 121.1047],
-  '屏东县': [22.5519, 120.5487],
+  '台北市': [25.0330, 121.5654], '新北市': [25.0169, 121.4627],
+  '桃園市': [24.9937, 121.3010], '台中市': [24.1477, 120.6736],
+  '台南市': [22.9999, 120.2269], '高雄市': [22.6273, 120.3014],
+  '南投縣': [23.9609, 120.9718], '宜蘭縣': [24.7021, 121.7377],
+  '花蓮縣': [23.9871, 121.6015], '台東縣': [22.7972, 121.1047],
+  '屏東縣': [22.5519, 120.5487], '彰化縣': [24.0809, 120.5385],
+  '雲林縣': [23.7092, 120.4313], '嘉義縣': [23.4518, 120.2555],
 };
+
+/// 篩出某地區的警報（氣象署用「臺」，地區清單用「台」，統一後比對）
+List<DisasterAlert> alertsForArea(List<DisasterAlert> all, String area) {
+  final city = AreaDataHelper.toCityName(area).replaceAll('臺', '台');
+  return all.where((a) => a.location.replaceAll('臺', '台').contains(city)).toList();
+}
 
 List<AlertRadarNode> buildAlertNodes(List<DisasterAlert> alerts, String adminArea) {
   final city   = AreaDataHelper.toCityName(adminArea);
@@ -96,15 +103,22 @@ List<AlertRadarNode> buildAlertNodes(List<DisasterAlert> alerts, String adminAre
   for (final alert in alerts) {
     if (result.length >= 5) break;
     double? aLat, aLng;
-    final dirReg = RegExp(r'([东西南北]{1,3})\s*方?\s*(\d+\.?\d*)\s*公里');
+    // 1) 地震：直接用氣象署提供的震央經緯度
+    final epi = alert.raw['EarthquakeInfo']?['Epicenter'];
+    if (epi is Map) {
+      aLat = double.tryParse('${epi['EpicenterLatitude']}');
+      aLng = double.tryParse('${epi['EpicenterLongitude']}');
+    }
+    // 2) 其他警報：從文字「XX方 N 公里」推算（繁簡體都可）
+    final dirReg = RegExp(r'([東西南北东]{1,3})\s*方?\s*(\d+\.?\d*)\s*公里');
     final m = dirReg.firstMatch('${alert.description} ${alert.location}');
-    if (m != null) {
-      final dir = m.group(1) ?? '';
+    if (aLat == null && m != null) {
+      final dir = (m.group(1) ?? '').replaceAll('东', '東');
       final dist = double.tryParse(m.group(2) ?? '') ?? 30.0;
       double dLat = 0, dLng = 0;
       if (dir.contains('北')) dLat =  dist / kmPerLat;
       if (dir.contains('南')) dLat = -dist / kmPerLat;
-      if (dir.contains('东')) dLng =  dist / kmPerLng;
+      if (dir.contains('東')) dLng =  dist / kmPerLng;
       if (dir.contains('西')) dLng = -dist / kmPerLng;
       aLat = cLat + dLat; aLng = cLng + dLng;
     }
@@ -151,7 +165,8 @@ class _DashboardPageState extends State<DashboardPage> {
   static const String _cwaKey = 'CWA-AFE44442-4E97-4836-A31F-0D743B56732B';
 
   int selectedIndex = 0;
-  String _adminName = '管理員', _adminTitle = '管理員', _adminArea = '南投縣';
+  String _adminArea = '南投縣';
+  String? _radarArea; // 雷達圖目前查看的地區（null = 自己的轄區）
 
   late Timer _clockTimer, _alertTimer, _envTimer;
   DateTime _now = DateTime.now();
@@ -161,6 +176,11 @@ class _DashboardPageState extends State<DashboardPage> {
   List<TimelineEvent> _timeline = [];
   bool _alertsLoading = false;
   int  _notificationCount = 0;
+
+  // 後端連線狀態（實際測量，不再寫死）
+  bool? _backendOk;   // null = 檢查中
+  int?  _latencyMs;
+  late Timer _backendTimer;
 
   final ScrollController _vCtrl = ScrollController();
 
@@ -172,6 +192,8 @@ class _DashboardPageState extends State<DashboardPage> {
     _startClock();
     _loadAlerts();
     _alertTimer = Timer.periodic(const Duration(minutes: 5),  (_) => _loadAlerts());
+    _checkBackend();
+    _backendTimer = Timer.periodic(const Duration(seconds: 30), (_) => _checkBackend());
     _envTimer   = Timer.periodic(const Duration(minutes: 10), (_) {
       if (mounted) context.read<WeatherViewModel>().refresh();
     });
@@ -179,7 +201,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   void dispose() {
-    _clockTimer.cancel(); _alertTimer.cancel(); _envTimer.cancel(); _vCtrl.dispose();
+    _clockTimer.cancel(); _alertTimer.cancel(); _envTimer.cancel(); _backendTimer.cancel(); _vCtrl.dispose();
     super.dispose();
   }
 
@@ -213,11 +235,38 @@ class _DashboardPageState extends State<DashboardPage> {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
-      _adminName  = prefs.getString('adminName')  ?? '管理員';
-      _adminTitle = prefs.getString('adminTitle') ?? '管理員';
       _adminArea  = prefs.getString('adminArea')  ?? '南投縣';
     });
   }
+
+  /// 實際呼叫後端，量測連線是否正常與回應時間
+  Future<void> _checkBackend() async {
+    final sw = Stopwatch()..start();
+    bool ok;
+    try {
+      final res = await http.post(
+        Uri.parse(ApiConfig.baseUrl),
+        headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'},
+        body: '{"type":"getInventory"}',
+      ).timeout(const Duration(seconds: 8));
+      ok = res.statusCode == 200;
+    } catch (_) {
+      ok = false;
+    }
+    sw.stop();
+    if (!mounted) return;
+    setState(() {
+      _backendOk = ok;
+      _latencyMs = ok ? sw.elapsedMilliseconds : null;
+    });
+  }
+
+  String get _backendLabel => _backendOk == null
+      ? '連線檢查中'
+      : (_backendOk! ? '後端連線正常' : '後端未連線');
+  Color get _backendColor => _backendOk == null
+      ? kTextSub
+      : (_backendOk! ? kGreen : kRed);
 
   void _loadCounts() {
     context.read<CitizenViewmodel>().loadCitizens();
@@ -227,16 +276,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _loadAlerts() async {
     if (_alertsLoading) return;
-    final vm = context.read<WeatherViewModel>();
-    if (vm.isSimulation) {
-      setState(() {
-        _disasterAlerts = vm.alerts;
-        _notificationCount = vm.alerts.length;
-        _lastSyncTime = DateTime.now();
-        _rebuildTimeline();
-      });
-      return;
-    }
     setState(() => _alertsLoading = true);
     try {
       final all = await WeatherService.fetchAllAlerts(apiKey: _cwaKey);
@@ -288,7 +327,6 @@ class _DashboardPageState extends State<DashboardPage> {
     switch (type) {
       case DisasterType.earthquake: return kRed;
       case DisasterType.typhoon:    return kOrange;
-      case DisasterType.landslide:  return Colors.deepOrange;
       case DisasterType.flood:      return kBlue;
       case DisasterType.rain:       return kBlue;
       default:                      return kMuted;
@@ -296,21 +334,6 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _go(int i) => setState(() => selectedIndex = i);
-
-  void _toggleMode() {
-    final vm = context.read<WeatherViewModel>();
-    vm.toggleMode();
-    setState(() { _disasterAlerts = []; _alertsLoading = false; });
-    _loadAlerts();
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(SnackBar(
-        backgroundColor: vm.isSimulation ? kOrange : kGreen,
-        behavior: SnackBarBehavior.floating,
-        content: Text(vm.isSimulation ? '已切換至警戒模擬模式' : '已切換至正常模式',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-      ));
-  }
 
   void _logout() {
     showDialog(
@@ -393,7 +416,6 @@ class _DashboardPageState extends State<DashboardPage> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _buildLogo(),
         const SizedBox(height: 14),
-        _buildModeBox(vm),
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
           child: Text('主要功能',
@@ -413,7 +435,6 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         const Spacer(),
         _buildSystemStatus(vm),
-        _buildAdminBox(),
         _buildLogoutButton(),
       ]),
     );
@@ -434,33 +455,6 @@ class _DashboardPageState extends State<DashboardPage> {
       ])),
     ]),
   );
-
-  Widget _buildModeBox(WeatherViewModel vm) {
-    final color = vm.isSimulation ? kOrange : const Color(0xFF34D399);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12), onTap: _toggleMode,
-        child: Container(
-          width: double.infinity, padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(.08), borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withOpacity(.12))),
-          child: Row(children: [
-            Icon(vm.isSimulation ? Icons.science_outlined : Icons.cloud_done_outlined, color: color, size: 18),
-            const SizedBox(width: 10),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(vm.isSimulation ? '警戒模擬模式' : '正常模式',
-                  style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)),
-              const SizedBox(height: 2),
-              const Text('近30天與即時資料', style: TextStyle(color: kSidebarTextSub, fontSize: 11)),
-            ])),
-            Text('切換', style: TextStyle(color: color, fontSize: 11)),
-          ]),
-        ),
-      ),
-    );
-  }
 
   Widget _navItem(int idx, IconData icon, String label) {
     final sel = selectedIndex == idx;
@@ -490,7 +484,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildSystemStatus(WeatherViewModel vm) {
-    final color = vm.isSimulation ? kOrange : const Color(0xFF34D399);
+    final color = _backendOk == false ? const Color(0xFFFC8181) : const Color(0xFF34D399);
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       padding: const EdgeInsets.all(11),
@@ -500,38 +494,11 @@ class _DashboardPageState extends State<DashboardPage> {
       child: Row(children: [
         Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 8),
-        Text(vm.isSimulation ? '模擬警戒中' : '系統運作正常',
+        Text(_backendLabel,
             style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)),
       ]),
     );
   }
-
-  Widget _buildAdminBox() => Container(
-    margin: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-    padding: const EdgeInsets.all(12),
-    decoration: BoxDecoration(
-      color: Colors.white.withOpacity(.06), borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: Colors.white.withOpacity(.10))),
-    child: Row(children: [
-      CircleAvatar(
-        radius: 18, backgroundColor: Colors.white.withOpacity(.18),
-        child: Text(_adminName.isNotEmpty ? _adminName[0] : '管',
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800))),
-      const SizedBox(width: 10),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(_adminName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-        Text('$_adminTitle · $_adminArea',
-            style: const TextStyle(color: kSidebarTextSub, fontSize: 11), overflow: TextOverflow.ellipsis),
-      ])),
-      IconButton(
-        visualDensity: VisualDensity.compact,
-        onPressed: () async {
-          await Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminSetupPage(isEdit: true)));
-          await _loadAdminInfo(); _loadAlerts();
-        },
-        icon: Icon(Icons.edit_outlined, color: kSidebarTextSub.withOpacity(.8), size: 16)),
-    ]),
-  );
 
   Widget _buildLogoutButton() => Padding(
     padding: const EdgeInsets.fromLTRB(12, 0, 12, 16),
@@ -564,7 +531,6 @@ class _DashboardPageState extends State<DashboardPage> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _buildTopBar(vm),
             const SizedBox(height: 14),
-            if (vm.isSimulation) ...[_buildSimulationBanner(), const SizedBox(height: 14)],
             _buildStatusStrip(vm),
             const SizedBox(height: 16),
             _buildStatsRow(),
@@ -573,11 +539,13 @@ class _DashboardPageState extends State<DashboardPage> {
               height: 360,
               child: Row(children: [
                 Expanded(flex: 5, child: Builder(builder: (context) {
-                  final cityName = AreaDataHelper.toCityName(_adminArea);
-                  final radarAlerts = _disasterAlerts.where((a) => a.location.contains(cityName)).toList();
+                  final viewArea = _radarArea ?? _adminArea;
                   return _TacticalMapCard(
-                    alerts: radarAlerts, isSimulation: vm.isSimulation,
-                    adminArea: _adminArea, onAlertTap: _showAlertDetail);
+                    alerts: _disasterAlerts,
+                    adminArea: viewArea, homeArea: _adminArea,
+                    onAreaChanged: (area) => setState(() =>
+                        _radarArea = area == _adminArea ? null : area),
+                    onAlertTap: _showAlertDetail);
                 })),
                 const SizedBox(width: 16),
                 Expanded(flex: 7, child: _GpsEmergencyMapCard(adminArea: _adminArea, onViewAll: () => _go(3))),
@@ -587,7 +555,7 @@ class _DashboardPageState extends State<DashboardPage> {
             Row(children: [
               Expanded(child: SizedBox(height: 420, child: _EventListCard(
                 alerts: _disasterAlerts, isLoading: _alertsLoading,
-                isSimulation: vm.isSimulation, onRefresh: _loadAlerts, onAlertTap: _showAlertDetail))),
+                onRefresh: _loadAlerts, onAlertTap: _showAlertDetail))),
               const SizedBox(width: 16),
               Expanded(child: SizedBox(height: 420, child: _TimelineCard(
                 events: _timeline, alerts: _disasterAlerts, onEventTap: _showAlertDetail))),
@@ -608,7 +576,7 @@ class _DashboardPageState extends State<DashboardPage> {
           overflow: TextOverflow.ellipsis, maxLines: 1),
     ])),
     const SizedBox(width: 12),
-    _statusChip(vm.isSimulation ? '模擬警戒中' : '系統正常', vm.isSimulation ? kOrange : kGreen),
+    _statusChip(_backendOk == false ? '後端未連線' : '系統正常', _backendOk == false ? kRed : kGreen),
     const SizedBox(width: 12),
     _timeBox(),
     const SizedBox(width: 12),
@@ -647,28 +615,14 @@ class _DashboardPageState extends State<DashboardPage> {
           style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))))),
   ]);
 
-  Widget _buildSimulationBanner() => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-    decoration: BoxDecoration(
-      color: kOrange.withOpacity(.08), borderRadius: BorderRadius.circular(10),
-      border: Border.all(color: kOrange.withOpacity(.22))),
-    child: Row(children: [
-      const Icon(Icons.science_outlined, color: kOrange, size: 18),
-      const SizedBox(width: 10),
-      const Expanded(child: Text('警戒模擬模式：目前顯示為展示情境，非真實即時資料。',
-          style: TextStyle(color: kTextMain, fontSize: 13, fontWeight: FontWeight.w600))),
-      TextButton(onPressed: _toggleMode, child: const Text('切換回正常模式')),
-    ]),
-  );
-
   Widget _buildStatusStrip(WeatherViewModel vm) => Container(
     height: 46, padding: const EdgeInsets.symmetric(horizontal: 16),
     decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
     child: Row(children: [
-      _statusDot(vm.isSimulation ? '模擬警戒中' : '系統運作正常', vm.isSimulation ? kOrange : kGreen),
-      _vline(), Flexible(child: _statusText('延迟 12ms', kBlue)),
-      _vline(), Flexible(child: _statusText('监控频道 CH-01', kTextSub)),
+      _statusDot(_backendLabel, _backendColor),
+      if (_latencyMs != null) ...[
+        _vline(), Flexible(child: _statusText('延遲 ${_latencyMs}ms', kBlue)),
+      ],
       _vline(),
       if (_alertsLoading)
         const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: kBlue))
@@ -678,7 +632,7 @@ class _DashboardPageState extends State<DashboardPage> {
       const Spacer(),
       Flexible(child: Text('上次同步：$_lastSyncText', style: const TextStyle(color: kTextSub, fontSize: 13), overflow: TextOverflow.ellipsis)),
       const SizedBox(width: 8),
-      _pillBtn(vm.isSimulation ? '模擬模式' : '即時監控中', vm.isSimulation ? kOrange : kBlue),
+      _pillBtn('即時監控中', kBlue),
     ]),
   );
 
@@ -748,11 +702,16 @@ return Row(children: [
 //  TACTICAL MAP CARD（雷達圖）
 // ══════════════════════════════════════════════════════════
 class _TacticalMapCard extends StatefulWidget {
-  final List<DisasterAlert> alerts;
-  final bool isSimulation;
-  final String adminArea;
+  final List<DisasterAlert> alerts; // 全台警報，卡片內再依地區篩選
+  final String adminArea;   // 目前雷達查看的地區
+  final String homeArea;    // 帳號本身的轄區
+  final ValueChanged<String> onAreaChanged;
   final ValueChanged<DisasterAlert> onAlertTap;
-  const _TacticalMapCard({required this.alerts, required this.isSimulation, required this.adminArea, required this.onAlertTap});
+  const _TacticalMapCard({required this.alerts, required this.adminArea,
+      required this.homeArea, required this.onAreaChanged, required this.onAlertTap});
+
+  /// 雷達可切換查看的地區（需在 kAreaCenterLatLng 有座標）
+  static const List<String> kRadarAreas = ['南投縣', '台北市', '新北市', '桃園市', '台中市', '彰化縣', '雲林縣', '嘉義縣', '台南市', '高雄市', '宜蘭縣', '花蓮縣', '台東縣', '屏東縣'];
   @override
   State<_TacticalMapCard> createState() => _TacticalMapCardState();
 }
@@ -769,9 +728,63 @@ class _TacticalMapCardState extends State<_TacticalMapCard> with TickerProviderS
   @override
   void dispose() { _radarCtrl.dispose(); _blinkCtrl.dispose(); super.dispose(); }
 
+  bool get _isHome => widget.adminArea == widget.homeArea;
+
+  /// 地區切換下拉選單
+  Widget _areaPicker() {
+    final areas = [
+      widget.homeArea,
+      ..._TacticalMapCard.kRadarAreas.where((a) => a != widget.homeArea),
+    ];
+    return PopupMenuButton<String>(
+      tooltip: '切換查看地區',
+      onSelected: widget.onAreaChanged,
+      position: PopupMenuPosition.under,
+      itemBuilder: (_) => [
+        for (final a in areas)
+          PopupMenuItem(
+            value: a,
+            height: 38,
+            child: Row(children: [
+              Icon(a == widget.adminArea ? Icons.radio_button_checked : Icons.radio_button_off,
+                  size: 16, color: a == widget.adminArea ? kBlue : kTextSub),
+              const SizedBox(width: 8),
+              Text(a, style: const TextStyle(fontSize: 13)),
+              if (a == widget.homeArea) ...[
+                const SizedBox(width: 6),
+                const Text('我的轄區', style: TextStyle(fontSize: 11, color: kTextSub)),
+              ],
+              const SizedBox(width: 16),
+              const Spacer(),
+              // 該地區目前的真實警報數
+              Builder(builder: (_) {
+                final n = alertsForArea(widget.alerts, a).length;
+                return n == 0
+                    ? const Text('無警報', style: TextStyle(fontSize: 11, color: kTextSub))
+                    : _smallBadge('$n 則警報', kOrange);
+              }),
+            ]),
+          ),
+      ],
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(8, 2, 4, 2),
+        decoration: BoxDecoration(
+          color: kBlue.withOpacity(.06),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: kBlue.withOpacity(.25)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text(widget.adminArea, style: const TextStyle(color: kBlue, fontSize: 12, fontWeight: FontWeight.w700)),
+          const Icon(Icons.arrow_drop_down_rounded, size: 18, color: kBlue),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final alertNodes = buildAlertNodes(widget.alerts, widget.adminArea);
+    final viewAlerts = alertsForArea(widget.alerts, widget.adminArea);
+    final alertNodes = buildAlertNodes(viewAlerts, widget.adminArea);
     return _card(padding: EdgeInsets.zero, child: Column(children: [
       Padding(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
@@ -783,10 +796,24 @@ class _TacticalMapCardState extends State<_TacticalMapCard> with TickerProviderS
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('轄區防災雷達圖', style: TextStyle(color: kTextMain, fontSize: 16, fontWeight: FontWeight.w800)),
             const SizedBox(height: 3),
-            Text('${widget.adminArea}｜氣象署災害警報', style: const TextStyle(color: kTextSub, fontSize: 12)),
+            Row(children: [
+              _areaPicker(),
+              const SizedBox(width: 6),
+              const Flexible(child: Text('氣象署災害警報', overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: kTextSub, fontSize: 12))),
+            ]),
           ])),
-          _smallBadge(widget.alerts.isEmpty ? '目前無警報' : '${widget.alerts.length} 則警報',
-              widget.alerts.isEmpty ? kGreen : kOrange),
+          if (!_isHome) ...[
+            TextButton.icon(
+              onPressed: () => widget.onAreaChanged(widget.homeArea),
+              style: TextButton.styleFrom(visualDensity: VisualDensity.compact, foregroundColor: kBlue),
+              icon: const Icon(Icons.my_location_rounded, size: 14),
+              label: const Text('回到轄區', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
+            const SizedBox(width: 4),
+          ],
+          _smallBadge(viewAlerts.isEmpty ? '目前無警報' : '${viewAlerts.length} 則警報',
+              viewAlerts.isEmpty ? kGreen : kOrange),
         ]),
       ),
       const Divider(height: 1, color: kBorder),
@@ -799,11 +826,10 @@ class _TacticalMapCardState extends State<_TacticalMapCard> with TickerProviderS
               animation: _radarCtrl,
               builder: (_, __) => CustomPaint(painter: _RadarMapPainter(
                 angle: _radarCtrl.value * Math.pi * 2,
-                hasAlerts: widget.alerts.isNotEmpty,
-                isSimulation: widget.isSimulation)))),
+                hasAlerts: viewAlerts.isNotEmpty)))),
             Center(child: _buildCenterNode(widget.adminArea)),
             for (final an in alertNodes) _buildAlertNode(an, w, h),
-            Positioned(left: 18, bottom: 18, child: _RadarLegend(hasAlerts: widget.alerts.isNotEmpty)),
+            Positioned(left: 18, bottom: 18, child: _RadarLegend(hasAlerts: viewAlerts.isNotEmpty)),
             Positioned(right: 14, bottom: 18,
                 child: Text('點擊節點查看詳情', style: TextStyle(color: kTextSub.withOpacity(.6), fontSize: 11))),
           ]);
@@ -823,7 +849,7 @@ class _TacticalMapCardState extends State<_TacticalMapCard> with TickerProviderS
         Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
             style: const TextStyle(color: kBlue, fontSize: 13, fontWeight: FontWeight.w900)),
         const SizedBox(height: 2),
-        const Text('指揮區', style: TextStyle(color: kTextSub, fontSize: 10)),
+        Text(_isHome ? '指揮區' : '觀察中', style: const TextStyle(color: kTextSub, fontSize: 10)),
       ]),
     );
   }
@@ -863,8 +889,8 @@ class _TacticalMapCardState extends State<_TacticalMapCard> with TickerProviderS
 
 class _RadarMapPainter extends CustomPainter {
   final double angle;
-  final bool hasAlerts, isSimulation;
-  const _RadarMapPainter({required this.angle, required this.hasAlerts, required this.isSimulation});
+  final bool hasAlerts;
+  const _RadarMapPainter({required this.angle, required this.hasAlerts});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -877,13 +903,13 @@ class _RadarMapPainter extends CustomPainter {
       ..drawLine(Offset(0, center.dy), Offset(size.width, center.dy), axis)
       ..drawLine(Offset(0, 0), Offset(size.width, size.height), axis)
       ..drawLine(Offset(size.width, 0), Offset(0, size.height), axis);
-    final ringColor = (hasAlerts || isSimulation) ? kOrange.withOpacity(.35) : const Color(0xFFBFDBFE).withOpacity(.55);
+    final ringColor = hasAlerts ? kOrange.withOpacity(.35) : const Color(0xFFBFDBFE).withOpacity(.55);
     final ring = Paint()..color = ringColor..style = PaintingStyle.stroke..strokeWidth = 1;
     for (int i = 1; i <= 4; i++) canvas.drawCircle(center, maxR * i / 4, ring);
     final sweep = Path()..moveTo(center.dx, center.dy)
       ..arcTo(Rect.fromCircle(center: center, radius: maxR), angle, 0.78, false)..close();
-    canvas.drawPath(sweep, Paint()..color = (isSimulation ? kOrange : kBlue).withOpacity(.12)..style = PaintingStyle.fill);
-    final armColor = (isSimulation ? kOrange : kBlue).withOpacity(.50);
+    canvas.drawPath(sweep, Paint()..color = kBlue.withOpacity(.12)..style = PaintingStyle.fill);
+    final armColor = kBlue.withOpacity(.50);
     final end = Offset(center.dx + maxR * Math.cos(angle), center.dy + maxR * Math.sin(angle));
     canvas.drawLine(center, end, Paint()..color = armColor..strokeWidth = 2.4..strokeCap = StrokeCap.round);
     final glow = Offset(center.dx + maxR * .72 * Math.cos(angle), center.dy + maxR * .72 * Math.sin(angle));
@@ -898,7 +924,7 @@ class _RadarMapPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _RadarMapPainter old) =>
-      old.angle != angle || old.hasAlerts != hasAlerts || old.isSimulation != isSimulation;
+      old.angle != angle || old.hasAlerts != hasAlerts;
 }
 
 class _RadarLegend extends StatelessWidget {
@@ -1090,8 +1116,7 @@ class _GpsMapCanvasState extends State<_GpsMapCanvas> {
           ),
           children: [
            TileLayer(
-  urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
-  subdomains: const ['a', 'b', 'c', 'd'],
+  urlTemplate: 'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}',  // 國土測繪中心 台灣通用電子地圖（免費、免金鑰）,
   userAgentPackageName: 'com.example.flutter_disaster_app',
   maxZoom: 19,
 ),
@@ -1340,7 +1365,7 @@ class _AlertDetailDialog extends StatelessWidget {
           const SizedBox(height: 16),
           Container(width: double.infinity, padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: kCardBg2, borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
-              child: const Text('資料來源：中央氣象署 / 水土保持署開放資料平台', style: TextStyle(color: kTextSub, fontSize: 12))),
+              child: const Text('資料來源：中央氣象署開放資料平台', style: TextStyle(color: kTextSub, fontSize: 12))),
         ])),
       ]),
     ));
@@ -1396,10 +1421,10 @@ class _NotificationDialog extends StatelessWidget {
 // ══════════════════════════════════════════════════════════
 class _EventListCard extends StatelessWidget {
   final List<DisasterAlert> alerts;
-  final bool isLoading, isSimulation;
+  final bool isLoading;
   final VoidCallback onRefresh;
   final ValueChanged<DisasterAlert> onAlertTap;
-  const _EventListCard({required this.alerts, required this.isLoading, required this.isSimulation, required this.onRefresh, required this.onAlertTap});
+  const _EventListCard({required this.alerts, required this.isLoading, required this.onRefresh, required this.onAlertTap});
 
   @override
   Widget build(BuildContext context) => _card(padding: const EdgeInsets.all(16), child: Column(children: [
@@ -1512,7 +1537,6 @@ Color _typeColor(DisasterType type) {
   switch (type) {
     case DisasterType.earthquake: return kRed;
     case DisasterType.typhoon:    return kOrange;
-    case DisasterType.landslide:  return Colors.deepOrange;
     case DisasterType.flood:      return kBlue;
     case DisasterType.rain:       return kBlue;
     default:                      return kMuted;
@@ -1523,7 +1547,6 @@ IconData _typeIcon(DisasterType type) {
   switch (type) {
     case DisasterType.earthquake: return Icons.vibration;
     case DisasterType.typhoon:    return Icons.air;
-    case DisasterType.landslide:  return Icons.landslide_outlined;
     case DisasterType.flood:      return Icons.water;
     case DisasterType.rain:       return Icons.water_drop_outlined;
     default:                      return Icons.warning_amber_rounded;

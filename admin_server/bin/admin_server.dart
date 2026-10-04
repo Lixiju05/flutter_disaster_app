@@ -206,6 +206,14 @@ Future<void> handleRequest(HttpRequest request) async {
         await handleGetPendingSupplyRequests(request);
         break;
 
+      case 'deleteInventory':
+        await handleDeleteInventory(jsonData, request);
+        break;
+
+      case 'cancelAllocation':
+        await handleCancelAllocation(jsonData, request);
+        break;
+
       default:
         sendJson(request, HttpStatus.badRequest, {
           "success": false,
@@ -758,5 +766,112 @@ Future<void> handleGetPendingSupplyRequests(
         'message': e.toString(),
       },
     );
+  }
+}
+
+/// 刪除物資
+/// 若仍有「待認領/已認領的物資需求」或「已預留的分配」使用這項物資，就拒絕刪除，避免資料對不起來
+Future<void> handleDeleteInventory(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  try {
+    final itemId = jsonData['itemId'];
+    if (itemId == null) {
+      sendJson(request, HttpStatus.badRequest, {
+        'success': false,
+        'message': 'itemId 為必填',
+      });
+      return;
+    }
+
+    final db = DatabaseService.instance;
+
+    final item = await db.select('SELECT * FROM inventory WHERE id = ?', [itemId]);
+    if (item.isEmpty) {
+      throw Exception('找不到這項物資');
+    }
+
+    final inUseRequests = await db.select(
+      "SELECT COUNT(*) AS c FROM supply_requests WHERE itemId = ? AND status IN ('pending', 'claimed')",
+      [itemId],
+    );
+    final inUseAllocations = await db.select(
+      "SELECT COUNT(*) AS c FROM allocations WHERE itemId = ? AND status = 'reserved'",
+      [itemId],
+    );
+    final reqCount = inUseRequests.first['c'] as int;
+    final allocCount = inUseAllocations.first['c'] as int;
+
+    if (reqCount > 0 || allocCount > 0) {
+      throw Exception(
+        '此物資仍有 $reqCount 筆物資需求、$allocCount 筆預留分配使用中，無法刪除',
+      );
+    }
+
+    await db.execute('DELETE FROM inventory WHERE id = ?', [itemId]);
+
+    sendJson(request, HttpStatus.ok, {
+      'success': true,
+      'message': '刪除成功',
+    });
+  } catch (e) {
+    sendJson(request, HttpStatus.badRequest, {
+      'success': false,
+      'message': e.toString().replaceFirst('Exception: ', ''),
+    });
+  }
+}
+
+/// 取消分配：把預留數量還回庫存
+Future<void> handleCancelAllocation(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  try {
+    final allocationId = jsonData['allocationId'];
+    if (allocationId == null) {
+      sendJson(request, HttpStatus.badRequest, {
+        'success': false,
+        'message': 'allocationId 為必填',
+      });
+      return;
+    }
+
+    final db = DatabaseService.instance;
+
+    await db.transaction(() async {
+      final result = await db.select(
+        'SELECT * FROM allocations WHERE id = ?',
+        [allocationId],
+      );
+      if (result.isEmpty) {
+        throw Exception('找不到這筆分配');
+      }
+
+      final allocation = result.first;
+      if (allocation['status'] != 'reserved') {
+        throw Exception('只有「已預留」的分配可以取消');
+      }
+
+      await db.execute(
+        'UPDATE inventory SET reservedQty = MAX(reservedQty - ?, 0), updatedAt = ? WHERE id = ?',
+        [allocation['quantity'], DateTime.now().toIso8601String(), allocation['itemId']],
+      );
+      await db.execute(
+        "UPDATE allocations SET status = 'cancelled' WHERE id = ?",
+        [allocationId],
+      );
+    });
+
+    sendJson(request, HttpStatus.ok, {
+      'success': true,
+      'message': '已取消分配',
+    });
+  } catch (e) {
+    sendJson(request, HttpStatus.badRequest, {
+      'success': false,
+      'message': e.toString().replaceFirst('Exception: ', ''),
+    });
   }
 }

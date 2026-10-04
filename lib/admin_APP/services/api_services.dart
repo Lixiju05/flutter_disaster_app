@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter_disaster_app/core/api_config.dart';
 
 class ApiServices {
-  static const String baseUrl = 'http://localhost:8080';
+  static const String baseUrl = ApiConfig.baseUrl;
 
   /// 通用 POST 方法
   static Future<dynamic> post(Map<String, dynamic> body) async {

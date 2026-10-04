@@ -402,8 +402,7 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
             children: [
               TileLayer(
                 urlTemplate:
-                    'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
+                    'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}',  // 國土測繪中心 台灣通用電子地圖（免費、免金鑰）,
                 userAgentPackageName: 'com.example.disaster_app',
               ),
               MarkerLayer(
