@@ -13,7 +13,7 @@ const Color _kCardBg   = Color(0xFFFFFFFF);
 const Color _kBorder   = Color(0xFFE2E8F0);
 const Color _kBlue     = Color(0xFF2563EB);
 const Color _kTextMain = Color(0xFF0F172A);
-const Color _kTextSub  = Color(0xFF64748B);
+const Color _kTextSub  = Color(0xFF475569);
 const Color _kRed      = Color(0xFFDC2626);
 
 const String _umBaseUrl = ApiConfig.baseUrl;
@@ -238,7 +238,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   'USER MANAGEMENT',
                   style: TextStyle(
                     color: _kTextSub,
-                    fontSize: 11,
+                    fontSize: 13,
                     letterSpacing: 1.4,
                     fontWeight: FontWeight.w500,
                   ),
@@ -282,7 +282,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                     _showAll ? '全部' : '本區',
                     style: TextStyle(
                       color: _showAll ? _kBlue : _kTextSub,
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -394,7 +394,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
             label,
             style: TextStyle(
               color: Colors.white.withValues(alpha: .85),
-              fontSize: 12,
+              fontSize: 13,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -422,10 +422,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
       child: TextField(
         controller: _searchController,
         onChanged: _onSearchChanged,
-        style: const TextStyle(color: _kTextMain, fontSize: 14),
+        style: const TextStyle(color: _kTextMain, fontSize: 15),
         decoration: InputDecoration(
           hintText: '搜尋姓名 / ID / 電話號碼…',
-          hintStyle: const TextStyle(color: _kTextSub, fontSize: 13),
+          hintStyle: const TextStyle(color: _kTextSub, fontSize: 14),
           prefixIcon: const Icon(Icons.search_rounded,
               color: _kTextSub, size: 18),
           suffixIcon: _searchKeyword.isNotEmpty
@@ -536,7 +536,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   name.isEmpty ? '未填寫' : name,
                   style: const TextStyle(
                     color: _kTextMain,
-                    fontSize: 14,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
                   maxLines: 1,
@@ -546,7 +546,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   Text(
                     area,
                     style: const TextStyle(
-                        color: _kTextSub, fontSize: 11),
+                        color: _kTextSub, fontSize: 13),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -561,7 +561,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
             id.isEmpty ? '—' : id,
             style: const TextStyle(
               color: _kTextSub,
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
             maxLines: 1,
@@ -585,7 +585,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   color: phone.isEmpty
                       ? _kTextSub.withValues(alpha: .4)
                       : _kTextSub,
-                  fontSize: 13,
+                  fontSize: 14,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -614,7 +614,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
           SizedBox(width: 4),
           Text('詳情',
               style: TextStyle(
-                  color: _kBlue, fontSize: 11, fontWeight: FontWeight.w600)),
+                  color: _kBlue, fontSize: 13, fontWeight: FontWeight.w600)),
         ]),
       ),
     );
@@ -756,7 +756,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
             title,
             style: TextStyle(
               color: color,
-              fontSize: 13,
+              fontSize: 14,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -790,7 +790,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
               label,
               style: const TextStyle(
                 color: _kTextSub,
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -800,7 +800,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
               isEmpty ? '未填寫' : value,
               style: TextStyle(
                 color: isEmpty ? _kTextSub.withValues(alpha: .5) : _kTextMain,
-                fontSize: 13,
+                fontSize: 14,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -854,7 +854,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
               : '目前沒有用戶資料',
           style: const TextStyle(
               color: _kTextSub,
-              fontSize: 14,
+              fontSize: 15,
               fontWeight: FontWeight.w500),
         ),
       ]),
@@ -874,14 +874,14 @@ class _UserManagementPageState extends State<UserManagementPage> {
       ),
       child: Row(children: [
         const Text('顯示',
-            style: TextStyle(color: _kTextSub, fontSize: 12)),
+            style: TextStyle(color: _kTextSub, fontSize: 13)),
         const SizedBox(width: 6),
         _pageSizeDropdown(),
         const SizedBox(width: 8),
         Flexible(
           child: Text(
             '共 ${_users.length} 位用戶',
-            style: const TextStyle(color: _kTextSub, fontSize: 12),
+            style: const TextStyle(color: _kTextSub, fontSize: 13),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -898,7 +898,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 padding: EdgeInsets.symmetric(horizontal: 3),
                 child: Text('…',
                     style:
-                        TextStyle(color: _kTextSub, fontSize: 12)),
+                        TextStyle(color: _kTextSub, fontSize: 13)),
               )
             : _pageNumBtn(p)),
         const SizedBox(width: 4),
@@ -923,7 +923,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
         child: DropdownButton<int>(
           value: _pageSize,
           isDense: true,
-          style: const TextStyle(color: _kTextMain, fontSize: 12),
+          style: const TextStyle(color: _kTextMain, fontSize: 13),
           icon: const Icon(Icons.keyboard_arrow_down_rounded,
               size: 14, color: _kTextSub),
           items: [10, 20, 50]
@@ -968,7 +968,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
             '${page + 1}',
             style: TextStyle(
               color: selected ? Colors.white : _kTextSub,
-              fontSize: 12,
+              fontSize: 13,
               fontWeight: selected
                   ? FontWeight.w700
                   : FontWeight.w400,
@@ -1009,7 +1009,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
               color: enabled
                   ? _kTextSub
                   : _kTextSub.withValues(alpha: .3),
-              fontSize: 12,
+              fontSize: 13,
             ),
           ),
           if (icon == Icons.chevron_right) ...[
@@ -1045,7 +1045,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
           Text(
             _errorMessage,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: _kRed, fontSize: 14),
+            style: const TextStyle(color: _kRed, fontSize: 15),
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
           ),
@@ -1070,7 +1070,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
 // ── Shared styles ────────────────────────────────────────────────
 const TextStyle _headerStyle = TextStyle(
   color: _kTextSub,
-  fontSize: 11,
+  fontSize: 13,
   fontWeight: FontWeight.w700,
   letterSpacing: 0.8,
 );

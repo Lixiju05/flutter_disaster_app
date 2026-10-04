@@ -12,7 +12,7 @@ const Color _kGreen    = Color(0xFF16A34A);
 const Color _kOrange   = Color(0xFFF59E0B);
 const Color _kRed      = Color(0xFFDC2626);
 const Color _kTextMain = Color(0xFF0F172A);
-const Color _kTextSub  = Color(0xFF64748B);
+const Color _kTextSub  = Color(0xFF475569);
 
 // ══════════════════════════════════════════════════════════
 //  EMERGENCY PAGE
@@ -63,7 +63,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
             style: TextStyle(color: _kTextMain, fontSize: 15, fontWeight: FontWeight.w700)),
         content: Text(
           '確定將「${e.userName.isNotEmpty ? e.userName : e.userId}」的求救事件標記為已處理？此操作無法還原。',
-          style: const TextStyle(color: _kTextSub, fontSize: 14),
+          style: const TextStyle(color: _kTextSub, fontSize: 15),
         ),
         actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         actions: [
@@ -147,7 +147,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
             style: TextStyle(color: _kTextMain, fontSize: 26, fontWeight: FontWeight.w800)),
         const SizedBox(height: 1),
         const Text('EMERGENCY MANAGEMENT',
-            style: TextStyle(color: _kTextSub, fontSize: 11, letterSpacing: 1.3)),
+            style: TextStyle(color: _kTextSub, fontSize: 13, letterSpacing: 1.3)),
       ]),
       const SizedBox(width: 12),
       if (pending > 0) _tag('待處理 $pending 件', _kOrange),
@@ -201,7 +201,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
             const SizedBox(width: 10),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(val, style: TextStyle(color: sel ? color : _kTextMain, fontSize: 20, fontWeight: FontWeight.w800, height: 1.1)),
-              Text(label, style: const TextStyle(color: _kTextSub, fontSize: 11)),
+              Text(label, style: const TextStyle(color: _kTextSub, fontSize: 13)),
             ]),
             if (sel) ...[const Spacer(), Icon(Icons.check_circle_rounded, color: color, size: 14)],
           ]),
@@ -222,10 +222,10 @@ class _EmergencyPageState extends State<EmergencyPage> {
       ),
       child: TextField(
         controller: _searchCtrl,
-        style: const TextStyle(color: _kTextMain, fontSize: 13),
+        style: const TextStyle(color: _kTextMain, fontSize: 14),
         decoration: InputDecoration(
           hintText:        '搜尋姓名、ID 或電話…',
-          hintStyle:       const TextStyle(color: _kTextSub, fontSize: 13),
+          hintStyle:       const TextStyle(color: _kTextSub, fontSize: 14),
           prefixIcon:      const Icon(Icons.search_rounded, color: _kTextSub, size: 18),
           suffixIcon: _searchQuery.isNotEmpty
               ? GestureDetector(
@@ -254,7 +254,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
       const SizedBox(width: 4),
       _filterBtn('已完成', _kGreen),
       const Spacer(),
-      Text('共 $shown 筆', style: const TextStyle(color: _kTextSub, fontSize: 12)),
+      Text('共 $shown 筆', style: const TextStyle(color: _kTextSub, fontSize: 13)),
     ]);
   }
 
@@ -273,7 +273,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
         child: Text(label,
             style: TextStyle(
                 color:      sel ? color : _kTextSub,
-                fontSize:   12,
+                fontSize:   13,
                 fontWeight: sel ? FontWeight.w700 : FontWeight.w500)),
       ),
     );
@@ -301,7 +301,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
             child: const Row(mainAxisSize: MainAxisSize.min, children: [
               Icon(Icons.refresh_rounded, color: _kRed, size: 14),
               SizedBox(width: 5),
-              Text('重新載入', style: TextStyle(color: _kRed, fontSize: 12, fontWeight: FontWeight.w600)),
+              Text('重新載入', style: TextStyle(color: _kRed, fontSize: 13, fontWeight: FontWeight.w600)),
             ]),
           ),
         ),
@@ -333,9 +333,9 @@ class _EmergencyPageState extends State<EmergencyPage> {
             const Icon(Icons.bolt_rounded, color: _kTextMain, size: 16),
             const SizedBox(width: 6),
             const Text('求救事件列表',
-                style: TextStyle(color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w700)),
+                style: TextStyle(color: _kTextMain, fontSize: 15, fontWeight: FontWeight.w700)),
             const Spacer(),
-            Text('共 ${filtered.length} 筆', style: const TextStyle(color: _kTextSub, fontSize: 11)),
+            Text('共 ${filtered.length} 筆', style: const TextStyle(color: _kTextSub, fontSize: 13)),
           ]),
         ),
         Expanded(
@@ -389,10 +389,10 @@ class _EmergencyPageState extends State<EmergencyPage> {
               const Icon(Icons.person_outline_rounded, color: _kTextSub, size: 13),
               const SizedBox(width: 4),
               Flexible(child: Text(displayName,
-                  style: const TextStyle(color: _kTextMain, fontSize: 13, fontWeight: FontWeight.w700),
+                  style: const TextStyle(color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w700),
                   overflow: TextOverflow.ellipsis, maxLines: 1)),
               const SizedBox(width: 6),
-              Flexible(child: Text('ID：${e.userId}', style: const TextStyle(color: _kTextSub, fontSize: 12),
+              Flexible(child: Text('ID：${e.userId}', style: const TextStyle(color: _kTextSub, fontSize: 13),
                   overflow: TextOverflow.ellipsis, maxLines: 1)),
               const SizedBox(width: 4),
               Container(
@@ -403,7 +403,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
                   border: Border.all(color: color.withValues(alpha: .25)),
                 ),
                 child: Text(statusLabel,
-                    style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700)),
+                    style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
               ),
             ]),
             const SizedBox(height: 5),
@@ -412,7 +412,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
               Row(children: [
                 const Icon(Icons.phone_outlined, color: _kTextSub, size: 13),
                 const SizedBox(width: 4),
-                Text(e.phone, style: const TextStyle(color: _kTextSub, fontSize: 12)),
+                Text(e.phone, style: const TextStyle(color: _kTextSub, fontSize: 13)),
               ]),
               const SizedBox(height: 5),
             ],
@@ -423,7 +423,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
               Expanded(
                 child: Text(
                   e.address?.isNotEmpty == true ? e.address! : '位置未提供',
-                  style: const TextStyle(color: _kTextSub, fontSize: 12),
+                  style: const TextStyle(color: _kTextSub, fontSize: 13),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -441,7 +441,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
                   child: const Row(mainAxisSize: MainAxisSize.min, children: [
                     Icon(Icons.map_outlined, color: _kBlue, size: 11),
                     SizedBox(width: 3),
-                    Text('地圖', style: TextStyle(color: _kBlue, fontSize: 10, fontWeight: FontWeight.w600)),
+                    Text('地圖', style: TextStyle(color: _kBlue, fontSize: 12, fontWeight: FontWeight.w600)),
                   ]),
                 ),
               ),
@@ -474,7 +474,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
                     Text('標記完成',
                         style: TextStyle(
                             color: _kGreen,
-                            fontSize: 12,
+                            fontSize: 13,
                             fontWeight: FontWeight.w700)),
                   ]),
                 ),
@@ -557,13 +557,13 @@ class _EmergencyPageState extends State<EmergencyPage> {
                         const SizedBox(width: 4),
                         Text(statusLabel,
                             style: TextStyle(color: color,
-                                fontSize: 11, fontWeight: FontWeight.w700)),
+                                fontSize: 13, fontWeight: FontWeight.w700)),
                       ]),
                     ),
                     const SizedBox(width: 8),
                     Text('ID：${e.userId}',
                         style: const TextStyle(
-                            color: _kTextSub, fontSize: 12)),
+                            color: _kTextSub, fontSize: 13)),
                   ]),
                 ])),
                 IconButton(
@@ -632,7 +632,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
                             Text('打開地圖',
                                 style: TextStyle(
                                     color: _kBlue,
-                                    fontSize: 13,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w600)),
                           ]),
                         ),
@@ -663,7 +663,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
           SizedBox(width: 4),
           Text('詳情',
               style: TextStyle(
-                  color: _kBlue, fontSize: 11, fontWeight: FontWeight.w600)),
+                  color: _kBlue, fontSize: 13, fontWeight: FontWeight.w600)),
         ]),
       ),
     );
@@ -684,12 +684,12 @@ class _EmergencyPageState extends State<EmergencyPage> {
           width: 78,
           child: Text(label,
               style: const TextStyle(
-                  color: _kTextSub, fontSize: 12, fontWeight: FontWeight.w500)),
+                  color: _kTextSub, fontSize: 13, fontWeight: FontWeight.w500)),
         ),
         Expanded(
           child: Text(value.isEmpty ? '未填寫' : value,
               style: const TextStyle(
-                  color: _kTextMain, fontSize: 13, fontWeight: FontWeight.w600)),
+                  color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w600)),
         ),
       ]),
     );
@@ -707,7 +707,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
         Text(label,
             style: const TextStyle(
                 color: _kTextMain,
-                fontSize: 13,
+                fontSize: 14,
                 fontWeight: FontWeight.w700)),
       ]),
     );
@@ -734,10 +734,10 @@ class _EmergencyPageState extends State<EmergencyPage> {
         ),
         const SizedBox(height: 10),
         Text(title ?? '',
-            style: const TextStyle(color: _kTextMain, fontSize: 13, fontWeight: FontWeight.w600)),
+            style: const TextStyle(color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w600)),
         if (subtitle != null) ...[
           const SizedBox(height: 3),
-          Text(subtitle, style: const TextStyle(color: _kTextSub, fontSize: 12)),
+          Text(subtitle, style: const TextStyle(color: _kTextSub, fontSize: 13)),
         ],
         if (action != null) action,
       ]),
@@ -750,7 +750,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
         color:        color.withValues(alpha:.08),
         borderRadius: BorderRadius.circular(999),
         border:       Border.all(color: color.withValues(alpha:.18))),
-    child: Text(text, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700)),
+    child: Text(text, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
   );
 
   static Widget _iconBtn(IconData icon, Color color, VoidCallback onTap) =>

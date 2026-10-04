@@ -172,7 +172,7 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
           child: Center(
             child: Text(
               '${widget.adminArea} 目前沒有取得防空避難設施資料',
-              style: const TextStyle(fontSize: 14),
+              style: const TextStyle(fontSize: 15),
             ),
           ),
         ),
@@ -218,7 +218,7 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
                             '設施清單（${_shelters.length} 處）',
                             style: const TextStyle(
                               color: kMuted,
-                              fontSize: 11,
+                              fontSize: 13,
                               letterSpacing: 1.2,
                             ),
                           ),
@@ -275,7 +275,7 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
               ),
               Text(
                 '$_areaShortName 轄區內共 ${_shelters.length} 處避難設施　總容量 ${_formatNumber(_totalCapacity)} 人',
-                style: const TextStyle(color: kMuted, fontSize: 11),
+                style: const TextStyle(color: kMuted, fontSize: 13),
               ),
             ],
           ),
@@ -335,13 +335,13 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
                     style: const TextStyle(
                       color: kTextMain,
                       fontWeight: FontWeight.bold,
-                      fontSize: 13,
+                      fontSize: 14,
                     ),
                   ),
                   const SizedBox(height: 3),
                   Text(
                     s.address,
-                    style: const TextStyle(color: kMuted, fontSize: 10),
+                    style: const TextStyle(color: kMuted, fontSize: 12),
                   ),
                   const SizedBox(height: 6),
                   Row(
@@ -377,7 +377,7 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
         text,
         style: TextStyle(
           color: color,
-          fontSize: 10,
+          fontSize: 12,
           fontWeight: FontWeight.bold,
         ),
       ),
@@ -471,7 +471,7 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
                   const SizedBox(width: 7),
                   const Text(
                     '防空避難設施',
-                    style: TextStyle(color: kTextSub, fontSize: 11),
+                    style: TextStyle(color: kTextSub, fontSize: 13),
                   ),
                 ],
               ),
@@ -492,7 +492,7 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
                 style: const TextStyle(
                   color: kOrange,
                   fontWeight: FontWeight.bold,
-                  fontSize: 12,
+                  fontSize: 13,
                 ),
               ),
             ),
@@ -533,13 +533,13 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
             style: const TextStyle(
               color: kTextMain,
               fontWeight: FontWeight.bold,
-              fontSize: 13,
+              fontSize: 14,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             s.address,
-            style: const TextStyle(color: kMuted, fontSize: 10),
+            style: const TextStyle(color: kMuted, fontSize: 12),
           ),
           const SizedBox(height: 8),
           Row(
@@ -558,7 +558,7 @@ class _ShelterMapDialogState extends State<ShelterMapDialog> {
               icon: const Icon(Icons.navigation_rounded, size: 15),
               label: const Text(
                 '導航前往',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: kOrange.withOpacity(.10),

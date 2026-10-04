@@ -97,108 +97,56 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isWide = MediaQuery.of(context).size.width >= 900;
-
     return Scaffold(
-      backgroundColor: kBg,
-      body: isWide
-          ? Row(children: [
-              SizedBox(width: 380, child: _buildSidePanel()),
-              Expanded(child: Center(child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: _buildLoginCard(),
-              ))),
-            ])
-          : Column(children: [
-              _buildTopBar(),
-              Expanded(child: Center(child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: _buildLoginCard(),
-              ))),
-            ]),
-    );
-  }
-
-  // ── Logo（與指揮中心側邊欄相同）──────────────────────────
-  Widget _logo() => Row(children: [
-        Container(
-          width: 40, height: 40,
-          decoration: BoxDecoration(
-              color: Colors.white.withOpacity(.15),
-              borderRadius: BorderRadius.circular(12)),
-          child: const Icon(Icons.shield_outlined, color: Colors.white, size: 22),
+      backgroundColor: kSidebarBg,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _logo(),
+                const SizedBox(height: 28),
+                _buildLoginCard(),
+                const SizedBox(height: 20),
+                const Text('帳號由各地區／社區統一發放，如需帳號請洽系統管理單位',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: kSidebarTextSub, fontSize: 13)),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(width: 12),
-        const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('災難管理系統',
-              style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
-          SizedBox(height: 2),
-          Text('EMERGENCY COMMAND',
-              style: TextStyle(color: kSidebarTextSub, fontSize: 11, letterSpacing: 1.1)),
-        ]),
-      ]);
-
-  // ── 左側面板（寬螢幕）：沿用側邊欄樣式 ─────────────────────
-  Widget _buildSidePanel() {
-    return Container(
-      color: kSidebarBg,
-      child: SafeArea(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
-            decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: kSidebarBorder))),
-            child: _logo(),
-          ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(18, 24, 18, 8),
-            child: Text('系統功能',
-                style: TextStyle(color: kSidebarTextSub, fontSize: 11,
-                    fontWeight: FontWeight.w600, letterSpacing: 0.8)),
-          ),
-          _feature(Icons.accessibility_new_rounded, '災民資訊與救援狀態追蹤'),
-          _feature(Icons.warning_amber_rounded, '緊急事件回報與處理'),
-          _feature(Icons.inventory_2_outlined, '救援物資調度與分配'),
-          _feature(Icons.favorite_border_rounded, '健康回報彙整'),
-          const Spacer(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 20),
-            child: Text('帳號由各地區／社區統一發放，\n如需帳號請洽系統管理單位。',
-                style: TextStyle(color: kSidebarTextSub.withOpacity(.8),
-                    fontSize: 12, height: 1.6)),
-          ),
-        ]),
       ),
     );
   }
 
-  Widget _feature(IconData icon, String text) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-        child: Row(children: [
-          Icon(icon, color: kSidebarTextSub, size: 19),
-          const SizedBox(width: 12),
-          Text(text, style: const TextStyle(color: Colors.white, fontSize: 14)),
-        ]),
-      );
-
-  // ── 上方深藍列（窄螢幕）─────────────────────────────────
-  Widget _buildTopBar() => Container(
-        width: double.infinity,
-        color: kSidebarBg,
-        padding: EdgeInsets.fromLTRB(18, MediaQuery.of(context).padding.top + 16, 18, 16),
-        child: _logo(),
-      );
+  // ── Logo（與指揮中心側邊欄相同樣式，置中）────────────────
+  Widget _logo() => Column(children: [
+        Container(
+          width: 56, height: 56,
+          decoration: BoxDecoration(
+              color: Colors.white.withOpacity(.15),
+              borderRadius: BorderRadius.circular(16)),
+          child: const Icon(Icons.shield_outlined, color: Colors.white, size: 30),
+        ),
+        const SizedBox(height: 14),
+        const Text('災難管理系統',
+            style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 4),
+        const Text('EMERGENCY COMMAND',
+            style: TextStyle(color: kSidebarTextSub, fontSize: 13, letterSpacing: 1.6)),
+      ]);
 
   // ── 登入卡片（與指揮中心白色卡片相同）────────────────────
   Widget _buildLoginCard() {
     return Container(
-      width: 400,
+      width: double.infinity,
+      constraints: const BoxConstraints(maxWidth: 420),
       padding: const EdgeInsets.fromLTRB(28, 28, 28, 24),
       decoration: BoxDecoration(
         color: kCardBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: kBorder),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -208,7 +156,7 @@ class _LoginPageState extends State<LoginPage> {
               style: TextStyle(color: kTextMain, fontSize: 24, fontWeight: FontWeight.w800)),
           const SizedBox(height: 2),
           const Text('ADMIN LOGIN',
-              style: TextStyle(color: kTextSub, fontSize: 11, letterSpacing: 1.3)),
+              style: TextStyle(color: kTextSub, fontSize: 13, letterSpacing: 1.3)),
           const SizedBox(height: 24),
           _label('帳號'),
           _input(
@@ -258,7 +206,7 @@ class _LoginPageState extends State<LoginPage> {
             Expanded(child: Divider(color: kBorder)),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 10),
-              child: Text('義工', style: TextStyle(color: kTextSub, fontSize: 12)),
+              child: Text('義工', style: TextStyle(color: kTextSub, fontSize: 13)),
             ),
             Expanded(child: Divider(color: kBorder)),
           ]),
@@ -276,7 +224,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
               icon: const Icon(Icons.volunteer_activism_outlined, size: 18, color: kGreen),
               label: const Text('義工 Demo（A收容中心）',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
@@ -287,7 +235,7 @@ class _LoginPageState extends State<LoginPage> {
   Widget _label(String text) => Padding(
         padding: const EdgeInsets.only(bottom: 6),
         child: Text(text,
-            style: const TextStyle(color: kTextMain, fontSize: 13, fontWeight: FontWeight.w600)),
+            style: const TextStyle(color: kTextMain, fontSize: 14, fontWeight: FontWeight.w600)),
       );
 
   Widget _input({
@@ -306,10 +254,10 @@ class _LoginPageState extends State<LoginPage> {
       controller: controller,
       obscureText: obscure,
       onSubmitted: onSubmitted,
-      style: const TextStyle(color: kTextMain, fontSize: 14),
+      style: const TextStyle(color: kTextMain, fontSize: 15),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: kTextSub, fontSize: 14),
+        hintStyle: const TextStyle(color: kTextSub, fontSize: 15),
         prefixIcon: Icon(icon, color: kTextSub, size: 18),
         suffixIcon: suffixIcon,
         filled: true,

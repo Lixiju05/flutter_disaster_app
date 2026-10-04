@@ -192,7 +192,7 @@ class _RegisterPageState extends State<RegisterPage>
                 color: Colors.white)),
         const SizedBox(height: 8),
         const Text('請輸入手機號碼與密碼完成註冊',
-            style: TextStyle(fontSize: 13, color: Color(0xFF3E5872))),
+            style: TextStyle(fontSize: 14, color: Color(0xFF475569))),
         const SizedBox(height: 30),
 
         // 手機號碼
@@ -215,7 +215,7 @@ class _RegisterPageState extends State<RegisterPage>
               _obscurePassword
                   ? Icons.visibility_off_rounded
                   : Icons.visibility_rounded,
-              color: const Color(0xFF3E5872), size: 18,
+              color: const Color(0xFF475569), size: 18,
             ),
             onPressed: () =>
                 setState(() => _obscurePassword = !_obscurePassword),
@@ -234,7 +234,7 @@ class _RegisterPageState extends State<RegisterPage>
               _obscureConfirm
                   ? Icons.visibility_off_rounded
                   : Icons.visibility_rounded,
-              color: const Color(0xFF3E5872), size: 18,
+              color: const Color(0xFF475569), size: 18,
             ),
             onPressed: () =>
                 setState(() => _obscureConfirm = !_obscureConfirm),
@@ -274,7 +274,7 @@ class _RegisterPageState extends State<RegisterPage>
           onPressed: () => Navigator.pop(context),
           child: const Text('已經有帳號？返回登入',
               style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 15,
                   color: Color(0xFF00C8FF),
                   fontWeight: FontWeight.w600)),
         ),
@@ -294,11 +294,11 @@ class _RegisterPageState extends State<RegisterPage>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.shield_outlined,
-                    size: 15, color: Color(0xFF3E5872)),
+                    size: 15, color: Color(0xFF475569)),
                 SizedBox(width: 8),
                 Text('測試模式：帳號密碼儲存於本機',
                     style: TextStyle(
-                        color: Color(0xFF3E5872), fontSize: 12)),
+                        color: Color(0xFF475569), fontSize: 13)),
               ]),
         ),
       ]),
@@ -323,13 +323,13 @@ class _RegisterPageState extends State<RegisterPage>
         controller: controller,
         obscureText: obscure,
         keyboardType: keyboardType,
-        style: const TextStyle(color: Colors.white, fontSize: 14),
+        style: const TextStyle(color: Colors.white, fontSize: 15),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle:
-              const TextStyle(color: Color(0xFF3E5872), fontSize: 14),
+              const TextStyle(color: Color(0xFF475569), fontSize: 15),
           prefixIcon:
-              Icon(icon, color: const Color(0xFF3E5872), size: 18),
+              Icon(icon, color: const Color(0xFF475569), size: 18),
           suffixIcon: suffixIcon,
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 16),

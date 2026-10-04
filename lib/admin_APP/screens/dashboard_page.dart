@@ -33,7 +33,7 @@ const Color kBorder    = Color(0xFFE5E7EB);
 
 const Color kSidebarBg      = Color(0xFF1E3A5F);
 const Color kSidebarBorder  = Color(0xFF2A4E7A);
-const Color kSidebarTextSub = Color(0xFF7FA8CC);
+const Color kSidebarTextSub = Color(0xFFB4CDE6);
 const Color kSidebarSel     = Color(0xFF2A4E7A);
 
 const Color kBlue   = Color(0xFF2563EB);
@@ -41,8 +41,8 @@ const Color kGreen  = Color(0xFF16A34A);
 const Color kOrange = Color(0xFFF59E0B);
 const Color kRed    = Color(0xFFDC2626);
 const Color kTextMain = Color(0xFF0F172A);
-const Color kTextSub  = Color(0xFF64748B);
-const Color kMuted    = Color(0xFF64748B);
+const Color kTextSub  = Color(0xFF475569);
+const Color kMuted    = Color(0xFF475569);
 
 // ══════════════════════════════════════════════════════════
 //  RADAR DATA
@@ -419,7 +419,7 @@ class _DashboardPageState extends State<DashboardPage> {
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
           child: Text('主要功能',
-              style: TextStyle(color: kSidebarTextSub, fontSize: 11,
+              style: TextStyle(color: kSidebarTextSub, fontSize: 13,
                   fontWeight: FontWeight.w600, letterSpacing: 0.8)),
         ),
         Padding(
@@ -451,7 +451,7 @@ class _DashboardPageState extends State<DashboardPage> {
       const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('災難管理系統', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
         SizedBox(height: 2),
-        Text('EMERGENCY COMMAND', style: TextStyle(color: kSidebarTextSub, fontSize: 11, letterSpacing: 1.1)),
+        Text('EMERGENCY COMMAND', style: TextStyle(color: kSidebarTextSub, fontSize: 13, letterSpacing: 1.1)),
       ])),
     ]),
   );
@@ -474,7 +474,7 @@ class _DashboardPageState extends State<DashboardPage> {
             const SizedBox(width: 12),
             Expanded(child: Text(label,
                 style: TextStyle(color: sel ? Colors.white : kSidebarTextSub,
-                    fontWeight: sel ? FontWeight.w700 : FontWeight.w500, fontSize: 14))),
+                    fontWeight: sel ? FontWeight.w700 : FontWeight.w500, fontSize: 15))),
             if (sel) Container(width: 4, height: 4,
                 decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
           ]),
@@ -495,7 +495,7 @@ class _DashboardPageState extends State<DashboardPage> {
         Container(width: 7, height: 7, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         const SizedBox(width: 8),
         Text(_backendLabel,
-            style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)),
+            style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 14)),
       ]),
     );
   }
@@ -513,7 +513,7 @@ class _DashboardPageState extends State<DashboardPage> {
         child: const Row(children: [
           Icon(Icons.logout, color: Color(0xFFFC8181), size: 17),
           SizedBox(width: 10),
-          Text('登出系統', style: TextStyle(color: Color(0xFFFC8181), fontWeight: FontWeight.w700, fontSize: 14)),
+          Text('登出系統', style: TextStyle(color: Color(0xFFFC8181), fontWeight: FontWeight.w700, fontSize: 15)),
         ]),
       ),
     ),
@@ -572,7 +572,7 @@ class _DashboardPageState extends State<DashboardPage> {
           overflow: TextOverflow.ellipsis, maxLines: 1),
       const SizedBox(height: 2),
       const Text('DISASTER MANAGEMENT SYSTEM',
-          style: TextStyle(color: kTextSub, fontSize: 12, letterSpacing: 1.4),
+          style: TextStyle(color: kTextSub, fontSize: 13, letterSpacing: 1.4),
           overflow: TextOverflow.ellipsis, maxLines: 1),
     ])),
     const SizedBox(width: 12),
@@ -587,7 +587,7 @@ class _DashboardPageState extends State<DashboardPage> {
     padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
     decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-      Text(_formattedDate, style: const TextStyle(color: kTextSub, fontSize: 11)),
+      Text(_formattedDate, style: const TextStyle(color: kTextSub, fontSize: 13)),
       const SizedBox(height: 2),
       Row(children: [
         const Icon(Icons.access_time, color: kBlue, size: 14),
@@ -612,7 +612,7 @@ class _DashboardPageState extends State<DashboardPage> {
         decoration: const BoxDecoration(color: kRed, shape: BoxShape.circle),
         child: Center(child: Text(
           _notificationCount > 9 ? '9+' : '$_notificationCount',
-          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800))))),
+          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800))))),
   ]);
 
   Widget _buildStatusStrip(WeatherViewModel vm) => Container(
@@ -630,7 +630,7 @@ class _DashboardPageState extends State<DashboardPage> {
         Flexible(child: _statusText(_disasterAlerts.isNotEmpty ? '${_disasterAlerts.length} 則通報' : '近期無重大警報',
             _disasterAlerts.isNotEmpty ? kOrange : kGreen)),
       const Spacer(),
-      Flexible(child: Text('上次同步：$_lastSyncText', style: const TextStyle(color: kTextSub, fontSize: 13), overflow: TextOverflow.ellipsis)),
+      Flexible(child: Text('上次同步：$_lastSyncText', style: const TextStyle(color: kTextSub, fontSize: 14), overflow: TextOverflow.ellipsis)),
       const SizedBox(width: 8),
       _pillBtn('即時監控中', kBlue),
     ]),
@@ -672,7 +672,7 @@ return Row(children: [
             child: Text(value, style: TextStyle(color: color, fontSize: 26, fontWeight: FontWeight.w800, height: 1.1)),
           ),
           const SizedBox(height: 3),
-          Text(label, style: const TextStyle(color: kTextSub, fontSize: 11), overflow: TextOverflow.ellipsis, maxLines: 1),
+          Text(label, style: const TextStyle(color: kTextSub, fontSize: 13), overflow: TextOverflow.ellipsis, maxLines: 1),
         ],
       )),
     );
@@ -681,21 +681,21 @@ return Row(children: [
   static Widget _statusDot(String text, Color color) => Row(children: [
     Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
     const SizedBox(width: 7),
-    Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)),
+    Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 14)),
   ]);
   static Widget _statusText(String text, Color color) => Padding(
     padding: const EdgeInsets.symmetric(horizontal: 10),
-    child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13),
+    child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 14),
         overflow: TextOverflow.ellipsis, maxLines: 1));
   static Widget _vline() => Container(width: 1, height: 20, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4));
   static Widget _pillBtn(String text, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
     decoration: BoxDecoration(color: color.withOpacity(.08), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(.18))),
-    child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)));
+    child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)));
   static Widget _statusChip(String text, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
     decoration: BoxDecoration(color: color.withOpacity(.08), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(.18))),
-    child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)));
+    child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 14)));
 }
 
 // ══════════════════════════════════════════════════════════
@@ -749,10 +749,10 @@ class _TacticalMapCardState extends State<_TacticalMapCard> with TickerProviderS
               Icon(a == widget.adminArea ? Icons.radio_button_checked : Icons.radio_button_off,
                   size: 16, color: a == widget.adminArea ? kBlue : kTextSub),
               const SizedBox(width: 8),
-              Text(a, style: const TextStyle(fontSize: 13)),
+              Text(a, style: const TextStyle(fontSize: 14)),
               if (a == widget.homeArea) ...[
                 const SizedBox(width: 6),
-                const Text('我的轄區', style: TextStyle(fontSize: 11, color: kTextSub)),
+                const Text('我的轄區', style: TextStyle(fontSize: 13, color: kTextSub)),
               ],
               const SizedBox(width: 16),
               const Spacer(),
@@ -760,7 +760,7 @@ class _TacticalMapCardState extends State<_TacticalMapCard> with TickerProviderS
               Builder(builder: (_) {
                 final n = alertsForArea(widget.alerts, a).length;
                 return n == 0
-                    ? const Text('無警報', style: TextStyle(fontSize: 11, color: kTextSub))
+                    ? const Text('無警報', style: TextStyle(fontSize: 13, color: kTextSub))
                     : _smallBadge('$n 則警報', kOrange);
               }),
             ]),
@@ -774,7 +774,7 @@ class _TacticalMapCardState extends State<_TacticalMapCard> with TickerProviderS
           border: Border.all(color: kBlue.withOpacity(.25)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text(widget.adminArea, style: const TextStyle(color: kBlue, fontSize: 12, fontWeight: FontWeight.w700)),
+          Text(widget.adminArea, style: const TextStyle(color: kBlue, fontSize: 13, fontWeight: FontWeight.w700)),
           const Icon(Icons.arrow_drop_down_rounded, size: 18, color: kBlue),
         ]),
       ),
@@ -800,7 +800,7 @@ class _TacticalMapCardState extends State<_TacticalMapCard> with TickerProviderS
               _areaPicker(),
               const SizedBox(width: 6),
               const Flexible(child: Text('氣象署災害警報', overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: kTextSub, fontSize: 12))),
+                  style: TextStyle(color: kTextSub, fontSize: 13))),
             ]),
           ])),
           if (!_isHome) ...[
@@ -808,7 +808,7 @@ class _TacticalMapCardState extends State<_TacticalMapCard> with TickerProviderS
               onPressed: () => widget.onAreaChanged(widget.homeArea),
               style: TextButton.styleFrom(visualDensity: VisualDensity.compact, foregroundColor: kBlue),
               icon: const Icon(Icons.my_location_rounded, size: 14),
-              label: const Text('回到轄區', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              label: const Text('回到轄區', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
             ),
             const SizedBox(width: 4),
           ],
@@ -831,7 +831,7 @@ class _TacticalMapCardState extends State<_TacticalMapCard> with TickerProviderS
             for (final an in alertNodes) _buildAlertNode(an, w, h),
             Positioned(left: 18, bottom: 18, child: _RadarLegend(hasAlerts: viewAlerts.isNotEmpty)),
             Positioned(right: 14, bottom: 18,
-                child: Text('點擊節點查看詳情', style: TextStyle(color: kTextSub.withOpacity(.6), fontSize: 11))),
+                child: Text('點擊節點查看詳情', style: TextStyle(color: kTextSub.withOpacity(.6), fontSize: 13))),
           ]);
         }),
       )),
@@ -847,9 +847,9 @@ class _TacticalMapCardState extends State<_TacticalMapCard> with TickerProviderS
           boxShadow: [BoxShadow(color: kBlue.withOpacity(.18), blurRadius: 18, spreadRadius: 2)]),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: kBlue, fontSize: 13, fontWeight: FontWeight.w900)),
+            style: const TextStyle(color: kBlue, fontSize: 14, fontWeight: FontWeight.w900)),
         const SizedBox(height: 2),
-        Text(_isHome ? '指揮區' : '觀察中', style: const TextStyle(color: kTextSub, fontSize: 10)),
+        Text(_isHome ? '指揮區' : '觀察中', style: const TextStyle(color: kTextSub, fontSize: 12)),
       ]),
     );
   }
@@ -872,7 +872,7 @@ class _TacticalMapCardState extends State<_TacticalMapCard> with TickerProviderS
                   Icon(_typeIcon(an.alert.type), color: color, size: 10),
                   const SizedBox(width: 4),
                   Text(an.alert.title.length > 8 ? '${an.alert.title.substring(0,8)}…' : an.alert.title,
-                      style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w800)),
+                      style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w800)),
                 ]),
               ),
               const SizedBox(height: 4),
@@ -914,7 +914,7 @@ class _RadarMapPainter extends CustomPainter {
     canvas.drawLine(center, end, Paint()..color = armColor..strokeWidth = 2.4..strokeCap = StrokeCap.round);
     final glow = Offset(center.dx + maxR * .72 * Math.cos(angle), center.dy + maxR * .72 * Math.sin(angle));
     canvas.drawCircle(glow, 4, Paint()..color = armColor.withOpacity(.80));
-    final ns = TextStyle(color: kBlue.withOpacity(.35), fontSize: 10, fontWeight: FontWeight.w700);
+    final ns = TextStyle(color: kBlue.withOpacity(.35), fontSize: 12, fontWeight: FontWeight.w700);
     void dn(String t, Offset o) => (TextPainter(text: TextSpan(text: t, style: ns), textDirection: TextDirection.ltr)..layout()).paint(canvas, o);
     dn('1', Offset(center.dx + maxR*.34, center.dy - maxR*.34));
     dn('2', Offset(center.dx + maxR*.62, center.dy - maxR*.62));
@@ -935,14 +935,14 @@ class _RadarLegend extends StatelessWidget {
     width: 130, padding: const EdgeInsets.all(10),
     decoration: BoxDecoration(color: Colors.white.withOpacity(.94), borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-      const Text('圖例', style: TextStyle(color: kTextSub, fontSize: 9, fontWeight: FontWeight.w800)),
+      const Text('圖例', style: TextStyle(color: kTextSub, fontSize: 10, fontWeight: FontWeight.w800)),
       const SizedBox(height: 6),
       if (hasAlerts) ...[
         const Divider(height: 10, color: kBorder),
         const _MiniLegend(color: kRed,    text: '地震警報', isAlert: true),
         const _MiniLegend(color: kOrange, text: '颱風警報', isAlert: true),
         const _MiniLegend(color: kBlue,   text: '水災警報', isAlert: true),
-      ] else const Text('目前轄區無警報', style: TextStyle(color: kTextSub, fontSize: 10)),
+      ] else const Text('目前轄區無警報', style: TextStyle(color: kTextSub, fontSize: 12)),
     ]),
   );
 }
@@ -958,7 +958,7 @@ class _MiniLegend extends StatelessWidget {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle,
               border: isAlert ? Border.all(color: color.withOpacity(.4), width: 2) : null)),
       const SizedBox(width: 6),
-      Text(text, style: const TextStyle(color: kTextSub, fontSize: 10)),
+      Text(text, style: const TextStyle(color: kTextSub, fontSize: 12)),
     ]),
   );
 }
@@ -1028,7 +1028,7 @@ class _GpsEmergencyMapCard extends StatelessWidget {
                 style: const TextStyle(color: kTextMain, fontSize: 16, fontWeight: FontWeight.w800),
                 overflow: TextOverflow.ellipsis, maxLines: 1),
             const SizedBox(height: 3),
-            const Text('只顯示未處理 SOS 求救位置', style: TextStyle(color: kTextSub, fontSize: 12),
+            const Text('只顯示未處理 SOS 求救位置', style: TextStyle(color: kTextSub, fontSize: 13),
                 overflow: TextOverflow.ellipsis, maxLines: 1),
           ])),
           sosOnly.isEmpty ? _smallBadge('目前无 SOS', kGreen) : _SosPendingBadge(count: sosOnly.length),
@@ -1141,7 +1141,7 @@ class _GpsMapCanvasState extends State<_GpsMapCanvas> {
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             const Icon(Icons.my_location_rounded, color: kBlue, size: 14),
             const SizedBox(width: 5),
-            Text(widget.bounds.label, style: const TextStyle(color: kTextMain, fontSize: 12, fontWeight: FontWeight.w800)),
+            Text(widget.bounds.label, style: const TextStyle(color: kTextMain, fontSize: 13, fontWeight: FontWeight.w800)),
           ]),
         )),
 
@@ -1193,7 +1193,7 @@ class _SosMarkerWidgetState extends State<_SosMarkerWidget> with SingleTickerPro
           decoration: BoxDecoration(color: kRed, shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 2.5),
               boxShadow: [BoxShadow(color: kRed.withOpacity(.50), blurRadius: 10, spreadRadius: 2)]),
-          child: const Center(child: Text('SOS', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: .5)))),
+          child: const Center(child: Text('SOS', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900, letterSpacing: .5)))),
     ])),
     CustomPaint(size: const Size(12, 6), painter: _TrianglePainter(kRed)),
   ]);
@@ -1238,7 +1238,7 @@ class _SosPendingBadgeState extends State<_SosPendingBadge> with SingleTickerPro
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           Container(width: 7, height: 7, decoration: const BoxDecoration(color: kRed, shape: BoxShape.circle)),
           const SizedBox(width: 5),
-          Text('求救中 ${widget.count}', style: const TextStyle(color: kRed, fontSize: 12, fontWeight: FontWeight.w800)),
+          Text('求救中 ${widget.count}', style: const TextStyle(color: kRed, fontSize: 13, fontWeight: FontWeight.w800)),
         ]),
       )),
   );
@@ -1277,19 +1277,19 @@ class _SosEventList extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(children: [
     Padding(padding: const EdgeInsets.fromLTRB(14,14,14,8), child: Row(children: [
-      const Expanded(child: Text('轄區 SOS 清單', style: TextStyle(color: kTextMain, fontSize: 14, fontWeight: FontWeight.w800))),
+      const Expanded(child: Text('轄區 SOS 清單', style: TextStyle(color: kTextMain, fontSize: 15, fontWeight: FontWeight.w800))),
       if (events.isNotEmpty)
         Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
             decoration: BoxDecoration(color: kRed.withOpacity(.10), borderRadius: BorderRadius.circular(20), border: Border.all(color: kRed.withOpacity(.25))),
-            child: Text('${events.length} 件待處理', style: const TextStyle(color: kRed, fontSize: 11, fontWeight: FontWeight.w800))),
+            child: Text('${events.length} 件待處理', style: const TextStyle(color: kRed, fontSize: 13, fontWeight: FontWeight.w800))),
     ])),
     Expanded(child: events.isEmpty
         ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
             const Icon(Icons.check_circle_outline, color: kGreen, size: 32),
             const SizedBox(height: 8),
-            const Text('目前無待處理 SOS', style: TextStyle(color: kGreen, fontSize: 13, fontWeight: FontWeight.w700)),
+            const Text('目前無待處理 SOS', style: TextStyle(color: kGreen, fontSize: 14, fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
-            const Text('轄區平安', style: TextStyle(color: kTextSub, fontSize: 12)),
+            const Text('轄區平安', style: TextStyle(color: kTextSub, fontSize: 13)),
           ]))
         : ListView.separated(
             padding: const EdgeInsets.fromLTRB(12,0,12,8),
@@ -1306,17 +1306,17 @@ class _SosEventList extends StatelessWidget {
                   const SizedBox(width: 9),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: kTextMain, fontSize: 13, fontWeight: FontWeight.w800)),
+                        style: const TextStyle(color: kTextMain, fontSize: 14, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 2),
-                    Text(e.status, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kTextSub, fontSize: 11)),
+                    Text(e.status, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kTextSub, fontSize: 13)),
                   ])),
                   Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
-                    Text(_relativeTime(e.sentAt), style: const TextStyle(color: kTextSub, fontSize: 10),
+                    Text(_relativeTime(e.sentAt), style: const TextStyle(color: kTextSub, fontSize: 12),
                         overflow: TextOverflow.ellipsis, maxLines: 1),
                     const SizedBox(height: 4),
                     Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                         decoration: BoxDecoration(color: kOrange.withValues(alpha: .10), borderRadius: BorderRadius.circular(4)),
-                        child: const Text('處理中', style: TextStyle(color: kOrange, fontSize: 9, fontWeight: FontWeight.w700))),
+                        child: const Text('處理中', style: TextStyle(color: kOrange, fontSize: 10, fontWeight: FontWeight.w700))),
                   ]),
                 ]));
             })),
@@ -1324,7 +1324,7 @@ class _SosEventList extends StatelessWidget {
       borderRadius: BorderRadius.circular(8), onTap: onViewAll,
       child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 9),
           decoration: BoxDecoration(color: kBlue.withOpacity(.06), borderRadius: BorderRadius.circular(8), border: Border.all(color: kBlue.withOpacity(.16))),
-          child: const Center(child: Text('查看全部緊急事件 →', style: TextStyle(color: kBlue, fontSize: 12, fontWeight: FontWeight.w800)))))),
+          child: const Center(child: Text('查看全部緊急事件 →', style: TextStyle(color: kBlue, fontSize: 13, fontWeight: FontWeight.w800)))))),
   ]);
 }
 
@@ -1365,7 +1365,7 @@ class _AlertDetailDialog extends StatelessWidget {
           const SizedBox(height: 16),
           Container(width: double.infinity, padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: kCardBg2, borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
-              child: const Text('資料來源：中央氣象署開放資料平台', style: TextStyle(color: kTextSub, fontSize: 12))),
+              child: const Text('資料來源：中央氣象署開放資料平台', style: TextStyle(color: kTextSub, fontSize: 13))),
         ])),
       ]),
     ));
@@ -1375,9 +1375,9 @@ class _AlertDetailDialog extends StatelessWidget {
       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Icon(icon, color: kTextSub, size: 18), const SizedBox(width: 10),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label, style: const TextStyle(color: kTextSub, fontSize: 12)),
+          Text(label, style: const TextStyle(color: kTextSub, fontSize: 13)),
           const SizedBox(height: 3),
-          Text(value, style: const TextStyle(color: kTextMain, fontSize: 13, fontWeight: FontWeight.w600)),
+          Text(value, style: const TextStyle(color: kTextMain, fontSize: 14, fontWeight: FontWeight.w600)),
         ])),
       ]);
 }
@@ -1444,7 +1444,7 @@ class _EventListCard extends StatelessWidget {
         const SizedBox(height: 10),
         const Text('目前轄區平安', style: TextStyle(color: kGreen, fontWeight: FontWeight.w700, fontSize: 15)),
         const SizedBox(height: 4),
-        const Text('近 30 天內沒有重大通報', style: TextStyle(color: kTextSub, fontSize: 13)),
+        const Text('近 30 天內沒有重大通報', style: TextStyle(color: kTextSub, fontSize: 14)),
       ])))
     else
       Expanded(child: ListView.separated(
@@ -1465,10 +1465,10 @@ class _EventListCard extends StatelessWidget {
               child: Icon(_typeIcon(alert.type), color: color, size: 19)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(alert.title, style: const TextStyle(color: kTextMain, fontWeight: FontWeight.w800, fontSize: 14)),
+            Text(alert.title, style: const TextStyle(color: kTextMain, fontWeight: FontWeight.w800, fontSize: 15)),
             const SizedBox(height: 4),
             Text('${alert.location} · ${_formatTime(alert.time)}', maxLines: 1, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: kTextSub, fontSize: 12)),
+                style: const TextStyle(color: kTextSub, fontSize: 13)),
           ])),
           _smallBadge(alert.severity, color),
         ])),
@@ -1490,7 +1490,7 @@ class _TimelineCard extends StatelessWidget {
     const Row(children: [
       Icon(Icons.timeline_rounded, color: kTextMain, size: 18), SizedBox(width: 7),
       Expanded(child: Text('事件時間轴', style: TextStyle(color: kTextMain, fontSize: 16, fontWeight: FontWeight.w800))),
-      Text('最近 30 天', style: TextStyle(color: kTextSub, fontSize: 12)),
+      Text('最近 30 天', style: TextStyle(color: kTextSub, fontSize: 13)),
     ]),
     const SizedBox(height: 14),
     if (events.isEmpty)
@@ -1507,11 +1507,11 @@ class _TimelineCard extends StatelessWidget {
             ]),
             const SizedBox(width: 12),
             Expanded(child: Padding(padding: const EdgeInsets.only(bottom: 15), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(e.title, style: const TextStyle(color: kTextMain, fontWeight: FontWeight.w800, fontSize: 14)),
+              Text(e.title, style: const TextStyle(color: kTextMain, fontWeight: FontWeight.w800, fontSize: 15)),
               const SizedBox(height: 4),
-              Text(e.subtitle, style: const TextStyle(color: kTextSub, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(e.subtitle, style: const TextStyle(color: kTextSub, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
               const SizedBox(height: 4),
-              Text(_relativeTime(e.time), style: const TextStyle(color: kTextSub, fontSize: 11)),
+              Text(_relativeTime(e.time), style: const TextStyle(color: kTextSub, fontSize: 13)),
             ]))),
           ]),
         );
@@ -1531,7 +1531,7 @@ Widget _card({required Widget child, EdgeInsetsGeometry padding = const EdgeInse
 Widget _smallBadge(String text, Color color) => Container(
   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
   decoration: BoxDecoration(color: color.withOpacity(.08), borderRadius: BorderRadius.circular(999), border: Border.all(color: color.withOpacity(.16))),
-  child: Text(text, style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800)));
+  child: Text(text, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w800)));
 
 Color _typeColor(DisasterType type) {
   switch (type) {

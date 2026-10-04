@@ -25,7 +25,7 @@ const Color _kOrange   = Color(0xFFEC6C2D);   // 重傷
 const Color _kRed      = Color(0xFFDC2626);
 const Color _kYellow   = Color(0xFFD3CA43);   // 輕傷（落日黃）
 const Color _kTextMain = Color(0xFF0F172A);
-const Color _kTextSub  = Color(0xFF64748B);
+const Color _kTextSub  = Color(0xFF475569);
 
 const String _baseUrl = ApiConfig.baseUrl;
 
@@ -122,7 +122,7 @@ class _CitizenPageState extends State<CitizenPage>
                   Text('CITIZEN MANAGEMENT CENTER',
                       style: TextStyle(
                           color: _kTextSub,
-                          fontSize: 11,
+                          fontSize: 13,
                           letterSpacing: 1.3)),
                 ]),
                 const SizedBox(width: 12),
@@ -152,9 +152,9 @@ class _CitizenPageState extends State<CitizenPage>
                   labelColor: _kBlue,
                   unselectedLabelColor: _kTextSub,
                   labelStyle: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w700),
+                      fontSize: 14, fontWeight: FontWeight.w700),
                   unselectedLabelStyle: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w500),
+                      fontSize: 14, fontWeight: FontWeight.w500),
                   tabs: const [
                     Tab(text: '全部'),
                     Tab(text: 'SOS'),
@@ -193,7 +193,7 @@ class _CitizenPageState extends State<CitizenPage>
         child: Text(text,
             style: TextStyle(
                 color: color,
-                fontSize: 10,
+                fontSize: 12,
                 fontWeight: FontWeight.w700)),
       );
 }
@@ -475,7 +475,7 @@ class _TotalTabState extends State<_TotalTab> {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(val, style: TextStyle(color: sel ? color : _kTextMain, fontSize: 20, fontWeight: FontWeight.w800, height: 1.1)),
-                Text(label, style: const TextStyle(color: _kTextSub, fontSize: 11)),
+                Text(label, style: const TextStyle(color: _kTextSub, fontSize: 13)),
               ]),
             ),
             if (sel) Icon(Icons.check_circle_rounded, color: color, size: 14),
@@ -642,7 +642,7 @@ class _TotalTabState extends State<_TotalTab> {
         const SizedBox(width: 5),
         Text(label,
             style: const TextStyle(
-                fontSize: 10,
+                fontSize: 12,
                 color: _kTextMain,
                 fontWeight: FontWeight.w500)),
       ]),
@@ -703,10 +703,10 @@ class _TotalTabState extends State<_TotalTab> {
             const Icon(Icons.people_alt_outlined, color: _kTextMain, size: 16),
             const SizedBox(width: 6),
             const Text('災民列表',
-                style: TextStyle(color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w700)),
+                style: TextStyle(color: _kTextMain, fontSize: 15, fontWeight: FontWeight.w700)),
             const Spacer(),
             Text('共 ${citizens.length} 人',
-                style: const TextStyle(color: _kTextSub, fontSize: 11)),
+                style: const TextStyle(color: _kTextSub, fontSize: 13)),
             const SizedBox(width: 10),
             _iconBtn(Icons.refresh_rounded, _kBlue, vm.loadCitizens),
           ]),
@@ -759,19 +759,19 @@ class _TotalTabState extends State<_TotalTab> {
               child: const Icon(Icons.inventory_2_outlined, color: _kBlue, size: 15),
             ),
             const SizedBox(width: 10),
-            const Text('物資需求', style: TextStyle(color: _kBlue, fontSize: 14, fontWeight: FontWeight.w700)),
+            const Text('物資需求', style: TextStyle(color: _kBlue, fontSize: 15, fontWeight: FontWeight.w700)),
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(color: _kBlue.withValues(alpha: .12), borderRadius: BorderRadius.circular(99)),
-              child: Text('${entries.length}', style: const TextStyle(color: _kBlue, fontSize: 12, fontWeight: FontWeight.w700)),
+              child: Text('${entries.length}', style: const TextStyle(color: _kBlue, fontSize: 13, fontWeight: FontWeight.w700)),
             ),
           ]),
         ),
         if (entries.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-            child: Text('目前無物資需求人員', style: TextStyle(color: _kTextSub, fontSize: 12)),
+            child: Text('目前無物資需求人員', style: TextStyle(color: _kTextSub, fontSize: 13)),
           )
         else
           for (int i = 0; i < entries.length; i++) ...[
@@ -790,15 +790,15 @@ class _TotalTabState extends State<_TotalTab> {
                   decoration: BoxDecoration(color: _kBlue.withValues(alpha: .10), borderRadius: BorderRadius.circular(10)),
                   child: Center(child: Text(
                     entries[i].key.isNotEmpty ? entries[i].key[0].toUpperCase() : '?',
-                    style: const TextStyle(color: _kBlue, fontSize: 13, fontWeight: FontWeight.w700),
+                    style: const TextStyle(color: _kBlue, fontSize: 14, fontWeight: FontWeight.w700),
                   )),
                 ),
                 const SizedBox(width: 12),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(entries[i].key, style: const TextStyle(color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w600)),
+                  Text(entries[i].key, style: const TextStyle(color: _kTextMain, fontSize: 15, fontWeight: FontWeight.w600)),
                   Text(
                     entries[i].value.map((r) => '${r['itemName'] ?? '物資'}×${r['qty']}${r['unit'] ?? ''}').join('、'),
-                    style: const TextStyle(color: _kTextSub, fontSize: 11),
+                    style: const TextStyle(color: _kTextSub, fontSize: 13),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -842,12 +842,12 @@ class _TotalTabState extends State<_TotalTab> {
               child: Icon(icon, color: color, size: 15),
             ),
             const SizedBox(width: 10),
-            Text(label, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700)),
+            Text(label, style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.w700)),
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(color: color.withValues(alpha: .12), borderRadius: BorderRadius.circular(99)),
-              child: Text('${group.length}', style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+              child: Text('${group.length}', style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
             ),
           ]),
         ),
@@ -855,7 +855,7 @@ class _TotalTabState extends State<_TotalTab> {
         if (group.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-            child: Text('目前無$label人員', style: const TextStyle(color: _kTextSub, fontSize: 12)),
+            child: Text('目前無$label人員', style: const TextStyle(color: _kTextSub, fontSize: 13)),
           )
         else
           for (int i = 0; i < group.length; i++) ...[
@@ -882,8 +882,8 @@ class _TotalTabState extends State<_TotalTab> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(group[i].name, style: const TextStyle(color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w600)),
-                  Text(group[i].id, style: const TextStyle(color: _kTextSub, fontSize: 11)),
+                  Text(group[i].name, style: const TextStyle(color: _kTextMain, fontSize: 15, fontWeight: FontWeight.w600)),
+                  Text(group[i].id, style: const TextStyle(color: _kTextSub, fontSize: 13)),
                 ])),
               ]),
             ),
@@ -917,7 +917,7 @@ class _TotalTabState extends State<_TotalTab> {
             child: Icon(icon, color: color, size: 14),
           ),
           const SizedBox(width: 8),
-          Text(label, style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
+          Text(label, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700)),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -926,7 +926,7 @@ class _TotalTabState extends State<_TotalTab> {
               borderRadius: BorderRadius.circular(99),
             ),
             child: Text('${group.length}',
-                style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w700)),
+                style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w700)),
           ),
         ]),
       ));
@@ -935,7 +935,7 @@ class _TotalTabState extends State<_TotalTab> {
         items.add(Padding(
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
           child: Text('目前無$label人員',
-              style: const TextStyle(color: _kTextSub, fontSize: 12)),
+              style: const TextStyle(color: _kTextSub, fontSize: 13)),
         ));
       } else {
         for (int i = 0; i < group.length; i++) {
@@ -971,8 +971,8 @@ class _TotalTabState extends State<_TotalTab> {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(c.name,
-                      style: const TextStyle(color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w600)),
-                  Text(c.id, style: const TextStyle(color: _kTextSub, fontSize: 11)),
+                      style: const TextStyle(color: _kTextMain, fontSize: 15, fontWeight: FontWeight.w600)),
+                  Text(c.id, style: const TextStyle(color: _kTextSub, fontSize: 13)),
                 ]),
               ),
               const SizedBox(width: 8),
@@ -1060,13 +1060,13 @@ class _TotalTabState extends State<_TotalTab> {
                         const SizedBox(width: 4),
                         Text(label,
                             style: TextStyle(color: color,
-                                fontSize: 11, fontWeight: FontWeight.w700)),
+                                fontSize: 13, fontWeight: FontWeight.w700)),
                       ]),
                     ),
                     const SizedBox(width: 8),
                     Text('ID：${c.id}',
                         style: const TextStyle(
-                            color: _kTextSub, fontSize: 12)),
+                            color: _kTextSub, fontSize: 13)),
                   ]),
                 ])),
                 IconButton(
@@ -1133,7 +1133,7 @@ class _TotalTabState extends State<_TotalTab> {
                       child: Center(
                         child: Text('此用戶尚無詳細資料',
                             style: TextStyle(
-                                color: _kTextSub, fontSize: 13)),
+                                color: _kTextSub, fontSize: 14)),
                       ),
                     ),
                 ]),
@@ -1207,7 +1207,7 @@ class _SosTabState extends State<_SosTab> {
         content: Text(
             '確定將「${e.userName.isNotEmpty ? e.userName : e.userId}」的求救事件標記為已處理？',
             style: const TextStyle(
-                color: _kTextSub, fontSize: 14)),
+                color: _kTextSub, fontSize: 15)),
         actionsPadding:
             const EdgeInsets.fromLTRB(12, 0, 12, 12),
         actions: [
@@ -1328,7 +1328,7 @@ class _SosTabState extends State<_SosTab> {
                       fontWeight: FontWeight.w800,
                       height: 1.1)),
               Text(label,
-                  style: const TextStyle(color: _kTextSub, fontSize: 11)),
+                  style: const TextStyle(color: _kTextSub, fontSize: 13)),
             ]),
           ]),
         ),
@@ -1377,12 +1377,12 @@ class _SosTabState extends State<_SosTab> {
             const Text('SOS 列表',
                 style: TextStyle(
                     color: _kTextMain,
-                    fontSize: 14,
+                    fontSize: 15,
                     fontWeight: FontWeight.w700)),
             const Spacer(),
             Text('共 ${filtered.length} 筆',
                 style: const TextStyle(
-                    color: _kTextSub, fontSize: 11)),
+                    color: _kTextSub, fontSize: 13)),
           ]),
         ),
         Expanded(
@@ -1447,7 +1447,7 @@ class _SosTabState extends State<_SosTab> {
               Text(displayName,
                   style: const TextStyle(
                       color: _kTextMain,
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: FontWeight.w700)),
               const SizedBox(width: 8),
               _statusDot(isHandled),
@@ -1465,7 +1465,7 @@ class _SosTabState extends State<_SosTab> {
                   child: const Text('逾時未處理',
                       style: TextStyle(
                           color: _kRed,
-                          fontSize: 10,
+                          fontSize: 12,
                           fontWeight: FontWeight.w700)),
                 ),
               ],
@@ -1478,7 +1478,7 @@ class _SosTabState extends State<_SosTab> {
                 const SizedBox(width: 4),
                 Text(e.phone,
                     style: const TextStyle(
-                        color: _kTextSub, fontSize: 12)),
+                        color: _kTextSub, fontSize: 13)),
               ]),
             const SizedBox(height: 5),
             Row(children: [
@@ -1489,14 +1489,14 @@ class _SosTabState extends State<_SosTab> {
               Text(_fullTime(e.sentAt),
                   style: TextStyle(
                       color: isOverdue ? _kRed : _kTextSub,
-                      fontSize: 12,
+                      fontSize: 13,
                       fontWeight: isOverdue
                           ? FontWeight.w600
                           : FontWeight.w400)),
               const SizedBox(width: 6),
               Text('（${_relativeTime(e.sentAt)}）',
                   style: const TextStyle(
-                      color: _kTextSub, fontSize: 11)),
+                      color: _kTextSub, fontSize: 13)),
             ]),
             const SizedBox(height: 5),
             Row(children: [
@@ -1505,7 +1505,7 @@ class _SosTabState extends State<_SosTab> {
               Expanded(
                 child: Text(
                   e.address?.isNotEmpty == true ? e.address! : '位置未提供',
-                  style: const TextStyle(color: _kTextSub, fontSize: 12),
+                  style: const TextStyle(color: _kTextSub, fontSize: 13),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1524,7 +1524,7 @@ class _SosTabState extends State<_SosTab> {
                     child: const Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(Icons.map_outlined, color: _kBlue, size: 11),
                       SizedBox(width: 3),
-                      Text('地圖', style: TextStyle(color: _kBlue, fontSize: 10, fontWeight: FontWeight.w600)),
+                      Text('地圖', style: TextStyle(color: _kBlue, fontSize: 12, fontWeight: FontWeight.w600)),
                     ]),
                   ),
                 ),
@@ -1565,7 +1565,7 @@ class _SosTabState extends State<_SosTab> {
                     Text('標記已處理',
                         style: TextStyle(
                             color: isOverdue ? _kRed : _kGreen,
-                            fontSize: 12,
+                            fontSize: 13,
                             fontWeight: FontWeight.w700)),
                   ]),
                 ),
@@ -1642,13 +1642,13 @@ class _SosTabState extends State<_SosTab> {
                         const SizedBox(width: 4),
                         Text(statusText,
                             style: TextStyle(color: color,
-                                fontSize: 11, fontWeight: FontWeight.w700)),
+                                fontSize: 13, fontWeight: FontWeight.w700)),
                       ]),
                     ),
                     const SizedBox(width: 8),
                     Text('ID：${e.userId}',
                         style: const TextStyle(
-                            color: _kTextSub, fontSize: 12)),
+                            color: _kTextSub, fontSize: 13)),
                   ]),
                 ])),
                 IconButton(
@@ -1717,7 +1717,7 @@ class _SosTabState extends State<_SosTab> {
                             Text('打開地圖',
                                 style: TextStyle(
                                     color: _kBlue,
-                                    fontSize: 13,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w600)),
                           ]),
                         ),
@@ -1746,7 +1746,7 @@ class _SosTabState extends State<_SosTab> {
       Text(text,
           style: TextStyle(
               color: color,
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: FontWeight.w600)),
     ]);
   }
@@ -1870,10 +1870,10 @@ class _SupplyTabState extends State<_SupplyTab> {
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(itemName,
-                style: const TextStyle(color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w700)),
+                style: const TextStyle(color: _kTextMain, fontSize: 15, fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text('申請人：$userName・數量：$qty $unit',
-                style: const TextStyle(color: _kTextSub, fontSize: 12)),
+                style: const TextStyle(color: _kTextSub, fontSize: 13)),
           ]),
         ),
         Container(
@@ -1883,7 +1883,7 @@ class _SupplyTabState extends State<_SupplyTab> {
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: _kOrange.withValues(alpha: .2)),
           ),
-          child: Text('#$reqId', style: const TextStyle(color: _kOrange, fontSize: 11, fontWeight: FontWeight.w700)),
+          child: Text('#$reqId', style: const TextStyle(color: _kOrange, fontSize: 13, fontWeight: FontWeight.w700)),
         ),
       ]),
     );
@@ -1925,11 +1925,11 @@ Widget _dialogInfoRow(String label, String value) {
       SizedBox(
         width: 78,
         child: Text(label,
-            style: const TextStyle(color: _kTextSub, fontSize: 12, fontWeight: FontWeight.w500)),
+            style: const TextStyle(color: _kTextSub, fontSize: 13, fontWeight: FontWeight.w500)),
       ),
       Expanded(
         child: Text(value.isEmpty ? '未填寫' : value,
-            style: const TextStyle(color: _kTextMain, fontSize: 13, fontWeight: FontWeight.w600)),
+            style: const TextStyle(color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w600)),
       ),
     ]),
   );
@@ -1946,7 +1946,7 @@ Widget _dialogSectionHeader(String label) {
       const SizedBox(width: 7),
       Text(label,
           style: const TextStyle(
-              color: _kTextMain, fontSize: 13, fontWeight: FontWeight.w700)),
+              color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w700)),
     ]),
   );
 }
@@ -1966,7 +1966,7 @@ Widget _detailButton(Color color, VoidCallback onTap) {
         const SizedBox(width: 4),
         Text('詳情',
             style: TextStyle(
-                color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+                color: color, fontSize: 13, fontWeight: FontWeight.w600)),
       ]),
     ),
   );
@@ -2028,7 +2028,7 @@ class _AddressWidgetState extends State<_AddressWidget> {
                 color: _loaded
                     ? _kTextSub
                     : _kBlue.withValues(alpha: .5),
-                fontSize: 12),
+                fontSize: 13),
             maxLines: 1,
             overflow: TextOverflow.ellipsis),
       ),
@@ -2053,7 +2053,7 @@ class _AddressWidgetState extends State<_AddressWidget> {
             Text('地圖',
                 style: TextStyle(
                     color: _kBlue,
-                    fontSize: 10,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600)),
           ]),
         ),

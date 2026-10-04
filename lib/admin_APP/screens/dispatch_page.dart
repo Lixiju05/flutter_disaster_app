@@ -76,7 +76,7 @@ class _DispatchPageState extends State<DispatchPage> {
                         color: titleColor)),
                 SizedBox(height: 4),
                 Text('Dispatch History',
-                    style: TextStyle(fontSize: 13, color: textSoft)),
+                    style: TextStyle(fontSize: 14, color: textSoft)),
               ],
             ),
           ),
@@ -141,11 +141,11 @@ class _DispatchPageState extends State<DispatchPage> {
                 Text(
                     '目標：${item.zoneId}　數量：${item.qty} ${item.unit}',
                     style:
-                        const TextStyle(color: textSoft, fontSize: 13)),
+                        const TextStyle(color: textSoft, fontSize: 14)),
                 if (item.dispatchedAt.isNotEmpty)
                   Text('出貨時間：${item.dispatchedAt}',
                       style:
-                          const TextStyle(color: textSoft, fontSize: 12)),
+                          const TextStyle(color: textSoft, fontSize: 13)),
               ],
             ),
           ),
@@ -160,7 +160,7 @@ class _DispatchPageState extends State<DispatchPage> {
                 style: TextStyle(
                     color: Color(0xFF2E7D32),
                     fontWeight: FontWeight.bold,
-                    fontSize: 13)),
+                    fontSize: 14)),
           ),
         ],
       ),

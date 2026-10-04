@@ -175,7 +175,7 @@ class _AllocationPageState extends State<AllocationPage> {
                         color: titleColor)),
                 SizedBox(height: 4),
                 Text('Allocation Management',
-                    style: TextStyle(fontSize: 13, color: textSoft)),
+                    style: TextStyle(fontSize: 14, color: textSoft)),
               ],
             ),
           ),
@@ -281,11 +281,11 @@ class _AllocationPageState extends State<AllocationPage> {
                 Text(
                     '目標：${item.zoneId}　數量：${item.qty} ${item.unit}',
                     style:
-                        const TextStyle(color: textSoft, fontSize: 13)),
+                        const TextStyle(color: textSoft, fontSize: 14)),
                 if (item.createdAt.isNotEmpty)
                   Text('建立時間：${item.createdAt}',
                       style:
-                          const TextStyle(color: textSoft, fontSize: 12)),
+                          const TextStyle(color: textSoft, fontSize: 13)),
               ],
             ),
           ),

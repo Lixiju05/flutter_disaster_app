@@ -122,7 +122,7 @@ class FullMapPage extends StatelessWidget {
                           '$subtitle｜${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}',
                           style: const TextStyle(
                             color: Color(0xFF7E91A6),
-                            fontSize: 12,
+                            fontSize: 13,
                           ),
                         ),
                       ],

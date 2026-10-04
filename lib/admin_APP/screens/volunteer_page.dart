@@ -38,9 +38,9 @@ const Color _kGreen    = Color(0xFF16A34A);
 const Color _kOrange   = Color(0xFFF59E0B);
 const Color _kRed      = Color(0xFFDC2626);
 const Color _kTextMain = Color(0xFF0F172A);
-const Color _kTextSub  = Color(0xFF64748B);
+const Color _kTextSub  = Color(0xFF475569);
 const Color _kSidebarBg      = Color(0xFF1E3A5F);
-const Color _kSidebarTextSub = Color(0xFF7FA8CC);
+const Color _kSidebarTextSub = Color(0xFFB4CDE6);
 
 class _VolunteerView extends StatelessWidget {
   const _VolunteerView();
@@ -127,7 +127,7 @@ class _VolunteerView extends StatelessWidget {
             Text('VOLUNTEER',
                 style: TextStyle(
                     color: _kSidebarTextSub,
-                    fontSize: 10,
+                    fontSize: 12,
                     letterSpacing: 1.1)),
           ]),
         ),
@@ -157,7 +157,7 @@ class _VolunteerView extends StatelessWidget {
             Row(children: [
               const Text('VOLUNTEER DELIVERY TASKS',
                   style: TextStyle(
-                      color: _kTextSub, fontSize: 10, letterSpacing: 1.3)),
+                      color: _kTextSub, fontSize: 12, letterSpacing: 1.3)),
               const SizedBox(width: 8),
               _tag('即時同步', _kGreen),
             ]),
@@ -197,12 +197,12 @@ class _VolunteerView extends StatelessWidget {
                   Text(vm.stationName,
                       style: const TextStyle(
                           color: _kTextMain,
-                          fontSize: 14,
+                          fontSize: 15,
                           fontWeight: FontWeight.w700)),
                   const SizedBox(height: 2),
                   Text('義工 ${vm.volunteerId}',
                       style: const TextStyle(
-                          color: _kTextSub, fontSize: 11)),
+                          color: _kTextSub, fontSize: 13)),
                 ]),
           ),
           _stat('${vm.requests.length}', '待認領', _kOrange),
@@ -222,7 +222,7 @@ class _VolunteerView extends StatelessWidget {
       Text(value,
           style: TextStyle(
               color: color, fontSize: 18, fontWeight: FontWeight.w800)),
-      Text(label, style: const TextStyle(color: _kTextSub, fontSize: 10)),
+      Text(label, style: const TextStyle(color: _kTextSub, fontSize: 12)),
     ]);
   }
 
@@ -248,9 +248,9 @@ class _VolunteerView extends StatelessWidget {
           labelColor: _kBlue,
           unselectedLabelColor: _kTextSub,
           labelStyle:
-              const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
           unselectedLabelStyle:
-              const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
           tabs: [
             Tab(text: '待認領 (${vm.requests.length})'),
             Tab(text: '我已認領 (${vm.myClaimed.length})'),
@@ -295,7 +295,7 @@ class _TaskList extends StatelessWidget {
                     child: Center(
                       child: Text(emptyText,
                           style: const TextStyle(
-                              color: _kTextSub, fontSize: 13)),
+                              color: _kTextSub, fontSize: 14)),
                     ),
                   )
                 : Column(children: [
@@ -325,7 +325,7 @@ class _TaskList extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
             child: Text(msg,
-                style: const TextStyle(color: _kRed, fontSize: 12))),
+                style: const TextStyle(color: _kRed, fontSize: 13))),
         TextButton(onPressed: onRetry, child: const Text('重試')),
       ]),
     );
@@ -377,7 +377,7 @@ class _TaskRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                         color: _kTextMain,
-                        fontSize: 14,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700),
                   ),
                 ),
@@ -389,12 +389,12 @@ class _TaskRow extends StatelessWidget {
                 Text(request.requestId,
                     style: const TextStyle(
                         color: _kTextSub,
-                        fontSize: 11,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600)),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 5),
                   child: Text('·',
-                      style: TextStyle(color: _kTextSub, fontSize: 11)),
+                      style: TextStyle(color: _kTextSub, fontSize: 13)),
                 ),
                 const Icon(Icons.location_on_outlined,
                     size: 12, color: _kTextSub),
@@ -403,7 +403,7 @@ class _TaskRow extends StatelessWidget {
                   child: Text(location,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                          color: _kTextSub, fontSize: 11)),
+                          color: _kTextSub, fontSize: 13)),
                 ),
               ]),
             ],
@@ -436,7 +436,7 @@ class _TaskRow extends StatelessWidget {
                           color: Colors.white, strokeWidth: 2))
                   : const Text('認領配送',
                       style: TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w700)),
+                          fontSize: 14, fontWeight: FontWeight.w700)),
             ),
           ),
       ]),
@@ -467,10 +467,10 @@ class _TaskRow extends StatelessWidget {
                     color: _kTextMain)),
             const SizedBox(height: 6),
             Text('${request.requestId}　${request.address}',
-                style: const TextStyle(fontSize: 12, color: _kTextSub)),
+                style: const TextStyle(fontSize: 13, color: _kTextSub)),
             const SizedBox(height: 12),
             const Text('認領後請負責將物資送達需求地點。',
-                style: TextStyle(fontSize: 13, color: _kTextMain)),
+                style: TextStyle(fontSize: 14, color: _kTextMain)),
           ],
         ),
         actions: [
@@ -520,5 +520,5 @@ Widget _tag(String text, Color color) => Container(
           border: Border.all(color: color.withValues(alpha: .18))),
       child: Text(text,
           style: TextStyle(
-              color: color, fontSize: 10, fontWeight: FontWeight.w700)),
+              color: color, fontSize: 12, fontWeight: FontWeight.w700)),
     );

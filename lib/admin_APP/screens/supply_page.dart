@@ -276,7 +276,7 @@ class _SupplyPageState extends State<SupplyPage>
         bottom: TabBar(
           controller: _tabController,
           labelColor: _blue,
-          unselectedLabelColor: const Color(0xFF64748B),
+          unselectedLabelColor: const Color(0xFF475569),
           indicatorColor: _blue,
           tabs: const [
             Tab(icon: Icon(Icons.warehouse_outlined),      text: '庫存管理'),
@@ -380,8 +380,8 @@ class _SupplyPageState extends State<SupplyPage>
                     ),
                     child: Text(cat,
                       style: TextStyle(
-                        color: sel ? Colors.white : const Color(0xFF64748B),
-                        fontSize: 13,
+                        color: sel ? Colors.white : const Color(0xFF475569),
+                        fontSize: 14,
                         fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
                       )),
                   ),
@@ -432,10 +432,10 @@ class _SupplyPageState extends State<SupplyPage>
                 const SizedBox(width: 8),
                 Text(category,
                   style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+                    fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
                 const SizedBox(width: 8),
                 Text('${categoryItems.length} 項',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
               ]),
             ),
             _supplyTable(categoryItems),
@@ -483,7 +483,7 @@ class _SupplyPageState extends State<SupplyPage>
     return Expanded(
       flex: flex,
       child: Text(label,
-        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
     );
   }
 
@@ -510,16 +510,16 @@ class _SupplyPageState extends State<SupplyPage>
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(flex: 3, child: Text(item.name,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)))),
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF0F172A)))),
           Expanded(flex: 1, child: Text(item.unit,
-            style: const TextStyle(fontSize: 13, color: Color(0xFF64748B)))),
+            style: const TextStyle(fontSize: 14, color: Color(0xFF475569)))),
           Expanded(flex: 1, child: Text('${item.availableQty}',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: isLow ? _orange : _green))),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: isLow ? _orange : _green))),
           Expanded(flex: 1, child: Text('${item.reservedQty}',
-            style: const TextStyle(fontSize: 13, color: Color(0xFF94A3B8)))),
+            style: const TextStyle(fontSize: 14, color: Color(0xFF64748B)))),
           Expanded(flex: 1, child: Text(isLow ? '$shortage' : '—',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
-              color: isLow ? _red : const Color(0xFF94A3B8)))),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600,
+              color: isLow ? _red : const Color(0xFF64748B)))),
           Expanded(flex: 2, child: _statusBadge(statusLabel, statusColor)),
           Expanded(
             flex: 3,
@@ -653,7 +653,7 @@ class _SupplyPageState extends State<SupplyPage>
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
                 const SizedBox(height: 4),
                 Text('需求 #$reqId・$qty $unit',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF475569))),
               ],
             )),
             _statusBadge(claimed ? '已認領' : '待認領', color),
@@ -684,11 +684,11 @@ class _SupplyPageState extends State<SupplyPage>
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Row(children: [
-        Icon(icon, size: 15, color: const Color(0xFF64748B)),
+        Icon(icon, size: 15, color: const Color(0xFF475569)),
         const SizedBox(width: 6),
-        Text('$label：', style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
+        Text('$label：', style: const TextStyle(fontSize: 14, color: Color(0xFF475569))),
         Expanded(child: Text(value,
-            style: const TextStyle(fontSize: 13, color: Color(0xFF0F172A)))),
+            style: const TextStyle(fontSize: 14, color: Color(0xFF0F172A)))),
       ]),
     );
   }
@@ -747,7 +747,7 @@ class _SupplyPageState extends State<SupplyPage>
             _statusBadge('待出貨', _blue),
           ]),
           const SizedBox(height: 4),
-          Text('物資名稱：${_itemNameById(item.itemId, item.itemName)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+          Text('物資名稱：${_itemNameById(item.itemId, item.itemName)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
           const SizedBox(height: 10),
           Row(children: [
             CircleAvatar(
@@ -760,13 +760,13 @@ class _SupplyPageState extends State<SupplyPage>
               children: [
                 const SizedBox(height: 4),
                 Text('分配區域：${item.zoneId}・數量：${item.qty} ${item.unit}',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF475569))),
               ],
             )),
           ]),
           const SizedBox(height: 8),
           Text('建立時間：${_formatDate(item.createdAt)}',
-            style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8))),
+            style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
           const SizedBox(height: 14),
           Row(children: [
             Expanded(
@@ -836,7 +836,7 @@ class _SupplyPageState extends State<SupplyPage>
             _statusBadge('已出貨', _green),
           ]),
           const SizedBox(height: 4),
-          Text('物資名稱：${_itemNameById(item.itemId, item.itemName)}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
+          Text('物資名稱：${_itemNameById(item.itemId, item.itemName)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
           const SizedBox(height: 10),
           Row(children: [
             CircleAvatar(
@@ -849,10 +849,10 @@ class _SupplyPageState extends State<SupplyPage>
               children: [
                 const SizedBox(height: 4),
                 Text('區域：${item.zoneId}・數量：${item.qty} ${item.unit}',
-                  style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF475569))),
                 const SizedBox(height: 2),
                 Text('出貨時間：${_formatDate(item.createdAt)}',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                  style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
               ],
             )),
           ]),
@@ -1034,7 +1034,7 @@ class _SupplyPageState extends State<SupplyPage>
                 Expanded(
                   child: Text(
                     '可用庫存：${item.availableQty} ${item.unit}（預留 ${item.reservedQty}）',
-                    style: TextStyle(color: _green, fontWeight: FontWeight.w600, fontSize: 13)),
+                    style: TextStyle(color: _green, fontWeight: FontWeight.w600, fontSize: 14)),
                 ),
               ]),
             ),
@@ -1125,7 +1125,7 @@ class _SupplyPageState extends State<SupplyPage>
         const SizedBox(height: 8),
         Text(value, style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.w900)),
         const SizedBox(height: 4),
-        Text(title, style: const TextStyle(color: Color(0xFF64748B), fontSize: 12)),
+        Text(title, style: const TextStyle(color: Color(0xFF475569), fontSize: 13)),
       ]),
     );
   }
@@ -1138,7 +1138,7 @@ class _SupplyPageState extends State<SupplyPage>
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(text,
-        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+        style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)),
     );
   }
 
@@ -1148,12 +1148,12 @@ class _SupplyPageState extends State<SupplyPage>
       padding: const EdgeInsets.all(40),
       decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(16)),
       child: Column(children: [
-        const Icon(Icons.inbox_outlined, size: 46, color: Color(0xFF94A3B8)),
+        const Icon(Icons.inbox_outlined, size: 46, color: Color(0xFF64748B)),
         const SizedBox(height: 12),
-        Text(title, style: const TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.bold)),
+        Text(title, style: const TextStyle(color: Color(0xFF475569), fontWeight: FontWeight.bold)),
         if (subtitle.isNotEmpty) ...[
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+          Text(subtitle, style: const TextStyle(color: Color(0xFF64748B), fontSize: 13)),
         ],
       ]),
     );

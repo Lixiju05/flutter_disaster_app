@@ -193,7 +193,7 @@ class _AdminSetupPageState extends State<AdminSetupPage>
                 color: Colors.white)),
         const SizedBox(height: 8),
         Text(widget.isEdit ? '更新您的姓名、職稱與管轄地區' : '請填寫您的資訊，完成後進入系統',
-            style: const TextStyle(fontSize: 13, color: Color(0xFF3E5872))),
+            style: const TextStyle(fontSize: 14, color: Color(0xFF475569))),
         const SizedBox(height: 32),
 
         // 姓名
@@ -224,10 +224,10 @@ class _AdminSetupPageState extends State<AdminSetupPage>
               isExpanded: true,
               dropdownColor: const Color(0xFF071828),
               value: _selectedArea,
-              style: const TextStyle(color: Colors.white, fontSize: 14),
+              style: const TextStyle(color: Colors.white, fontSize: 15),
               padding: const EdgeInsets.symmetric(horizontal: 14),
               icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                  color: Color(0xFF3E5872)),
+                  color: Color(0xFF475569)),
               items: kAreaList.map((area) => DropdownMenuItem(
                 value: area['name'],
                 child: Row(children: [
@@ -257,7 +257,7 @@ class _AdminSetupPageState extends State<AdminSetupPage>
             Expanded(
               child: Text(
                 '戰術地圖將優先顯示您管轄地區的災害警報',
-                style: TextStyle(color: Color(0xFF00C8FF), fontSize: 12),
+                style: TextStyle(color: Color(0xFF00C8FF), fontSize: 13),
               ),
             ),
           ]),
@@ -292,7 +292,7 @@ class _AdminSetupPageState extends State<AdminSetupPage>
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('取消',
-                style: TextStyle(fontSize: 14, color: Color(0xFF3E5872))),
+                style: TextStyle(fontSize: 15, color: Color(0xFF475569))),
           ),
         ],
       ]),
@@ -304,7 +304,7 @@ class _AdminSetupPageState extends State<AdminSetupPage>
       Icon(icon, color: const Color(0xFF00C8FF), size: 14),
       const SizedBox(width: 6),
       Text(label, style: const TextStyle(
-          color: Color(0xFF00C8FF), fontSize: 13, fontWeight: FontWeight.bold)),
+          color: Color(0xFF00C8FF), fontSize: 14, fontWeight: FontWeight.bold)),
     ]);
   }
 
@@ -321,11 +321,11 @@ class _AdminSetupPageState extends State<AdminSetupPage>
       ),
       child: TextField(
         controller: controller,
-        style: const TextStyle(color: Colors.white, fontSize: 14),
+        style: const TextStyle(color: Colors.white, fontSize: 15),
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: const TextStyle(color: Color(0xFF3E5872), fontSize: 13),
-          prefixIcon: Icon(icon, color: const Color(0xFF3E5872), size: 18),
+          hintStyle: const TextStyle(color: Color(0xFF475569), fontSize: 14),
+          prefixIcon: Icon(icon, color: const Color(0xFF475569), size: 18),
           border: InputBorder.none,
           contentPadding: const EdgeInsets.symmetric(vertical: 16),
         ),

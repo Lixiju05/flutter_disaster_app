@@ -18,7 +18,7 @@ const Color _kCritical = Color(0xFFEC6C2D);   // 重傷（橘色）
 const Color _kOrange   = Color(0xFFD3CA43);   // 輕傷（落日黃）
 const Color _kRed      = Color(0xFFDC2626);   // 錯誤 / 緊急警示
 const Color _kTextMain = Color(0xFF0F172A);
-const Color _kTextSub  = Color(0xFF64748B);
+const Color _kTextSub  = Color(0xFF475569);
 
 class HealthReportPage extends StatefulWidget {
   const HealthReportPage({super.key, this.showSearch = false});
@@ -198,10 +198,10 @@ class _HealthReportPageState extends State<HealthReportPage> {
         Expanded(
           child: TextField(
             controller: _searchCtrl,
-            style: const TextStyle(fontSize: 13, color: _kTextMain),
+            style: const TextStyle(fontSize: 14, color: _kTextMain),
             decoration: const InputDecoration(
               hintText: '搜尋姓名 / ID…',
-              hintStyle: TextStyle(color: _kTextSub, fontSize: 13),
+              hintStyle: TextStyle(color: _kTextSub, fontSize: 14),
               border: InputBorder.none,
               isDense: true,
               contentPadding: EdgeInsets.zero,
@@ -238,7 +238,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
             style: TextStyle(color: _kTextMain, fontSize: 26, fontWeight: FontWeight.w800)),
         const SizedBox(height: 1),
         const Text('HEALTH REPORT MANAGEMENT',
-            style: TextStyle(color: _kTextSub, fontSize: 11, letterSpacing: 1.3)),
+            style: TextStyle(color: _kTextSub, fontSize: 13, letterSpacing: 1.3)),
       ]),
       const SizedBox(width: 12),
       if (urgentCount > 0)
@@ -250,7 +250,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
             border: Border.all(color: _kRed.withValues(alpha: .18)),
           ),
           child: Text('傷患 $urgentCount 件',
-              style: const TextStyle(color: _kRed, fontSize: 10, fontWeight: FontWeight.w700)),
+              style: const TextStyle(color: _kRed, fontSize: 12, fontWeight: FontWeight.w700)),
         ),
       const Spacer(),
       GestureDetector(
@@ -279,7 +279,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
         q.isNotEmpty
             ? '搜尋「$q」：共 ${_reports.length} 筆'
             : '篩選結果：共 ${_reports.length} 筆',
-        style: const TextStyle(color: _kTextSub, fontSize: 12),
+        style: const TextStyle(color: _kTextSub, fontSize: 13),
       ),
     );
   }
@@ -381,7 +381,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
                         fontWeight: FontWeight.w800,
                         height: 1.1)),
                 Text(label,
-                    style: const TextStyle(color: _kTextSub, fontSize: 11)),
+                    style: const TextStyle(color: _kTextSub, fontSize: 13)),
               ],
             )),
             if (sel) Icon(Icons.check_circle_rounded, color: color, size: 14),
@@ -441,7 +441,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
           child: Text('$count 筆',
               style: TextStyle(
                   color: color,
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600)),
         ),
         const SizedBox(width: 8),
@@ -511,7 +511,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
             const SizedBox(height: 3),
             Text('回報者 ID：${r.reporterId}',
                 style: const TextStyle(
-                    color: _kTextSub, fontSize: 12)),
+                    color: _kTextSub, fontSize: 13)),
             const SizedBox(height: 10),
             Wrap(spacing: 8, runSpacing: 6, children: [
               _tag(Icons.phone_outlined,
@@ -538,7 +538,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
                       ? '${r.description!.substring(0, 60)}...'
                       : r.description!,
                   style: const TextStyle(
-                      color: _kTextSub, fontSize: 12),
+                      color: _kTextSub, fontSize: 13),
                 ),
               ),
             ],
@@ -608,7 +608,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
                       Text('ID：${r.reporterId}',
                           style: const TextStyle(
                               color: _kTextSub,
-                              fontSize: 12)),
+                              fontSize: 13)),
                     ]),
                   ]),
                 ),
@@ -682,7 +682,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
                           Text('打開全屏地圖',
                               style: TextStyle(
                                   color: _kBlue,
-                                  fontSize: 13,
+                                  fontSize: 14,
                                   fontWeight:
                                       FontWeight.w600)),
                         ]),
@@ -716,7 +716,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
           child: Text(label,
               style: const TextStyle(
                   color: _kTextSub,
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: FontWeight.w500)),
         ),
         Expanded(
@@ -724,7 +724,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
             value.isEmpty ? '未填寫' : value,
             style: const TextStyle(
                 color: _kTextMain,
-                fontSize: 13,
+                fontSize: 14,
                 fontWeight: FontWeight.w600),
           ),
         ),
@@ -755,7 +755,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
           Text(_errorMessage,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                  color: _kRed, fontSize: 14)),
+                  color: _kRed, fontSize: 15)),
           const SizedBox(height: 18),
           OutlinedButton.icon(
             onPressed: () => _loadReports(),
@@ -791,7 +791,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
         Text(text,
             style: const TextStyle(
                 color: _kTextSub,
-                fontSize: 14,
+                fontSize: 15,
                 fontWeight: FontWeight.w500)),
       ]),
     );
@@ -818,7 +818,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
           Text(label,
               style: TextStyle(
                   color: color,
-                  fontSize: 12,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600)),
         ]),
       ),
@@ -844,7 +844,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
         Text(text,
             style: TextStyle(
                 color: color,
-                fontSize: 11,
+                fontSize: 13,
                 fontWeight: FontWeight.w700)),
       ]),
     );
@@ -866,7 +866,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
         Text(text.isEmpty ? '未填寫' : text,
             style: const TextStyle(
                 color: _kTextSub,
-                fontSize: 11,
+                fontSize: 13,
                 fontWeight: FontWeight.w500)),
       ]),
     );
