@@ -202,6 +202,9 @@ Future<void> handleRequest(HttpRequest request) async {
       case 'claimSupplyRequest':
         await handleClaimSupplyRequest(request, jsonData);
         break;
+      case 'getPendingSupplyRequests':
+        await handleGetPendingSupplyRequests(request);
+        break;
 
       default:
         sendJson(request, HttpStatus.badRequest, {
@@ -720,6 +723,36 @@ Future<void> handleClaimSupplyRequest(
     sendJson(
       request,
       HttpStatus.badRequest,
+      {
+        'success': false,
+        'message': e.toString(),
+      },
+    );
+  }
+}
+Future<void> handleGetPendingSupplyRequests(
+  HttpRequest request,
+) async {
+  try {
+    final service = SupplyRequestService(
+      DatabaseService.instance,
+    );
+
+    final requests =
+        await service.getPendingSupplyRequests();
+
+    sendJson(
+      request,
+      HttpStatus.ok,
+      {
+        'success': true,
+        'requests': requests,
+      },
+    );
+  } catch (e) {
+    sendJson(
+      request,
+      HttpStatus.internalServerError,
       {
         'success': false,
         'message': e.toString(),

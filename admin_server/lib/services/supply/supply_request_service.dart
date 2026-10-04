@@ -91,4 +91,30 @@ class SupplyRequestService {
       );
     });
   }
+  Future<List<Map<String, Object?>>> getPendingSupplyRequests() async {
+    final result = await db.select(
+      '''
+      SELECT
+        sr.requestId,
+        sr.userId,
+        sr.itemId,
+        i.name AS itemName,
+        i.unit,
+        sr.qty,
+        sr.lat,
+        sr.lng,
+        sr.address,
+        sr.status,
+        sr.createdAt
+      FROM supply_requests sr
+      LEFT JOIN inventory i
+        ON sr.itemId = i.id
+      WHERE sr.status = ?
+      ORDER BY sr.createdAt ASC
+      ''',
+      ['pending'],
+    );
+
+    return result.toList();
+  }
 }

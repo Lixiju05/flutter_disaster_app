@@ -979,9 +979,7 @@ class DatabaseService {
   }
 
 Future<void> seedInventory() async {
-
   final items = [
-
     ['礦泉水', '食品飲水', '箱', 120, 20, 300],
     ['泡麵', '食品飲水', '箱', 80, 10, 200],
     ['餅乾', '食品飲水', '箱', 50, 5, 100],
@@ -995,12 +993,35 @@ Future<void> seedInventory() async {
 
     ['雨衣', '衣物', '件', 70, 12, 150],
     ['保暖外套', '衣物', '件', 30, 3, 60],
-
   ];
 
   for (final i in items) {
+    // 先檢查這個品項是否已經存在
+    final existing = await select(
+      '''
+      SELECT id
+      FROM inventory
+      WHERE name = ?
+        AND category = ?
+        AND unit = ?
+      LIMIT 1
+      ''',
+      [
+        i[0],
+        i[1],
+        i[2],
+      ],
+    );
 
-    await execute('''
+    // 已經存在就不要再新增
+    if (existing.isNotEmpty) {
+      print('Inventory 已存在，跳過：${i[0]}');
+      continue;
+    }
+
+    // 不存在才新增
+    await execute(
+      '''
       INSERT INTO inventory (
         name,
         category,
@@ -1011,20 +1032,22 @@ Future<void> seedInventory() async {
         updatedAt
       )
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', [
+      ''',
+      [
+        i[0],
+        i[1],
+        i[2],
+        i[3],
+        i[4],
+        i[5],
+        DateTime.now().toIso8601String(),
+      ],
+    );
 
-      i[0],
-      i[1],
-      i[2],
-      i[3],
-      i[4],
-      i[5],
-      DateTime.now().toIso8601String(),
-
-    ]);
+    print('新增 Inventory：${i[0]}');
   }
 
-  print("Seed inventory created");
+  print('Seed inventory finished');
   }
 
 Future<void> seedAllocations() async {
