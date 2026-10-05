@@ -177,15 +177,15 @@ class _SupplyPageState extends State<SupplyPage>
     }
   }
 
-  Future<bool> allocate({required int itemId, required String zoneId, required int qty}) async {
+  Future<({bool ok, String reason})> allocate({required int itemId, required String zoneId, required int qty}) async {
     try {
       final data = await _post({'type': 'allocate', 'itemId': itemId, 'zoneId': zoneId, 'qty': qty});
       if (data['success'] == true) {
         await Future.wait([loadSupplies(), loadAllocations()]);
-        return true;
+        return (ok: true, reason: '');
       }
-      return false;
-    } catch (e) { return false; }
+      return (ok: false, reason: _failReason(data, '可用庫存不足或資料有誤'));
+    } catch (e) { return (ok: false, reason: '連線失敗'); }
   }
 
   Future<bool> cancelAllocation(int allocationId) async {
@@ -218,15 +218,15 @@ class _SupplyPageState extends State<SupplyPage>
     }
   }
 
-  Future<bool> dispatch(int allocationId) async {
+  Future<({bool ok, String reason})> dispatch(int allocationId) async {
     try {
       final data = await _post({'type': 'dispatch', 'allocationId': allocationId});
       if (data['success'] == true) {
         await Future.wait([loadSupplies(), loadAllocations(), loadDispatches()]);
-        return true;
+        return (ok: true, reason: '');
       }
-      return false;
-    } catch (e) { return false; }
+      return (ok: false, reason: _failReason(data, '出貨失敗，請重新整理後再試'));
+    } catch (e) { return (ok: false, reason: '連線失敗'); }
   }
 
   // ── 需求配送 API ──────────────────────────────────────────
@@ -254,16 +254,32 @@ class _SupplyPageState extends State<SupplyPage>
     }
   }
 
-  Future<bool> dispatchRequest(Map<String, dynamic> req) async {
+  Future<({bool ok, String reason})> dispatchRequest(Map<String, dynamic> req) async {
     try {
       final requestId = req['id']?.toString() ?? req['requestId']?.toString() ?? '';
       final data = await _post({'type': 'dispatchSupplyRequest', 'requestId': requestId});
       if (data['success'] == true) {
         await Future.wait([loadSupplies(), loadAllocations(), loadDispatches(), loadSupplyRequests()]);
-        return true;
+        return (ok: true, reason: '');
       }
-      return false;
-    } catch (e) { return false; }
+      return (ok: false, reason: _failReason(data, '配送失敗'));
+    } catch (e) { return (ok: false, reason: '連線失敗'); }
+  }
+
+  /// 依 itemId 找庫存資料（找不到回傳 null）
+  SupplyItem? _supplyById(int? itemId) {
+    for (final s in _supplies) {
+      if (s.itemId == itemId) return s;
+    }
+    return null;
+  }
+
+  /// 後端失敗訊息轉成管理員看得懂的文字
+  String _failReason(Map<String, dynamic> data, String fallback) {
+    final msg = data['message']?.toString() ?? '';
+    if (msg.isEmpty || msg == 'Invalid request') return fallback;
+    if (msg.contains('Not enough stock')) return '庫存不足';
+    return msg.replaceFirst('Exception: ', '');
   }
 
   // ── Build ─────────────────────────────────────────────────
@@ -679,23 +695,54 @@ class _SupplyPageState extends State<SupplyPage>
           const SizedBox(height: 10),
           _requestInfoRow(Icons.location_on_outlined, '需求地點', location),
           _requestInfoRow(Icons.home_work_outlined, '負責據點', 'A收容中心'),
+          // 待認領：顯示目前可用庫存（總庫存 - 已預留）是否足夠
+          if (!claimed && !dispatched)
+            Builder(builder: (_) {
+              final stock = _supplyById((req['itemId'] as num?)?.toInt());
+              if (stock == null) return const SizedBox.shrink();
+              final enough = stock.availableQty >= qty;
+              return Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(children: [
+                  Icon(enough ? Icons.inventory_2_outlined : Icons.warning_amber_rounded,
+                      size: 15, color: enough ? const Color(0xFF475569) : _red),
+                  const SizedBox(width: 6),
+                  const Text('可用庫存：', style: TextStyle(fontSize: 14, color: Color(0xFF475569))),
+                  Text('${stock.availableQty} ${stock.unit}',
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
+                          color: enough ? _green : _red)),
+                  Text('／需要 $qty $unit',
+                      style: const TextStyle(fontSize: 14, color: Color(0xFF0F172A))),
+                  if (!enough) ...[
+                    const SizedBox(width: 8),
+                    _statusBadge('庫存不足，差 ${qty - stock.availableQty}', _red),
+                  ],
+                ]),
+              );
+            }),
           if (volunteerId != null && volunteerId.isNotEmpty)
             _requestInfoRow(Icons.badge_outlined, '認領義工', volunteerId),
           if (claimedAt != null && claimedAt.isNotEmpty)
             _requestInfoRow(Icons.schedule, '認領時間', _formatDate(claimedAt)),
           if (!dispatched) ...[
           const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () => _confirmDispatchRequest(req),
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: claimed ? _green : _blue, foregroundColor: Colors.white),
-              icon: Icon(claimed ? Icons.task_alt : Icons.local_shipping, size: 16),
-              // 待認領：管理員直接配送（扣庫存）；已認領：義工已扣庫存，只標記送達
-              label: Text(claimed ? '確認已送達' : '直接配送'),
-            ),
-          ),
+          Builder(builder: (_) {
+            // 待認領且可用庫存不足 → 按鈕停用，提示先補貨
+            final stock = _supplyById((req['itemId'] as num?)?.toInt());
+            final short = !claimed && stock != null && stock.availableQty < qty;
+            return SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: short ? null : () => _confirmDispatchRequest(req),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: claimed ? _green : _blue, foregroundColor: Colors.white),
+                icon: Icon(short ? Icons.block : (claimed ? Icons.task_alt : Icons.local_shipping), size: 16),
+                // 待認領：管理員直接配送（扣庫存）；已認領：義工已扣庫存，只標記送達
+                label: Text(short ? '庫存不足，請先到「庫存管理」補貨'
+                    : (claimed ? '確認已送達' : '直接配送')),
+              ),
+            );
+          }),
           ],
         ],
       ),
@@ -733,8 +780,8 @@ class _SupplyPageState extends State<SupplyPage>
             style: ElevatedButton.styleFrom(backgroundColor: _blue),
             onPressed: () async {
               Navigator.pop(context);
-              final ok = await dispatchRequest(req);
-              _snack(ok ? '已標記為已配送' : '配送失敗（庫存可能不足）', ok);
+              final r = await dispatchRequest(req);
+              _snack(r.ok ? '已標記為已配送' : '配送失敗：${r.reason}', r.ok);
             },
             child: const Text('確認配送', style: TextStyle(color: Colors.white)),
           ),
@@ -1072,11 +1119,15 @@ class _SupplyPageState extends State<SupplyPage>
               final qty = int.tryParse(qtyCtrl.text.trim()) ?? 0;
               if (qty <= 0)                     { _snack('請輸入有效數量', false); return; }
               if (zoneCtrl.text.trim().isEmpty) { _snack('請輸入分配區域', false); return; }
+              if (qty > item.availableQty) {
+                _snack('超過可用庫存：可用 ${item.availableQty} ${item.unit}，請先補貨或減少數量', false);
+                return;
+              }
               Navigator.pop(context);
-              final ok = await allocate(
+              final r = await allocate(
                 itemId: item.itemId, zoneId: zoneCtrl.text.trim(), qty: qty);
-              _snack(ok ? '分配成功' : '分配失敗（庫存可能不足）', ok);
-              if (ok) _tabController.animateTo(1);
+              _snack(r.ok ? '分配成功' : '分配失敗：${r.reason}', r.ok);
+              if (r.ok) _tabController.animateTo(1);
             },
             child: const Text('確認分配'),
           ),
@@ -1097,9 +1148,9 @@ class _SupplyPageState extends State<SupplyPage>
             style: ElevatedButton.styleFrom(backgroundColor: _green),
             onPressed: () async {
               Navigator.pop(context);
-              final ok = await dispatch(item.allocationId);
+              final r = await dispatch(item.allocationId);
               // 出貨後留在目前頁面，不自動跳到「出貨紀錄」
-              _snack(ok ? '出貨成功，可在「出貨紀錄」查看' : '出貨失敗', ok);
+              _snack(r.ok ? '出貨成功，可在「出貨紀錄」查看' : '出貨失敗：${r.reason}', r.ok);
             },
             child: const Text('確認出貨', style: TextStyle(color: Colors.white)),
           ),

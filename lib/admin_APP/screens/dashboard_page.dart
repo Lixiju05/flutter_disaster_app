@@ -966,7 +966,7 @@ class _MiniLegend extends StatelessWidget {
 // ══════════════════════════════════════════════════════════
 //  ADMIN AREA BOUNDS
 // ══════════════════════════════════════════════════════════
-/// 暨南國際大學校園邊界（資料來源：OpenStreetMap way 207630685）
+/// 暨南國際大學校園範圍（資料來源：OpenStreetMap way 207630685），用來讓地圖框住校園
 final List<ll.LatLng> kNcnuCampus = [
   ll.LatLng(23.944908, 120.922468), ll.LatLng(23.944027, 120.923839),
   ll.LatLng(23.944001, 120.926033), ll.LatLng(23.945060, 120.928115),
@@ -1114,16 +1114,6 @@ class _GpsMapCanvasState extends State<_GpsMapCanvas> {
   maxNativeZoom: 16,
   maxZoom: 18,
 ),
-            // ★ 暨大校園邊界
-            PolygonLayer(polygons: [
-              Polygon(
-                points: kNcnuCampus,
-                isFilled: true,
-                color: kBlue.withOpacity(.08),
-                borderColor: kBlue,
-                borderStrokeWidth: 3,
-              ),
-            ]),
             // ★ 只有未處理 SOS 紅點
             MarkerLayer(markers: widget.events.map((e) {
               final name = e.userName.isNotEmpty ? e.userName : '用戶 ${e.userId}';
