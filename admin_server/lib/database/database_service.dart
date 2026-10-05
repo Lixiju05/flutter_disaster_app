@@ -785,20 +785,23 @@ class DatabaseService {
     final itemName = item['name']?.toString() ?? '';
     final unit = item['unit']?.toString() ?? '';
 
-    if (stockQty < qty) {
-      throw Exception("Not enough stock");
-    }
+    // 義工認領（claimed）時已經扣過庫存，這裡只有 pending 才需要扣
+    if (status != 'claimed') {
+      if (stockQty < qty) {
+        throw Exception("Not enough stock");
+      }
 
-    await execute('''
-      UPDATE inventory
-      SET stockQty = stockQty - ?,
-          updatedAt = ?
-      WHERE id = ?
-    ''', [
-      qty,
-      DateTime.now().toIso8601String(),
-      itemId,
-    ]);
+      await execute('''
+        UPDATE inventory
+        SET stockQty = stockQty - ?,
+            updatedAt = ?
+        WHERE id = ?
+      ''', [
+        qty,
+        DateTime.now().toIso8601String(),
+        itemId,
+      ]);
+    }
 
     await execute('''
       UPDATE supply_requests
@@ -1152,7 +1155,10 @@ Future<void> seedAllocations() async {
           sr.hopCount,
           sr.status,
           sr.createdAt,
-          sr.receivedAt
+          sr.receivedAt,
+          sr.address,
+          sr.volunteerId,
+          sr.claimedAt
         FROM supply_requests sr
         JOIN inventory i
         ON sr.itemId = i.id

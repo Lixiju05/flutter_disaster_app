@@ -42,6 +42,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
   bool   _showAll       = true;
 
   int _currentPage = 0;
+  final ScrollController _listCtrl = ScrollController();
   int _pageSize    = 10;
 
   @override
@@ -60,6 +61,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
     _refreshTimer?.cancel();
     _debounce?.cancel();
     _searchController.dispose();
+    _listCtrl.dispose();
     super.dispose();
   }
 
@@ -320,8 +322,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
     }
     if (_errorMessage.isNotEmpty) return _buildError();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+    // 統計卡與搜尋列固定，只有用戶資料在表格內上下滑動（同緊急事件頁）
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -329,7 +332,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
           const SizedBox(height: 16),
           _buildSearchBar(),
           const SizedBox(height: 14),
-          _buildTable(),
+          Expanded(child: _buildTable()),
         ],
       ),
     );
@@ -462,16 +465,24 @@ class _UserManagementPageState extends State<UserManagementPage> {
           ),
         ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
           _buildTableHeader(),
-          if (_users.isEmpty)
-            _buildTableEmpty()
-          else
-            ..._pagedUsers.asMap().entries.map(
-                  (e) => _buildTableRow(
-                      e.value, _currentPage * _pageSize + e.key),
-                ),
+          Expanded(
+            child: _users.isEmpty
+                ? SingleChildScrollView(child: _buildTableEmpty())
+                : Scrollbar(
+                    controller: _listCtrl,
+                    thumbVisibility: true,
+                    child: ListView.builder(
+                      controller: _listCtrl,
+                      itemCount: _pagedUsers.length,
+                      itemBuilder: (_, i) => _buildTableRow(
+                          _pagedUsers[i], _currentPage * _pageSize + i),
+                    ),
+                  ),
+          ),
           _buildPagination(),
         ],
       ),

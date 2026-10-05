@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -59,10 +60,19 @@ class _SupplyPageState extends State<SupplyPage>
       if (_tabController.index == 2) loadDispatches();
     });
     loadSupplies();
+    loadSupplyRequests();
+    _autoRefresh = Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted) return;
+      loadSupplies(silent: true);
+      loadSupplyRequests(silent: true);
+    });
   }
+
+  Timer? _autoRefresh;
 
   @override
   void dispose() {
+    _autoRefresh?.cancel();
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -84,8 +94,9 @@ class _SupplyPageState extends State<SupplyPage>
 
   // ── 庫存 API ──────────────────────────────────────────────
 
-  Future<void> loadSupplies() async {
-    setState(() { _isLoadingSupplies = true; _suppliesError = null; });
+  /// silent = 背景自動更新，不顯示轉圈圈
+  Future<void> loadSupplies({bool silent = false}) async {
+    if (!silent) setState(() { _isLoadingSupplies = true; _suppliesError = null; });
     try {
       final data = await _post({'type': 'getInventory'});
       if (data['success'] == true) {
@@ -220,16 +231,19 @@ class _SupplyPageState extends State<SupplyPage>
 
   // ── 需求配送 API ──────────────────────────────────────────
 
-  Future<void> loadSupplyRequests() async {
-    setState(() { _isLoadingRequests = true; _requestsError = null; });
+  Future<void> loadSupplyRequests({bool silent = false}) async {
+    if (!silent) setState(() { _isLoadingRequests = true; _requestsError = null; });
     try {
       final data = await _post({'type': 'getSupplyRequestDetails'});
       if (data['success'] == true) {
         final all = List<Map<String, dynamic>>.from(data['data']);
-        // pending（待認領）＋ claimed（義工已認領）都顯示
+        // 待認領 → 已認領（義工）→ 已配送，依流程順序排列
+        const order = {'pending': 0, 'claimed': 1, 'dispatched': 2};
+        if (!mounted) return;
         setState(() => _supplyRequests = all
-            .where((r) => r['status'] == 'pending' || r['status'] == 'claimed')
-            .toList());
+            .where((r) => order.containsKey(r['status']))
+            .toList()
+          ..sort((a, b) => order[a['status']]!.compareTo(order[b['status']]!)));
       } else {
         setState(() => _requestsError = '載入失敗');
       }
@@ -621,13 +635,17 @@ class _SupplyPageState extends State<SupplyPage>
     final itemName = req['itemName']?.toString() ?? '物資 #${req['itemId']}';
     final qty      = (req['qty'] as num?)?.toInt() ?? 0;
     final unit     = req['unit']?.toString() ?? '';
-    final claimed  = req['status'] == 'claimed';
+    final status   = req['status']?.toString() ?? 'pending';
+    final claimed  = status == 'claimed';
+    final dispatched = status == 'dispatched';
     final volunteerId = req['volunteerId']?.toString();
+    final claimedAt = req['claimedAt']?.toString();
     final address  = req['address']?.toString();
     final location = (address != null && address.isNotEmpty)
         ? address
         : (req['lat'] != null ? '${req['lat']}, ${req['lng']}' : '未提供');
-    final color    = claimed ? _green : _orange;
+    final color    = dispatched ? _blue : (claimed ? _green : _orange);
+    final statusText = dispatched ? '已配送' : (claimed ? '已認領／待配送' : '待認領');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -643,7 +661,7 @@ class _SupplyPageState extends State<SupplyPage>
           Row(children: [
             CircleAvatar(
               backgroundColor: color.withValues(alpha: 0.1),
-              child: Icon(claimed ? Icons.volunteer_activism : Icons.inbox_outlined, color: color),
+              child: Icon(dispatched ? Icons.task_alt : (claimed ? Icons.volunteer_activism : Icons.inbox_outlined), color: color),
             ),
             const SizedBox(width: 12),
             Expanded(child: Column(
@@ -656,22 +674,26 @@ class _SupplyPageState extends State<SupplyPage>
                   style: const TextStyle(fontSize: 13, color: Color(0xFF475569))),
               ],
             )),
-            _statusBadge(claimed ? '已認領' : '待認領', color),
+            _statusBadge(statusText, color),
           ]),
           const SizedBox(height: 10),
           _requestInfoRow(Icons.location_on_outlined, '需求地點', location),
           _requestInfoRow(Icons.home_work_outlined, '負責據點', 'A收容中心'),
-          if (claimed)
-            _requestInfoRow(Icons.badge_outlined, '認領義工', volunteerId ?? '—'),
-          if (!claimed) ...[
+          if (volunteerId != null && volunteerId.isNotEmpty)
+            _requestInfoRow(Icons.badge_outlined, '認領義工', volunteerId),
+          if (claimedAt != null && claimedAt.isNotEmpty)
+            _requestInfoRow(Icons.schedule, '認領時間', _formatDate(claimedAt)),
+          if (!dispatched) ...[
           const SizedBox(height: 14),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () => _confirmDispatchRequest(req),
-              style: ElevatedButton.styleFrom(backgroundColor: _blue, foregroundColor: Colors.white),
-              icon: const Icon(Icons.local_shipping, size: 16),
-              label: const Text('配送'),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: claimed ? _green : _blue, foregroundColor: Colors.white),
+              icon: Icon(claimed ? Icons.task_alt : Icons.local_shipping, size: 16),
+              // 待認領：管理員直接配送（扣庫存）；已認領：義工已扣庫存，只標記送達
+              label: Text(claimed ? '確認已送達' : '直接配送'),
             ),
           ),
           ],
@@ -712,7 +734,7 @@ class _SupplyPageState extends State<SupplyPage>
             onPressed: () async {
               Navigator.pop(context);
               final ok = await dispatchRequest(req);
-              _snack(ok ? '配送成功' : '配送失敗（庫存可能不足）', ok);
+              _snack(ok ? '已標記為已配送' : '配送失敗（庫存可能不足）', ok);
             },
             child: const Text('確認配送', style: TextStyle(color: Colors.white)),
           ),
@@ -1076,8 +1098,8 @@ class _SupplyPageState extends State<SupplyPage>
             onPressed: () async {
               Navigator.pop(context);
               final ok = await dispatch(item.allocationId);
-              _snack(ok ? '出貨成功' : '出貨失敗', ok);
-              if (ok) _tabController.animateTo(2);
+              // 出貨後留在目前頁面，不自動跳到「出貨紀錄」
+              _snack(ok ? '出貨成功，可在「出貨紀錄」查看' : '出貨失敗', ok);
             },
             child: const Text('確認出貨', style: TextStyle(color: Colors.white)),
           ),

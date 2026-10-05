@@ -60,6 +60,7 @@ class FullMapPage extends StatelessWidget {
             children: [
               TileLayer(
                 urlTemplate: 'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}',  // 國土測繪中心 台灣通用電子地圖（免費、免金鑰）,
+                maxNativeZoom: 16,  // 此區圖資只到第 16 層，超過就放大第 16 層
                 userAgentPackageName: 'com.example.flutter_disaster_app',
               ),
               CircleLayer(

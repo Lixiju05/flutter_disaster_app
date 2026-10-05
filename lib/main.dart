@@ -36,6 +36,13 @@ class MyApp extends StatelessWidget {
           ),
           useMaterial3: true,
         ),
+        // 全站文字統一放大 10%，讓管理員閱讀更清楚
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: const TextScaler.linear(1.1),
+          ),
+          child: child!,
+        ),
         home: const LoginPage(),
       ),
     );

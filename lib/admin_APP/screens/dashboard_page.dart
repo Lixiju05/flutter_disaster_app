@@ -966,6 +966,19 @@ class _MiniLegend extends StatelessWidget {
 // ══════════════════════════════════════════════════════════
 //  ADMIN AREA BOUNDS
 // ══════════════════════════════════════════════════════════
+/// 暨南國際大學校園邊界（資料來源：OpenStreetMap way 207630685）
+final List<ll.LatLng> kNcnuCampus = [
+  ll.LatLng(23.944908, 120.922468), ll.LatLng(23.944027, 120.923839),
+  ll.LatLng(23.944001, 120.926033), ll.LatLng(23.945060, 120.928115),
+  ll.LatLng(23.945985, 120.929843), ll.LatLng(23.947465, 120.935224),
+  ll.LatLng(23.950618, 120.936402), ll.LatLng(23.952518, 120.935720),
+  ll.LatLng(23.954042, 120.935200), ll.LatLng(23.956551, 120.931352),
+  ll.LatLng(23.957618, 120.927095), ll.LatLng(23.955493, 120.924346),
+  ll.LatLng(23.952905, 120.923714), ll.LatLng(23.952549, 120.923666),
+  ll.LatLng(23.952181, 120.923616), ll.LatLng(23.948786, 120.923158),
+  ll.LatLng(23.944908, 120.922468),
+];
+
 class _AdminAreaBounds {
   final String label;
   final double minLat, maxLat, minLng, maxLng;
@@ -990,7 +1003,7 @@ class _AdminAreaBounds {
   ];
 
   static _AdminAreaBounds forArea(String area) {
-    if (area.contains('暨大') || area.contains('暨南')) return const _AdminAreaBounds(label: '暨南大學', minLat: 23.930, maxLat: 23.985, minLng: 120.895, maxLng: 120.960);
+    if (area.contains('暨大') || area.contains('暨南')) return const _AdminAreaBounds(label: '暨南大學', minLat: 23.9440, maxLat: 23.9577, minLng: 120.9224, maxLng: 120.9365);
     if (area.contains('南村')) return const _AdminAreaBounds(label: '南村里', minLat: 23.9350, maxLat: 23.9850, minLng: 120.9350, maxLng: 121.0000);
     if (area.contains('埔里')) return const _AdminAreaBounds(label: '埔里鎮', minLat: 23.9000, maxLat: 24.0500, minLng: 120.8800, maxLng: 121.0500);
     if (area.contains('南投')) return const _AdminAreaBounds(label: '南投縣', minLat: 23.4500, maxLat: 24.2500, minLng: 120.6000, maxLng: 121.3500);
@@ -1009,7 +1022,8 @@ class _GpsEmergencyMapCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vm     = context.watch<EmergencyViewModel>();
-    final bounds = _AdminAreaBounds.forArea(adminArea);
+    // 目前轄區先固定為暨南大學
+    final bounds = _AdminAreaBounds.forArea('暨大');
     final sosOnly = vm.emergencies
     .where((e) => e.status != 'resolved')
     .toList()
@@ -1024,7 +1038,7 @@ class _GpsEmergencyMapCard extends StatelessWidget {
               child: const Icon(Icons.sos_rounded, color: kRed)),
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('GPS 即時地圖 - $adminArea',
+            Text('GPS 即時地圖 - ${bounds.label}',
                 style: const TextStyle(color: kTextMain, fontSize: 16, fontWeight: FontWeight.w800),
                 overflow: TextOverflow.ellipsis, maxLines: 1),
             const SizedBox(height: 3),
@@ -1064,40 +1078,18 @@ class _GpsMapCanvasState extends State<_GpsMapCanvas> {
   @override
   void dispose() { _mapCtrl.dispose(); super.dispose(); }
 
-  @override
-  void didUpdateWidget(_GpsMapCanvas old) {
-    super.didUpdateWidget(old);
-    final boundsChanged = old.bounds.label != widget.bounds.label;
-    final eventsChanged = old.events.length != widget.events.length;
-    if (boundsChanged || eventsChanged) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (widget.events.isNotEmpty) {
-          _fitToEvents();
-        } else {
-          _mapCtrl.move(widget.bounds.center, widget.bounds.zoom);
-        }
-      });
-    }
-  }
+  /// 校園範圍（含一點邊距）
+  CameraFit get _homeFit => CameraFit.bounds(
+        bounds: LatLngBounds.fromPoints(kNcnuCampus),
+        padding: const EdgeInsets.all(24),
+      );
 
-  void _fitToEvents() {
-    if (widget.events.isEmpty) return;
-    if (widget.events.length == 1) {
-      _mapCtrl.move(ll.LatLng(widget.events.first.lat, widget.events.first.lng), 14.0);
-      return;
-    }
-    final lats = widget.events.map((e) => e.lat);
-    final lngs = widget.events.map((e) => e.lng);
-    final minLat = lats.reduce((a, b) => a < b ? a : b);
-    final maxLat = lats.reduce((a, b) => a > b ? a : b);
-    final minLng = lngs.reduce((a, b) => a < b ? a : b);
-    final maxLng = lngs.reduce((a, b) => a > b ? a : b);
-    final centerLat = (minLat + maxLat) / 2;
-    final centerLng = (minLng + maxLng) / 2;
-    final span = maxLat - minLat;
-    final zoom = span < 0.02 ? 14.0 : span < 0.10 ? 12.0 : span < 0.50 ? 10.0 : 8.0;
-    _mapCtrl.move(ll.LatLng(centerLat, centerLng), zoom);
+  /// 回到暨大
+  void _goHome() => _mapCtrl.fitCamera(_homeFit);
+
+  void _zoomBy(double delta) {
+    final z = (_mapCtrl.camera.zoom + delta).clamp(12.0, 18.0);
+    _mapCtrl.move(_mapCtrl.camera.center, z);
   }
 
   @override
@@ -1109,17 +1101,29 @@ class _GpsMapCanvasState extends State<_GpsMapCanvas> {
         FlutterMap(
           mapController: _mapCtrl,
           options: MapOptions(
-            initialCenter: widget.bounds.center,
-            initialZoom:   widget.bounds.zoom,
+            initialCameraFit: _homeFit,
+            minZoom: 12,
+            maxZoom: 18,
             interactionOptions: const InteractionOptions(
-              flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag),
+              flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
           ),
           children: [
            TileLayer(
   urlTemplate: 'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}',  // 國土測繪中心 台灣通用電子地圖（免費、免金鑰）,
   userAgentPackageName: 'com.example.flutter_disaster_app',
-  maxZoom: 19,
+  maxNativeZoom: 16,
+  maxZoom: 18,
 ),
+            // ★ 暨大校園邊界
+            PolygonLayer(polygons: [
+              Polygon(
+                points: kNcnuCampus,
+                isFilled: true,
+                color: kBlue.withOpacity(.08),
+                borderColor: kBlue,
+                borderStrokeWidth: 3,
+              ),
+            ]),
             // ★ 只有未處理 SOS 紅點
             MarkerLayer(markers: widget.events.map((e) {
               final name = e.userName.isNotEmpty ? e.userName : '用戶 ${e.userId}';
@@ -1135,7 +1139,7 @@ class _GpsMapCanvasState extends State<_GpsMapCanvas> {
         ),
 
         // 轄區標籤
-        Positioned(top: 12, left: 12, child: Container(
+        Positioned(top: 12, left: 12, child: GestureDetector(onTap: _goHome, child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(color: Colors.white.withOpacity(.92), borderRadius: BorderRadius.circular(8), border: Border.all(color: kBorder)),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -1143,25 +1147,28 @@ class _GpsMapCanvasState extends State<_GpsMapCanvas> {
             const SizedBox(width: 5),
             Text(widget.bounds.label, style: const TextStyle(color: kTextMain, fontSize: 13, fontWeight: FontWeight.w800)),
           ]),
-        )),
+        ))),
 
         // 缩放按钮
         Positioned(right: 12, bottom: 12, child: Column(children: [
-          _mapBtn(Icons.add,    () => _mapCtrl.move(_mapCtrl.camera.center, _mapCtrl.camera.zoom + 1)),
+          _mapBtn(Icons.add,    () => _zoomBy(1), tooltip: '放大'),
           const SizedBox(height: 4),
-          _mapBtn(Icons.remove, () => _mapCtrl.move(_mapCtrl.camera.center, _mapCtrl.camera.zoom - 1)),
+          _mapBtn(Icons.remove, () => _zoomBy(-1), tooltip: '縮小'),
           const SizedBox(height: 4),
-          _mapBtn(Icons.my_location_rounded, () => _mapCtrl.move(widget.bounds.center, widget.bounds.zoom)),
+          _mapBtn(Icons.my_location_rounded, _goHome, tooltip: '回到暨大'),
         ])),
       ]),
     );
   }
 
-  Widget _mapBtn(IconData icon, VoidCallback onTap) => InkWell(
-    onTap: onTap, borderRadius: BorderRadius.circular(6),
-    child: Container(width: 30, height: 30,
-        decoration: BoxDecoration(color: Colors.white.withOpacity(.94), borderRadius: BorderRadius.circular(6), border: Border.all(color: kBorder)),
-        child: Icon(icon, size: 16, color: kTextMain)),
+  Widget _mapBtn(IconData icon, VoidCallback onTap, {String? tooltip}) => Tooltip(
+    message: tooltip ?? '',
+    child: InkWell(
+      onTap: onTap, borderRadius: BorderRadius.circular(6),
+      child: Container(width: 32, height: 32,
+          decoration: BoxDecoration(color: Colors.white.withOpacity(.94), borderRadius: BorderRadius.circular(6), border: Border.all(color: kBorder)),
+          child: Icon(icon, size: 17, color: kTextMain)),
+    ),
   );
 }
 
@@ -1308,15 +1315,19 @@ class _SosEventList extends StatelessWidget {
                     Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: kTextMain, fontSize: 14, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 2),
-                    Text(e.status, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kTextSub, fontSize: 13)),
+                    Text((e.address ?? '').isNotEmpty ? e.address! : e.phone, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kTextSub, fontSize: 13)),
                   ])),
                   Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
                     Text(_relativeTime(e.sentAt), style: const TextStyle(color: kTextSub, fontSize: 12),
                         overflow: TextOverflow.ellipsis, maxLines: 1),
                     const SizedBox(height: 4),
-                    Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                        decoration: BoxDecoration(color: kOrange.withValues(alpha: .10), borderRadius: BorderRadius.circular(4)),
-                        child: const Text('處理中', style: TextStyle(color: kOrange, fontSize: 10, fontWeight: FontWeight.w700))),
+                    Builder(builder: (_) {
+                      final processing = e.status == 'processing';
+                      final c = processing ? kBlue : kOrange;
+                      return Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(color: c.withValues(alpha: .10), borderRadius: BorderRadius.circular(4)),
+                          child: Text(processing ? '處理中' : '待處理', style: TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w700)));
+                    }),
                   ]),
                 ]));
             })),

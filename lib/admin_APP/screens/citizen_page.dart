@@ -214,6 +214,8 @@ class _TotalTabState extends State<_TotalTab> {
   LatLng _mapCenter = const LatLng(23.9575, 120.9275); // 暨大
   double _mapZoom   = 14.0;
   String _filter    = 'all';
+  String _keyword   = '';
+  final TextEditingController _searchCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -227,6 +229,7 @@ class _TotalTabState extends State<_TotalTab> {
   @override
   void dispose() {
     _mapCtrl.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -394,10 +397,10 @@ class _TotalTabState extends State<_TotalTab> {
       child: Column(children: [
         // ── 統計卡片 ──────────────────────────────────────────
         _buildStatsRow(total, sosCount, critical, injured, safe, supplyNeed),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         // ── 地圖 ──────────────────────────────────────────────
         _buildMap(citizens, emVm),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         // ── 災民列表 + 健康回報 + 物資需求 ───────────────────────
         Expanded(
           child: ListView(
@@ -458,13 +461,13 @@ class _TotalTabState extends State<_TotalTab> {
         onTap: () => setState(() => _filter = filter),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
             color: sel ? color.withValues(alpha: .06) : Colors.transparent,
           ),
           child: Row(children: [
             Container(
-              width: 32, height: 32,
+              width: 28, height: 28,
               decoration: BoxDecoration(
                 color: color.withValues(alpha: .10),
                 borderRadius: BorderRadius.circular(8),
@@ -474,7 +477,7 @@ class _TotalTabState extends State<_TotalTab> {
             const SizedBox(width: 10),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(val, style: TextStyle(color: sel ? color : _kTextMain, fontSize: 20, fontWeight: FontWeight.w800, height: 1.1)),
+                Text(val, style: TextStyle(color: sel ? color : _kTextMain, fontSize: 18, fontWeight: FontWeight.w800, height: 1.1)),
                 Text(label, style: const TextStyle(color: _kTextSub, fontSize: 13)),
               ]),
             ),
@@ -561,6 +564,7 @@ class _TotalTabState extends State<_TotalTab> {
               TileLayer(
                 urlTemplate:
                     'https://wmts.nlsc.gov.tw/wmts/EMAP/default/GoogleMapsCompatible/{z}/{y}/{x}',  // 國土測繪中心 台灣通用電子地圖（免費、免金鑰）,
+                maxNativeZoom: 16,  // 此區圖資只到第 16 層，超過就放大第 16 層
                 userAgentPackageName:
                     'com.example.flutter_disaster_app',
               ),
@@ -678,6 +682,14 @@ class _TotalTabState extends State<_TotalTab> {
         ? allGroups
         : allGroups.where((g) => g.$2 == _filter).toList();
 
+    // 依姓名 / ID 搜尋
+    final kw = _keyword.trim().toLowerCase();
+    if (kw.isNotEmpty) {
+      citizens = citizens
+          .where((c) => c.name.toLowerCase().contains(kw) || c.id.toLowerCase().contains(kw))
+          .toList();
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: _kCardBg,
@@ -693,7 +705,7 @@ class _TotalTabState extends State<_TotalTab> {
       child: Column(children: [
         // 標題列
         Container(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+          padding: const EdgeInsets.fromLTRB(18, 8, 14, 8),
           decoration: const BoxDecoration(
             color: Color(0xFFF8FAFC),
             borderRadius: BorderRadius.vertical(top: Radius.circular(13)),
@@ -704,6 +716,37 @@ class _TotalTabState extends State<_TotalTab> {
             const SizedBox(width: 6),
             const Text('災民列表',
                 style: TextStyle(color: _kTextMain, fontSize: 15, fontWeight: FontWeight.w700)),
+            const SizedBox(width: 16),
+            // 搜尋姓名 / ID
+            SizedBox(
+              width: 260, height: 36,
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: (v) => setState(() => _keyword = v),
+                style: const TextStyle(color: _kTextMain, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: '搜尋姓名 / ID',
+                  hintStyle: const TextStyle(color: _kTextSub, fontSize: 14),
+                  prefixIcon: const Icon(Icons.search_rounded, color: _kTextSub, size: 18),
+                  suffixIcon: _keyword.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: const Icon(Icons.close_rounded, size: 16, color: _kTextSub),
+                          onPressed: () => setState(() { _searchCtrl.clear(); _keyword = ''; }),
+                        ),
+                  isDense: true,
+                  filled: true,
+                  fillColor: _kCardBg,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: _kBorder)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: _kBlue)),
+                ),
+              ),
+            ),
             const Spacer(),
             Text('共 ${citizens.length} 人',
                 style: const TextStyle(color: _kTextSub, fontSize: 13)),
@@ -720,7 +763,9 @@ class _TotalTabState extends State<_TotalTab> {
         else if (vm.errorMessage != null)
           Padding(padding: const EdgeInsets.all(16), child: Text(vm.errorMessage!, style: const TextStyle(color: _kRed)))
         else if (citizens.isEmpty)
-          const Padding(padding: EdgeInsets.all(16), child: Text('暫無資料', style: TextStyle(color: _kTextSub)))
+          Padding(padding: const EdgeInsets.all(16),
+              child: Text(kw.isNotEmpty ? '找不到符合「${_keyword.trim()}」的災民' : '暫無資料',
+                  style: const TextStyle(color: _kTextSub)))
         else
           Column(children: _buildGroupedItems(citizens, emVm, groups)),
       ]),
@@ -905,11 +950,11 @@ class _TotalTabState extends State<_TotalTab> {
 
       // 分組標題
       items.add(Container(
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 6),
+        padding: const EdgeInsets.fromLTRB(18, 5, 18, 5),
         color: color.withValues(alpha: .04),
         child: Row(children: [
           Container(
-            width: 28, height: 28,
+            width: 24, height: 24,
             decoration: BoxDecoration(
               color: color.withValues(alpha: .12),
               borderRadius: BorderRadius.circular(8),
@@ -933,7 +978,7 @@ class _TotalTabState extends State<_TotalTab> {
 
       if (group.isEmpty) {
         items.add(Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 5),
           child: Text('目前無$label人員',
               style: const TextStyle(color: _kTextSub, fontSize: 13)),
         ));
@@ -942,7 +987,7 @@ class _TotalTabState extends State<_TotalTab> {
           final c      = group[i];
           final isLast = i == group.length - 1;
           items.add(Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
             decoration: BoxDecoration(
               border: isLast
                   ? null
@@ -950,12 +995,12 @@ class _TotalTabState extends State<_TotalTab> {
             ),
             child: Row(children: [
               Container(
-                width: 3, height: 36,
+                width: 3, height: 30,
                 decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(99)),
               ),
               const SizedBox(width: 12),
               Container(
-                width: 36, height: 36,
+                width: 32, height: 32,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(10),
@@ -1307,13 +1352,13 @@ class _SosTabState extends State<_SosTab> {
         onTap: () => setState(() => _filter = filter),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
           decoration: BoxDecoration(
             color: sel ? color.withValues(alpha: .06) : Colors.transparent,
           ),
           child: Row(children: [
             Container(
-              width: 32, height: 32,
+              width: 28, height: 28,
               decoration: BoxDecoration(
                   color: color.withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(8)),
