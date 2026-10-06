@@ -1,33 +1,24 @@
-import 'package:admin_server/database/database_service.dart';
-import 'package:admin_server/services/supply/supply_request_service.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 Future<void> main() async {
-  await DatabaseService.init();
-
-  final service = SupplyRequestService(
-    DatabaseService.instance,
-  );
+  const url = 'http://localhost:8080';
 
   try {
-    final requests =
-        await service.getPendingSupplyRequests();
+    final response = await http.post(
+      Uri.parse(url),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'type': 'getPendingSupplyRequests',
+        'stationId': 'S001',
+      }),
+    );
 
-    print('===== 待認領物資需求 =====');
-
-    if (requests.isEmpty) {
-      print('目前沒有待認領需求');
-      return;
-    }
-
-    for (final request in requests) {
-      print('--------------------------');
-      print('需求編號：${request['requestId']}');
-      print('物資：${request['itemName']}');
-      print('數量：${request['qty']} ${request['unit']}');
-      print('地址：${request['address']}');
-      print('狀態：${request['status']}');
-    }
+    print('HTTP Status: ${response.statusCode}');
+    print('Response: ${response.body}');
   } catch (e) {
-    print('❌ 測試失敗：$e');
+    print('❌ API 測試失敗：$e');
   }
 }

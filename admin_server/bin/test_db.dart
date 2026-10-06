@@ -3,8 +3,10 @@ import 'package:admin_server/database/database_service.dart';
 Future<void> main() async {
   await DatabaseService.init();
 
-  //測試登入
-  bool result =await DatabaseService.instance.checkLogin("admin", "1234");
+  bool result = await DatabaseService.instance.checkLogin(
+    "admin_ncnu",
+    "1234",
+  );
 
   if (result) {
     print("Login success");

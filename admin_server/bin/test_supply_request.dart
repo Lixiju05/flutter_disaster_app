@@ -7,13 +7,15 @@ Future<void> main() async {
   await DatabaseService.init();
 
   final db = DatabaseService.instance;
-
   final service = SupplyRequestService(db);
+
+  const requestId = 'AUTO_TEST001';
 
   try {
     await service.claimSupplyRequest(
-      requestId: 'REQ001',
+      requestId: requestId,
       volunteerId: 'V001',
+      stationId: 'S001',
     );
 
     print('✅ 認領成功');
@@ -24,7 +26,7 @@ Future<void> main() async {
       FROM supply_requests
       WHERE requestId = ?
       ''',
-      ['REQ001'],
+      [requestId],
     );
 
     print('需求資料：');
@@ -32,16 +34,18 @@ Future<void> main() async {
 
     final inventory = await db.select(
       '''
-      SELECT *
-      FROM inventory
-      WHERE id = ?
+      SELECT si.*, i.name, i.unit
+      FROM station_inventory si
+      JOIN inventory i
+        ON si.itemId = i.id
+      WHERE si.stationId = ?
+        AND si.itemId = ?
       ''',
-      [1],
+      ['S001', 2],
     );
 
-    print('庫存資料：');
+    print('S001 庫存資料：');
     print(inventory);
-
   } catch (e) {
     print('❌ 認領失敗：$e');
   }

@@ -12,8 +12,9 @@ Future<void> main() async {
       },
       body: jsonEncode({
         'type': 'claimSupplyRequest',
-        'requestId': 'REQ002',
-        'volunteerId': 'V002',
+        'requestId': 'AUTO_TEST001',
+        'volunteerId': 'V001',
+        'stationId': 'S001',
       }),
     );
 

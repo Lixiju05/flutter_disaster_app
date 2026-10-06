@@ -1,1454 +1,3255 @@
 import 'dart:io';
+
 import 'package:sqlite3/sqlite3.dart';
+
 import 'package:admin_server/core/models/healthReport.dart';
+
 import 'package:admin_server/core/models/admin.dart';
+
 import 'package:admin_server/core/models/user.dart';
+
 import 'package:admin_server/core/models/supply_request.dart';
+
 import 'package:admin_server/core/models/emergency_request.dart';
 
+
+
 class DatabaseService {
+
   final Database _db; // 核心實例變數
+
+
 
   DatabaseService(this._db);
 
+
+
   // 全域唯一的靜態實例
+
   static late DatabaseService instance;
 
+
+
   /// 初始化資料庫
+
   static Future<void> init() async {
+
     print('Initializing database...');
 
+
+
     final dataDir = Directory('data');
+
     if (!dataDir.existsSync()) {
+
       dataDir.createSync(recursive: true);
+
     }
+
+
 
     final rawDb = sqlite3.open('data/admin.db');
+
     instance = DatabaseService(rawDb);
 
+
+
     // 建立所有資料表
+
     rawDb.execute('''CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY AUTOINCREMENT,username TEXT UNIQUE,password TEXT);''');
+
     rawDb.execute('''CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, name TEXT, phone TEXT, area TEXT, emergencyContactName TEXT, emergencyContactPhone TEXT, emergencyContactRelation TEXT, bloodType TEXT, medicalInfo TEXT, registeredAt TEXT);''');
+
     rawDb.execute('''CREATE TABLE IF NOT EXISTS health_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT UNIQUE, reporterId TEXT, name TEXT, phone TEXT, bloodType TEXT, status TEXT, description TEXT, lat REAL, lng REAL,address TEXT, reportTime TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
+
     rawDb.execute('''CREATE TABLE IF NOT EXISTS inventory (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, category TEXT, unit TEXT, stockQty INTEGER DEFAULT 0, reservedQty INTEGER DEFAULT 0, neededQty INTEGER DEFAULT 0, updatedAt TEXT);''');
+
     rawDb.execute('''CREATE TABLE IF NOT EXISTS allocations (id INTEGER PRIMARY KEY AUTOINCREMENT, itemId INTEGER, zoneId TEXT, quantity INTEGER, status TEXT, createdAt TEXT);''');
-    rawDb.execute('''CREATE TABLE IF NOT EXISTS supply_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,requestId TEXT UNIQUE,userId TEXT,itemId INTEGER,qty INTEGER,lat REAL,lng REAL,address TEXT,status TEXT,createdAt TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
+
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS supply_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,requestId TEXT UNIQUE,userId TEXT,itemId INTEGER,qty INTEGER,stationId TEXT,lat REAL,lng REAL,address TEXT,status TEXT,createdAt TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,receivedAt TEXT);''');
+
     rawDb.execute('''CREATE TABLE IF NOT EXISTS emergency_requests (id INTEGER PRIMARY KEY AUTOINCREMENT,emergencyId TEXT UNIQUE,userId TEXT,userName TEXT,phone TEXT,latitude REAL,longitude REAL,address TEXT,status TEXT,receiverAdminId TEXT,hopCount INTEGER DEFAULT 0,sentAt TEXT,receivedAt TEXT);''');
+
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS stations (stationId TEXT PRIMARY KEY,name TEXT NOT NULL,type TEXT NOT NULL,lat REAL NOT NULL,lng REAL NOT NULL,address TEXT)''');
+
+    rawDb.execute('''CREATE TABLE IF NOT EXISTS station_inventory (stationId TEXT NOT NULL,itemId INTEGER NOT NULL,stockQty INTEGER NOT NULL DEFAULT 0,reservedQty INTEGER NOT NULL DEFAULT 0,updatedAt TEXT NOT NULL,PRIMARY KEY (stationId, itemId),FOREIGN KEY (stationId)REFERENCES stations(stationId),FOREIGN KEY (itemId)REFERENCES inventory(id))''');
+
     _addSupplyRequestColumns(rawDb);
 
+
+
     instance._initDefaultAdmin();
+
     instance.seedAll();
 
+
+
     print('Database ready');
+
   }
+
+
 
   static void _addSupplyRequestColumns(Database db) {
+
     final columns = db.select(
+
       "PRAGMA table_info(supply_requests)"
+
     );
+
+
 
     final columnNames = columns
+
       .map((row) => row['name'].toString())
+
       .toSet();
 
+
+
     if (!columnNames.contains('volunteerId')) {
+
       db.execute('''
+
         ALTER TABLE supply_requests
+
         ADD COLUMN volunteerId TEXT
+
       ''');
+
+
 
       print('Added volunteerId to supply_requests');
+
     }
+
+
 
     if (!columnNames.contains('claimedAt')) {
+
       db.execute('''
+
         ALTER TABLE supply_requests
+
         ADD COLUMN claimedAt TEXT
+
       ''');
 
+
+
       print('Added claimedAt to supply_requests');
+
     }
-  }
 
-  // --- 工具方法 ---
-  Future<void> transaction(Future<void> Function() action) async {
-    try {
-      _db.execute('BEGIN TRANSACTION');
-      await action();
-      _db.execute('COMMIT');
-    } catch (e) {
-      _db.execute('ROLLBACK');
-      rethrow;
-    }
-  }
 
-  Future<ResultSet> select(String sql, [List<Object?> parameters = const []]) async{
-    return _db.select(sql,parameters);
-  }
-  Future<void> execute(String sql, [List<Object?> parameters = const []]) async {
-    _db.execute(sql, parameters);
-  }
-  // =====================
-  // ADMIN 邏輯
-  // =====================
-  Future <void> insertAdmin(Admin admin) async{
-    await execute('INSERT OR IGNORE INTO admins (username, password) VALUES (?, ?)', [admin.username, admin.password]);
-  }
 
-  Future<bool> checkLogin(String username, String password) async {
-    final result = await select('SELECT * FROM admins WHERE username = ? AND password = ?', [username, password]);
-    return result.isNotEmpty;
-  }
+    if (!columnNames.contains('stationId')) {
 
-  Future<void> _initDefaultAdmin() async {
-    final result = await select(
-      "SELECT * FROM admins WHERE username = ?",
-      ["admin_ncnu"],
-    );
+      db.execute(
 
-    if (result.isEmpty) {
-      await execute(
-        "INSERT INTO admins (username, password) VALUES (?, ?)",
-        ["admin_ncnu", "1234"],
+        'ALTER TABLE supply_requests ADD COLUMN stationId TEXT'
+
       );
 
-      print("Default admin created");
+}
+
+  }
+
+
+
+  // --- 工具方法 ---
+
+  Future<void> transaction(Future<void> Function() action) async {
+
+    try {
+
+      _db.execute('BEGIN TRANSACTION');
+
+      await action();
+
+      _db.execute('COMMIT');
+
+    } catch (e) {
+
+      _db.execute('ROLLBACK');
+
+      rethrow;
+
     }
-  }
-  // =====================
-  // USER 邏輯
-  // =====================
-  Future<void> insertUser(AppUser user) async {
-    await execute('''
-      INSERT OR REPLACE INTO users (id, name, phone, area, emergencyContactName, emergencyContactPhone, 
-      emergencyContactRelation, bloodType, medicalInfo, registeredAt) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
-      [user.id, user.name, user.phone, user.area, user.emergencyContactName, user.emergencyContactPhone, 
-       user.emergencyContactRelation, user.bloodType, user.medicalInfo, user.registeredAt.toIso8601String()]);
+
   }
 
-  Future<AppUser?> getUser(String id) async {
-    final result = await select('SELECT * FROM users WHERE id = ?', [id]);
-    return result.isEmpty ? null : _rowToUser(result.first);
+
+
+  Future<ResultSet> select(String sql, [List<Object?> parameters = const []]) async{
+
+    return _db.select(sql,parameters);
+
   }
 
-  Future<List<AppUser>> getAllUsers() async {
-    final result = await select('SELECT * FROM users');
-    return result.map((row) => _rowToUser(row)).toList();
-  }
+  Future<void> execute(String sql, [List<Object?> parameters = const []]) async {
 
-  Future<List<AppUser>> searchUsers(String keyword) async {
-    final result = await select('SELECT * FROM users WHERE name LIKE ? OR phone LIKE ? OR area LIKE ?', 
-    ['%$keyword%', '%$keyword%', '%$keyword%']);
-    return result.map((row) => _rowToUser(row)).toList();
-  }
-  // =====================
-  // HEALTH REPORT 邏輯
-  // =====================
-  Future<void> insertHealthReport(HealthReport report) async {
-    await execute('''
-      INSERT OR IGNORE INTO health_reports (
-        uuid,
-        reporterId,
-        name,
-        phone,
-        bloodType,
-        status,
-        description,
-        lat,
-        lng,
-        reportTime,
-        receiverAdminId,
-        hopCount,
-        receivedAt
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', [
-      report.uuid,
-      report.reporterId,
-      report.name,
-      report.phone,
-      report.bloodType,
-      report.status,
-      report.description,
-      report.lat,
-      report.lng,
-      report.reportTime.toIso8601String(),
-      report.receiverAdminId,
-      report.hopCount,
-      report.receivedAt?.toIso8601String(),
-    ]);
-  }
+    _db.execute(sql, parameters);
 
-  Future<List<HealthReport>> getAllReports() async {
-    final result = await select('SELECT * FROM health_reports ORDER BY reportTime DESC');
-    return result.map((row) => _rowToHealthReport(row)).toList();
-  }
-
-  Future<List<Map<String, Object?>>> searchReports(String keyword) async {
-    final result = await select('SELECT * FROM health_reports WHERE name LIKE ? OR status LIKE ? OR description LIKE ? ORDER BY reportTime DESC', 
-    ['%$keyword%', '%$keyword%', '%$keyword%']);
-    return result.toList();
-  }
-
-  Future<List<HealthReport>> getHealthReportsByAdmin(
-    String receiverAdminId,
-  ) async {
-    final result = await select('''
-      SELECT *
-      FROM health_reports
-      WHERE receiverAdminId = ?
-      ORDER BY receivedAt DESC
-    ''', [receiverAdminId]);
-
-    return result.map((row) {
-      return HealthReport.fromMap(row);
-    }).toList();
   }
 
   // =====================
-  // INVENTORY 邏輯
+
+  // ADMIN 邏輯
+
   // =====================
-  Future<void> updateInventoryQty(int id, int stockQty) async {
-    await execute('UPDATE inventory SET stockQty = ?, updatedAt = ? WHERE id = ?', [stockQty, DateTime.now().toIso8601String(), id]);
+
+  Future <void> insertAdmin(Admin admin) async{
+
+    await execute('INSERT OR IGNORE INTO admins (username, password) VALUES (?, ?)', [admin.username, admin.password]);
+
   }
 
-  Future<List<Map<String, Object?>>> getAllInventory() async {
-    final result = await select('SELECT * FROM inventory');
-    return result.toList();
-  }
-  Future<void> addInventory({
-    required String name,
-    required String category,
-    required String unit,
-    required int stockQty,
-    int neededQty = 0,
-  }) async {
 
-    // 1️⃣ 先檢查有沒有同品項
+
+  Future<bool> checkLogin(String username, String password) async {
+
+    final result = await select('SELECT * FROM admins WHERE username = ? AND password = ?', [username, password]);
+
+    return result.isNotEmpty;
+
+  }
+
+
+
+  Future<void> _initDefaultAdmin() async {
+
     final result = await select(
-      '''
-      SELECT * FROM inventory
-      WHERE name = ?
-      ''',
-      [name],
+
+      "SELECT * FROM admins WHERE username = ?",
+
+      ["admin_ncnu"],
+
     );
 
+
+
+    if (result.isEmpty) {
+
+      await execute(
+
+        "INSERT INTO admins (username, password) VALUES (?, ?)",
+
+        ["admin_ncnu", "1234"],
+
+      );
+
+
+
+      print("Default admin created");
+
+    }
+
+  }
+
+  // =====================
+
+  // USER 邏輯
+
+  // =====================
+
+  Future<void> insertUser(AppUser user) async {
+
+    await execute('''
+
+      INSERT OR REPLACE INTO users (id, name, phone, area, emergencyContactName, emergencyContactPhone, 
+
+      emergencyContactRelation, bloodType, medicalInfo, registeredAt) 
+
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
+
+      [user.id, user.name, user.phone, user.area, user.emergencyContactName, user.emergencyContactPhone, 
+
+       user.emergencyContactRelation, user.bloodType, user.medicalInfo, user.registeredAt.toIso8601String()]);
+
+  }
+
+
+
+  Future<AppUser?> getUser(String id) async {
+
+    final result = await select('SELECT * FROM users WHERE id = ?', [id]);
+
+    return result.isEmpty ? null : _rowToUser(result.first);
+
+  }
+
+
+
+  Future<List<AppUser>> getAllUsers() async {
+
+    final result = await select('SELECT * FROM users');
+
+    return result.map((row) => _rowToUser(row)).toList();
+
+  }
+
+
+
+  Future<List<AppUser>> searchUsers(String keyword) async {
+
+    final result = await select('SELECT * FROM users WHERE name LIKE ? OR phone LIKE ? OR area LIKE ?', 
+
+    ['%$keyword%', '%$keyword%', '%$keyword%']);
+
+    return result.map((row) => _rowToUser(row)).toList();
+
+  }
+
+  // =====================
+
+  // HEALTH REPORT 邏輯
+
+  // =====================
+
+  Future<void> insertHealthReport(HealthReport report) async {
+
+    await execute('''
+
+      INSERT OR IGNORE INTO health_reports (
+
+        uuid,
+
+        reporterId,
+
+        name,
+
+        phone,
+
+        bloodType,
+
+        status,
+
+        description,
+
+        lat,
+
+        lng,
+
+        reportTime,
+
+        receiverAdminId,
+
+        hopCount,
+
+        receivedAt
+
+      )
+
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
+    ''', [
+
+      report.uuid,
+
+      report.reporterId,
+
+      report.name,
+
+      report.phone,
+
+      report.bloodType,
+
+      report.status,
+
+      report.description,
+
+      report.lat,
+
+      report.lng,
+
+      report.reportTime.toIso8601String(),
+
+      report.receiverAdminId,
+
+      report.hopCount,
+
+      report.receivedAt?.toIso8601String(),
+
+    ]);
+
+  }
+
+
+
+  Future<List<HealthReport>> getAllReports() async {
+
+    final result = await select('SELECT * FROM health_reports ORDER BY reportTime DESC');
+
+    return result.map((row) => _rowToHealthReport(row)).toList();
+
+  }
+
+
+
+  Future<List<Map<String, Object?>>> searchReports(String keyword) async {
+
+    final result = await select('SELECT * FROM health_reports WHERE name LIKE ? OR status LIKE ? OR description LIKE ? ORDER BY reportTime DESC', 
+
+    ['%$keyword%', '%$keyword%', '%$keyword%']);
+
+    return result.toList();
+
+  }
+
+
+
+  Future<List<HealthReport>> getHealthReportsByAdmin(
+
+    String receiverAdminId,
+
+  ) async {
+
+    final result = await select('''
+
+      SELECT *
+
+      FROM health_reports
+
+      WHERE receiverAdminId = ?
+
+      ORDER BY receivedAt DESC
+
+    ''', [receiverAdminId]);
+
+
+
+    return result.map((row) {
+
+      return HealthReport.fromMap(row);
+
+    }).toList();
+
+  }
+
+
+
+  // =====================
+
+  // INVENTORY 邏輯
+
+  // =====================
+
+  Future<void> updateInventoryQty(int id, int stockQty) async {
+
+    await execute('UPDATE inventory SET stockQty = ?, updatedAt = ? WHERE id = ?', [stockQty, DateTime.now().toIso8601String(), id]);
+
+  }
+
+
+
+  Future<List<Map<String, Object?>>> getAllInventory() async {
+
+    final result = await select('SELECT * FROM inventory');
+
+    return result.toList();
+
+  }
+
+  Future<void> addInventory({
+
+    required String name,
+
+    required String category,
+
+    required String unit,
+
+    required int stockQty,
+
+    int neededQty = 0,
+
+  }) async {
+
+
+
+    // 1️⃣ 先檢查有沒有同品項
+
+    final result = await select(
+
+      '''
+
+      SELECT * FROM inventory
+
+      WHERE name = ?
+
+      ''',
+
+      [name],
+
+    );
+
+
+
     // 2️⃣ 有 -> 更新數量
+
     if (result.isNotEmpty) {
+
+
 
       final row = result.first;
 
+
+
       final currentStock =
+
           row['stockQty'] as int;
 
+
+
       final currentNeeded =
+
           row['neededQty'] as int;
 
+
+
       await execute(
+
         '''
+
         UPDATE inventory
+
         SET stockQty = ?,
+
             neededQty = ?,
+
             updatedAt = ?
+
         WHERE name = ?
+
         ''',
+
         [
+
           currentStock + stockQty,
+
           currentNeeded + neededQty,
+
           DateTime.now().toIso8601String(),
+
           name,
+
         ],
+
       );
+
+
 
     } else {
 
+
+
       // 3️⃣ 沒有 -> 新增
+
       await execute(
+
         '''
+
         INSERT INTO inventory (
+
           name,
+
           category,
+
           unit,
+
           stockQty,
+
           reservedQty,
+
           neededQty,
+
           updatedAt
+
         )
+
         VALUES (?, ?, ?, ?, 0, ?, ?)
+
         ''',
+
         [
+
           name,
+
           category,
+
           unit,
+
           stockQty,
+
           neededQty,
+
           DateTime.now().toIso8601String(),
+
         ],
+
       );
+
     }
+
   }
+
+
 
   //補貨
+
   Future<void> addStock(int id, int qty) async {
+
     await execute('''
+
       UPDATE inventory
+
       SET stockQty = stockQty + ?,
+
           updatedAt = ?
+
       WHERE id = ?
+
     ''', [
+
       qty,
+
       DateTime.now().toIso8601String(),
+
       id
+
     ]);
+
   }
+
+
 
   //更新需求量
+
   Future<void> updateNeeded(int id, int neededQty) async {
+
     await execute('''
+
       UPDATE inventory
+
       SET neededQty = ?,
+
           updatedAt = ?
+
       WHERE id = ?
+
     ''', [
+
       neededQty,
+
       DateTime.now().toIso8601String(),
+
       id
+
     ]);
+
   }
+
   //預留物資
+
   Future<void> allocate({
+
     required int itemId,
+
     required String zoneId,
+
     required int qty,
+
   }) async {
 
+
+
     await transaction(() async {
+
+
 
       // 1️⃣ 檢查庫存
+
       final item = await select(
+
         'SELECT * FROM inventory WHERE id = ?',
+
         [itemId],
+
       );
 
+
+
       if (item.isEmpty) {
+
         throw Exception("Item not found");
+
       }
+
+
 
       final row = item.first;
+
       final stock = row['stockQty'] as int;
 
+
+
       if (stock < qty) {
+
         throw Exception("Not enough stock");
+
       }
 
+
+
       // 2️⃣ 增加 reserved
+
       await execute('''
+
         UPDATE inventory
+
         SET reservedQty = reservedQty + ?
+
         WHERE id = ?
+
       ''', [qty, itemId]);
 
+
+
       // 3️⃣ 建立 allocation
+
       await execute('''
+
         INSERT INTO allocations (
+
           itemId, zoneId, quantity,
+
           status, createdAt
+
         )
+
         VALUES (?, ?, ?, 'reserved', ?)
+
       ''', [
+
         itemId,
+
         zoneId,
+
         qty,
+
         DateTime.now().toIso8601String(),
+
       ]);
+
     });
+
   }
+
+
 
   //查allocation
+
   Future<List<Map<String, Object?>>> getAllocations() async {
+
     final result = await select('''
+
       SELECT
+
         a.id        AS allocationId,
+
         a.itemId    AS itemId,
+
         a.zoneId    AS zoneId,
+
         a.quantity  AS qty,
+
         a.status    AS status,
+
         a.createdAt AS createdAt,
+
         i.name      AS itemName,
+
         i.unit      AS unit
+
       FROM allocations a
+
       LEFT JOIN inventory i ON a.itemId = i.id
+
       ORDER BY a.createdAt DESC
+
     ''');
+
     return result.toList();
+
   }
 
+
+
   //出貨(扣庫存)
+
   Future<void> dispatch({
+
     required int allocationId,
+
   }) async {
+
+
 
     await transaction(() async {
 
+
+
       // 1️⃣ 找 allocation
+
       final alloc = await select(
+
         'SELECT * FROM allocations WHERE id = ?',
+
         [allocationId],
+
       );
 
+
+
       if (alloc.isEmpty) {
+
         throw Exception("Allocation not found");
+
       }
+
+
 
       final a = alloc.first;
 
+
+
       final itemId = a['itemId'] as int;
+
       final qty = a['quantity'] as int;
+
       final status = a['status'] as String;
 
+
+
       if (status == 'shipped') {
+
         throw Exception("Already shipped");
+
       }
 
+
+
       // 2️⃣ 更新 inventory
+
       await execute('''
+
         UPDATE inventory
+
         SET stockQty = stockQty - ?,
+
             reservedQty = reservedQty - ?
+
         WHERE id = ?
+
       ''', [
+
         qty,
+
         qty,
+
         itemId
+
       ]);
 
+
+
       // 3️⃣ 更新 allocation
+
       await execute('''
+
         UPDATE allocations
+
         SET status = 'shipped'
+
         WHERE id = ?
+
       ''', [allocationId]);
+
     });
+
   }
+
+
 
   //查daispatch
+
   Future<List<Map<String, Object?>>> getDispatches() async {
+
     final result = await select('''
+
       SELECT
+
         a.id        AS allocationId,
+
         a.itemId    AS itemId,
+
         a.zoneId    AS zoneId,
+
         a.quantity  AS qty,
+
         a.status    AS status,
+
         a.createdAt AS createdAt,
+
         i.name      AS itemName,
+
         i.unit      AS unit
+
       FROM allocations a
+
       LEFT JOIN inventory i ON a.itemId = i.id
+
       WHERE a.status = 'shipped'
+
       ORDER BY a.createdAt DESC
+
     ''');
+
     return result.toList();
+
   }
+
+
 
   Future<void> insertSupplyRequest(SupplyRequest req) async {
+
     await execute('''
+
       INSERT OR IGNORE INTO supply_requests (
+
         requestId,
+
         userId,
+
         itemId,
+
         qty,
+
         lat,
+
         lng,
+
         receiverAdminId,
+
         hopCount,
+
         status,
+
         createdAt,
+
         receivedAt
+
       )
+
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
     ''', [
+
       req.requestId,
+
       req.userId,
+
       req.itemId,
+
       req.qty,
+
       req.lat,
+
       req.lng,
+
       req.receiverAdminId,
+
       req.hopCount,
+
       req.status,
+
       req.createdAt.toIso8601String(),
+
       req.receivedAt?.toIso8601String(),
+
     ]);
+
   }
+
+
 
   Future<List<Map<String, Object?>>> getAllRequests() async {
+
     final result = await select('SELECT * FROM supply_requests ORDER BY createdAt DESC');
+
     return result.toList();
+
   }
+
+
 
   Future<List<Map<String, Object?>>> getRequestsByAdmin(
+
     String receiverAdminId,
+
   ) async {
+
     final result = await select('''
+
       SELECT
+
         sr.requestId,
+
         sr.userId,
+
         sr.itemId,
+
         i.name AS itemName,
+
         i.unit AS unit,
+
         sr.qty,
+
         sr.lat,
+
         sr.lng,
+
         sr.receiverAdminId,
+
         sr.hopCount,
+
         sr.status,
+
         sr.createdAt,
+
         sr.receivedAt
+
       FROM supply_requests sr
+
       JOIN inventory i ON sr.itemId = i.id
+
       WHERE sr.receiverAdminId = ?
+
       ORDER BY sr.receivedAt DESC
+
     ''', [receiverAdminId]);
 
+
+
     return result.toList();
+
   }
+
+
 
   Future<void> updateRequestStatus(String requestId, String status) async {
+
     await execute('''
+
       UPDATE supply_requests
+
       SET status = ?
+
       WHERE requestId = ?
+
     ''', [status, requestId]);
+
   }
 
+
+
   // 1. 登入時抓取該帳號對應的轄區
+
   Future<String?> getZoneIdByAdmin(String username, String password) async {
+
     final result = await select(
+
       'SELECT zoneId FROM admins WHERE username = ? AND password = ?', 
+
       [username, password]
+
     );
+
     if (result.isEmpty) return null;
+
     return result.first['zoneId']?.toString();
+
   }
+
+
+
 
 
   Future<List<Map<String, Object?>>> getHotZones() async {
+
     final result = await select('''
+
       SELECT 
+
         gridId,
+
         zoneId,
+
         SUM(qty) AS totalQty,
+
         COUNT(*) AS requestCount
+
       FROM supply_requests
+
       WHERE status = 'pending'
+
       GROUP BY gridId, zoneId
+
       ORDER BY totalQty DESC
+
     ''');
 
+
+
     return result.toList();
+
   }
+
   Future<void> insertEmergencyRequest(EmergencyRequest req) async {
+
     await execute('''
+
       INSERT OR IGNORE INTO emergency_requests (
+
         emergencyId,
+
         userId,
+
         userName,
+
         phone,
+
         latitude,
+
         longitude,
+
         status,
+
         receiverAdminId,
+
         hopCount,
+
         sentAt,
+
         receivedAt
+
       )
+
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
       ''', [
+
         req.emergencyId,
+
         req.userId,
+
         req.userName,
+
         req.phone,
+
         req.lat,
+
         req.lng,
+
         req.status,
+
         req.receiverAdminId,
+
         req.hopCount,
+
         req.sentAt.toIso8601String(),
+
         req.receivedAt?.toIso8601String(),
+
       ]);
+
   }
+
+
 
   Future<List<Map<String, Object?>>> getEmergencyRequestsByAdmin(
+
     String receiverAdminId,
+
   ) async {
+
     final result = await select('''
+
       SELECT *
+
       FROM emergency_requests
+
       WHERE receiverAdminId = ?
+
       ORDER BY receivedAt DESC
+
     ''', [receiverAdminId]);
 
+
+
     return result.toList();
+
   }
+
+
 
   Future<void> updateEmergencyStatus(
+
     String emergencyId,
+
     String status,
+
   ) async {
+
     await execute('''
+
       UPDATE emergency_requests
+
       SET status = ?
+
       WHERE emergencyId = ?
+
     ''', [status, emergencyId]);
+
   }
+
+
 
   Future<List<Map<String, dynamic>>> getVictimDashboard(
+
   String receiverAdminId,
+
 ) async {
+
   final victims = <String, Map<String, dynamic>>{};
 
+
+
   // 1. 健康回報
+
   final healthReports = await getHealthReportsByAdmin(receiverAdminId);
 
+
+
   for (final report in healthReports) {
+
     victims[report.reporterId] ??= {
+
       "userId": report.reporterId,
+
       "name": report.name,
+
       "phone": report.phone,
+
       "healthStatus": null,
+
       "healthDescription": null,
+
       "hasSOS": false,
+
       "sosStatus": null,
+
       "supplyRequests": [],
+
       "lat": report.lat,
+
       "lng": report.lng,
+
       "lastUpdatedAt": report.reportTime.toIso8601String(),
+
     };
 
+
+
     victims[report.reporterId]!["healthStatus"] = report.status;
+
     victims[report.reporterId]!["healthDescription"] = report.description;
+
     victims[report.reporterId]!["lat"] = report.lat;
+
     victims[report.reporterId]!["lng"] = report.lng;
+
     victims[report.reporterId]!["lastUpdatedAt"] =
+
         report.reportTime.toIso8601String();
+
   }
 
+
+
   // 2. SOS
+
   final sosList =
+
     await getEmergencyRequestsByAdmin(
+
       receiverAdminId,
+
     );
+
+
 
   for (final sos in sosList) {
 
+
+
     final userId =
+
         sos['userId']?.toString() ?? '';
 
+
+
     victims[userId] ??= {
+
       "userId": userId,
 
+
+
       "name":
+
           sos['userName']?.toString() ?? '',
 
+
+
       "phone":
+
           sos['phone']?.toString() ?? '',
+
+
 
       "healthStatus": null,
 
+
+
       "healthDescription": null,
+
+
 
       "hasSOS": false,
 
+
+
       "sosStatus": null,
+
+
 
       "supplyRequests": [],
 
+
+
       "lat": sos['latitude'],
+
+
 
       "lng": sos['longitude'],
 
+
+
       "lastUpdatedAt":
+
           sos['sentAt']?.toString(),
+
     };
+
+
 
     victims[userId]!["hasSOS"] = true;
 
+
+
     victims[userId]!["sosStatus"] =
+
         sos['status'];
 
+
+
     victims[userId]!["lat"] =
+
         sos['latitude'];
 
+
+
     victims[userId]!["lng"] =
+
         sos['longitude'];
 
+
+
     victims[userId]!["lastUpdatedAt"] =
+
         sos['sentAt']?.toString();
+
   }
 
+
+
     // 3. 物資需求
+
     final requests = await getRequestsByAdmin(receiverAdminId);
 
+
+
     for (final req in requests) {
+
       final userId = req['userId']?.toString() ?? '';
+
       if (userId.isEmpty) continue;
 
+
+
       victims[userId] ??= {
+
         "userId": userId,
+
         "name": "",
+
         "phone": "",
+
         "healthStatus": null,
+
         "healthDescription": null,
+
         "hasSOS": false,
+
         "sosStatus": null,
+
         "supplyRequests": [],
+
         "lat": req['lat'],
+
         "lng": req['lng'],
+
         "lastUpdatedAt": req['receivedAt']?.toString() ??
+
             req['createdAt']?.toString(),
+
       };
 
+
+
       (victims[userId]!["supplyRequests"] as List).add({
+
         "requestId": req['requestId'],
+
         "itemId": req['itemId'],
+
         "itemName": req['itemName'],
+
         "unit": req['unit'],
+
         "qty": req['qty'],
+
         "status": req['status'],
+
       });
 
+
+
       victims[userId]!["lat"] = req['lat'];
+
       victims[userId]!["lng"] = req['lng'];
+
       victims[userId]!["lastUpdatedAt"] =
+
           req['receivedAt']?.toString() ?? req['createdAt']?.toString();
+
     }
+
+
 
     final list = victims.values.toList();
 
+
+
     list.sort((a, b) {
+
       int priority(Map<String, dynamic> v) {
+
         if (v["hasSOS"] == true && v["sosStatus"] == "active") return 0;
+
         if (v["healthStatus"] == "critical") return 1;
+
         if (v["healthStatus"] == "missing") return 2;
+
         if ((v["supplyRequests"] as List).isNotEmpty) return 3;
+
         if (v["healthStatus"] == "minor") return 4;
+
         return 5;
+
       }
 
+
+
       return priority(a).compareTo(priority(b));
+
     });
 
+
+
     return list;
+
   }
 
+
+
   Future<Map<String, dynamic>> dispatchSupplyRequest({
+
     required String requestId,
+
   }) async {
+
     Map<String, dynamic>? dispatchResult;
+
+
 
     await transaction(() async {
 
+
+
       // 1. 找物資需求
+
       final reqResult = await select(
+
         '''
+
         SELECT *
+
         FROM supply_requests
+
         WHERE requestId = ?
+
         ''',
+
         [requestId],
+
       );
 
+
+
       if (reqResult.isEmpty) {
+
         throw Exception("Supply request not found");
+
       }
+
+
 
       final req = reqResult.first;
 
+
+
       final itemId = req['itemId'] as int;
+
       final qty = req['qty'] as int;
+
       final status = req['status']?.toString() ?? 'pending';
 
+      final stationId = req['stationId']?.toString();
+
+
+
       // 2. 只有 claimed 才可以確認取貨
+
       if (status != 'claimed') {
+
         throw Exception("Only claimed request can be dispatched");
+
       }
 
-      // 3. 找庫存
-      final itemResult = await select(
+
+
+      // 3. 必須已經分配收容中心
+
+      if (stationId == null || stationId.isEmpty) {
+
+        throw Exception("Supply request has no assigned station");
+
+      }
+
+
+
+      // 4. 找「指定收容中心」的庫存
+
+      final stationItemResult = await select(
+
         '''
-        SELECT *
-        FROM inventory
-        WHERE id = ?
+
+        SELECT
+
+          si.*,
+
+          i.name,
+
+          i.unit
+
+        FROM station_inventory si
+
+        JOIN inventory i
+
+          ON si.itemId = i.id
+
+        WHERE si.stationId = ?
+
+          AND si.itemId = ?
+
         ''',
-        [itemId],
+
+        [
+
+          stationId,
+
+          itemId,
+
+        ],
+
       );
 
-      if (itemResult.isEmpty) {
-        throw Exception("Inventory item not found");
+
+
+      if (stationItemResult.isEmpty) {
+
+        throw Exception("Station inventory item not found");
+
       }
 
-      final item = itemResult.first;
+
+
+      final item = stationItemResult.first;
+
+
 
       final stockQty = item['stockQty'] as int;
+
       final reservedQty = item['reservedQty'] as int;
 
+
+
       final itemName = item['name']?.toString() ?? '';
+
       final unit = item['unit']?.toString() ?? '';
 
-      // 4. 檢查實際庫存
+
+
+      // 5. 檢查實際庫存
+
       if (stockQty < qty) {
+
         throw Exception(
-          "Not enough stock. stock=$stockQty, required=$qty",
+
+          "Not enough station stock. stock=$stockQty, required=$qty",
+
         );
+
       }
 
-      // 5. 檢查這筆需求是否真的有預留物資
+
+
+      // 6. 檢查預留數量
+
       if (reservedQty < qty) {
+
         throw Exception(
-          "Reserved quantity is not enough. reserved=$reservedQty, required=$qty",
+
+          "Station reserved quantity is not enough. "
+
+          "reserved=$reservedQty, required=$qty",
+
         );
+
       }
+
+
 
       final now = DateTime.now().toIso8601String();
 
-      // 6. 義工真正取貨
-      // 此時物資才真正離開收容中心
+
+
+      // 7. 義工真正取貨
+
+      // 物資此時才真正離開「指定收容中心」
+
       await execute(
+
         '''
-        UPDATE inventory
+
+        UPDATE station_inventory
+
         SET stockQty = stockQty - ?,
+
             reservedQty = reservedQty - ?,
+
             updatedAt = ?
-        WHERE id = ?
+
+        WHERE stationId = ?
+
+          AND itemId = ?
+
         ''',
+
         [
+
           qty,
+
           qty,
+
           now,
+
+          stationId,
+
           itemId,
+
         ],
+
       );
 
-      // 7. 更新需求狀態
+
+
+      // 8. 更新需求狀態
+
       await execute(
+
         '''
+
         UPDATE supply_requests
+
         SET status = 'dispatched'
+
         WHERE requestId = ?
+
         ''',
+
         [requestId],
+
       );
 
-      // 8. 回傳結果
+
+
+      // 9. 回傳結果
+
       dispatchResult = {
+
         "requestId": requestId,
+
+        "stationId": stationId,
+
         "itemId": itemId,
+
         "itemName": itemName,
+
         "unit": unit,
+
         "qty": qty,
+
         "status": "dispatched",
+
       };
+
     });
 
+
+
     return dispatchResult!;
+
   }
 
   Future<Map<String, dynamic>> completeSupplyRequest({
+
     required String requestId,
+
   }) async {
+
     Map<String, dynamic>? result;
 
+
+
     await transaction(() async {
+
       // 1. 找需求
+
       final reqResult = await select(
+
         '''
+
         SELECT *
+
         FROM supply_requests
+
         WHERE requestId = ?
+
         ''',
+
         [requestId],
+
       );
+
+
 
       if (reqResult.isEmpty) {
+
         throw Exception("Supply request not found");
+
       }
+
+
 
       final req = reqResult.first;
+
       final status = req['status']?.toString();
 
+
+
       // 2. 只有 dispatched 才能完成
+
       if (status != 'dispatched') {
+
         throw Exception(
+
           "Only dispatched request can be completed",
+
         );
+
       }
 
+
+
       // 3. 只改狀態，不動 inventory
+
       await execute(
+
         '''
+
         UPDATE supply_requests
+
         SET status = 'completed'
+
         WHERE requestId = ?
+
         ''',
+
         [requestId],
+
       );
 
+
+
       result = {
+
         "requestId": requestId,
+
         "status": "completed",
+
       };
+
     });
 
+
+
     return result!;
+
   }
+
   // =====================
+
   // SEED & HELPERS 
+
   // =====================
+
   Future<void> seedAll() async {
+
+
 
   await seedUsers();
 
+
+
   await seedHealthReports();
+
+
 
   await seedInventory();
 
+
+
+  await seedStations();
+
+
+
+  await seedStationInventory();
+
+
+
   await seedAllocations();
+
+
 
   await seedSupplyRequests();
 
+
+
   await seedEmergencyRequests();
 
+
+
   print("All seed data completed");
+
 }
 
+
+
   Future<void> seedUsers() async {
+
     final users = [
+
       ['U001', '王小明', '0912345678', '南投縣埔里鎮大學路521號'],
+
       ['U002', '李小華', '0923456789', '南投縣埔里鎮大學路560號'],
 
+
+
       ['U003', '陳志明', '0934567891', '南投縣埔里鎮大學路470號'],
+
       ['U004', '林雅婷', '0945678912', '南投縣埔里鎮大學路301號'],
 
+
+
       ['U005', '黃建豪', '0956789123', '南投縣埔里鎮大學路480號'],
+
       ['U006', '張美玲', '0967891234', '南投縣埔里鎮大學路500號'],
 
+
+
       ['U007', '吳宗翰', '0978912345', '南投縣埔里鎮大學路490號'],
+
       ['U008', '蔡佩珊', '0989123456', '南投縣埔里鎮大學路502號'],
 
+
+
       ['U009', '劉志偉', '0990123456', '南投縣埔里鎮大學路506號'],
+
       ['U010', '陳美玲', '0910123456', '南投縣埔里鎮大學路511號'],
 
+
+
       ['U011', '黃甲玲', '0965924783', '南投縣埔里鎮大學路47號'],
+
       ['U012', '張員安', '0951849635', '南投縣埔里鎮大學路503號'],
 
+
+
       ['U013', '楊意涵', '0949668511', '南投縣埔里鎮大學路490號'],
+
       ['U014', '周延依', '0933875619', '南投縣埔里鎮大學路485號'],
+
     ];
+
+
+
 
 
   for (final u in users) {
+
     await execute('''
+
       INSERT OR IGNORE INTO users (
+
         id, name, phone, area, registeredAt
+
       )
+
       VALUES (?, ?, ?, ?, ?)
+
     ''', [
+
       u[0],
+
       u[1],
+
       u[2],
+
       u[3],
+
       DateTime.now().toIso8601String(),
+
     ]);
+
   }
 
+
+
   print("Seed users created");
+
   }
+
+
 
   Future<void> seedHealthReports() async {
 
+
+
     final existing =
+
       await select("SELECT id FROM health_reports LIMIT 1");
 
+
+
       if (existing.isNotEmpty) {
+
         print("Health reports 已存在，跳過 seed");
+
         return;
+
       }
+
     final reports = [
 
+
+
   [
+
     'R001',
+
     'U001',
+
     '王小明',
+
     'safe',
+
     '目前安全，在宿舍區',
+
     23.9531,
+
     120.9302,
+
     '南投縣埔里鎮大學路521號'
+
   ],
 
+
+
   [
+
     'R002',
+
     'U004',
+
     '林雅婷',
+
     'minor',
+
     '腳受傷，需要醫療協助',
+
     23.9498,
+
     120.9269,
+
     '南投縣埔里鎮大學路301號'
+
   ],
 
+
+
   [
+
     'R003',
+
     'U006',
+
     '張美玲',
+
     'critical',
+
     '受困圖書館',
+
     23.9614,
+
     120.9255,
+
     '南投縣埔里鎮大學路500號'
 
+
+
   ],
 
+
+
   [
+
     'R004',
+
     'U007',
+
     '吳宗翰',
+
     'safe',
+
     '目前安全',
+
     23.9576,
+
     120.9254,
+
     '南投縣埔里鎮大學路490號'
 
+
+
   ],
+
+
 
   [
+
     'R005',
+
     'U008',
+
     '蔡佩珊',
+
     'minor',
+
     '需要簡單包紮',
+
     23.9506,
+
     120.9361,
+
     '南投縣埔里鎮大學路502號'
 
+
+
   ],
+
+
 
 ];
 
+
+
   for (final r in reports) {
 
+
+
     await execute('''
+
       INSERT OR REPLACE INTO health_reports (
+
         uuid,
+
         reporterId,
+
         name,
+
         status,
+
         description,
+
         lat,
+
         lng,
+
         address,
+
         reportTime
+
       )
+
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+
     ''', [
 
+
+
       r[0],
+
       r[1],
+
       r[2],
+
       r[3],
+
       r[4],
+
       r[5],
+
       r[6],
+
       r[7],
+
       DateTime.now().toIso8601String(),
 
+
+
     ]);
+
   }
+
+
 
   print("Seed health reports created");
+
   }
+
+
 
 Future<void> seedInventory() async {
+
   final items = [
+
     ['礦泉水', '食品飲水', '箱', 120, 20, 300],
+
     ['泡麵', '食品飲水', '箱', 80, 10, 200],
+
     ['餅乾', '食品飲水', '箱', 50, 5, 100],
 
+
+
     ['毛毯', '生活用品', '件', 40, 15, 80],
+
     ['睡袋', '生活用品', '件', 25, 5, 50],
 
+
+
     ['口罩', '醫療衛生', '盒', 300, 50, 500],
+
     ['急救包', '醫療衛生', '組', 60, 10, 120],
+
     ['退燒藥', '醫療衛生', '盒', 45, 8, 100],
 
+
+
     ['雨衣', '衣物', '件', 70, 12, 150],
+
     ['保暖外套', '衣物', '件', 30, 3, 60],
+
   ];
 
+
+
   for (final i in items) {
+
     // 先檢查這個品項是否已經存在
+
     final existing = await select(
+
       '''
+
       SELECT id
+
       FROM inventory
+
       WHERE name = ?
+
         AND category = ?
+
         AND unit = ?
+
       LIMIT 1
+
       ''',
+
       [
+
         i[0],
+
         i[1],
+
         i[2],
+
       ],
+
     );
+
+
 
     // 已經存在就不要再新增
+
     if (existing.isNotEmpty) {
+
       print('Inventory 已存在，跳過：${i[0]}');
+
       continue;
+
     }
 
+
+
     // 不存在才新增
+
     await execute(
+
       '''
+
       INSERT INTO inventory (
+
         name,
+
         category,
+
         unit,
+
         stockQty,
+
         reservedQty,
+
         neededQty,
+
         updatedAt
+
       )
+
       VALUES (?, ?, ?, ?, ?, ?, ?)
+
       ''',
+
       [
+
         i[0],
+
         i[1],
+
         i[2],
+
         i[3],
+
         i[4],
+
         i[5],
+
         DateTime.now().toIso8601String(),
+
       ],
+
     );
 
+
+
     print('新增 Inventory：${i[0]}');
+
   }
 
+
+
   print('Seed inventory finished');
+
   }
+
+
 
 Future<void> seedAllocations() async {
 
+
+
   // ===== 測試資料 1 =====
+
   final existing1 = await select(
+
     '''
+
     SELECT id
+
     FROM allocations
+
     WHERE itemId = ?
+
       AND zoneId = ?
+
       AND quantity = ?
+
     LIMIT 1
+
     ''',
+
     [
+
       1,
+
       '宿舍區物資站',
+
       30,
+
     ],
+
   );
 
+
+
   if (existing1.isEmpty) {
+
     await execute(
+
       '''
+
       INSERT INTO allocations (
+
         itemId,
+
         zoneId,
+
         quantity,
+
         status,
+
         createdAt
+
       )
+
       VALUES (?, ?, ?, ?, ?)
+
       ''',
+
       [
+
         1,
+
         '宿舍區物資站',
+
         30,
+
         'reserved',
+
         DateTime.now().toIso8601String(),
+
       ],
+
     );
 
+
+
     print('新增 Allocation：宿舍區物資站');
+
   } else {
+
     print('Allocation 已存在，跳過：宿舍區物資站');
+
   }
+
+
+
 
 
   // ===== 測試資料 2 =====
+
   final existing2 = await select(
+
     '''
+
     SELECT id
+
     FROM allocations
+
     WHERE itemId = ?
+
       AND zoneId = ?
+
       AND quantity = ?
+
     LIMIT 1
+
     ''',
+
     [
+
       2,
+
       '教學大樓物資站',
+
       20,
+
     ],
+
   );
 
+
+
   if (existing2.isEmpty) {
+
     await execute(
+
       '''
+
       INSERT INTO allocations (
+
         itemId,
+
         zoneId,
+
         quantity,
+
         status,
+
         createdAt
+
       )
+
       VALUES (?, ?, ?, ?, ?)
+
       ''',
+
       [
+
         2,
+
         '教學大樓物資站',
+
         20,
+
         'shipped',
+
         DateTime.now().toIso8601String(),
+
       ],
+
     );
 
+
+
     print('新增 Allocation：教學大樓物資站');
+
   } else {
+
     print('Allocation 已存在，跳過：教學大樓物資站');
+
   }
+
+
 
   print('Seed allocations finished');
+
 }
 
+
+
   Future<void> seedSupplyRequests() async {
+
     final result = await select("SELECT id FROM supply_requests LIMIT 1");
+
     if (result.isNotEmpty) return;
 
+
+
     final requests = [
+
       ['REQ001', 'U009', 1, 20, 23.9512, 120.9285, 'admin_ncnu', 1],
+
       ['REQ002', 'U010', 1, 35, 23.9520, 120.9290, 'admin_ncnu', 2],
+
       ['REQ003', 'U011', 2, 15, 23.9505, 120.9278, 'admin_ncnu', 1],
+
       ['REQ004', 'U012', 7, 10, 23.9531, 120.9302, 'admin_ncnu', 3],
+
     ];
 
+
+
     for (final r in requests) {
+
       await execute('''
+
         INSERT OR IGNORE INTO supply_requests (
+
           requestId,
+
           userId,
+
           itemId,
+
           qty,
+
           lat,
+
           lng,
+
           receiverAdminId,
+
           hopCount,
+
           status,
+
           createdAt,
+
           receivedAt
+
         )
+
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
       ''', [
+
         r[0],
+
         r[1],
+
         r[2],
+
         r[3],
+
         r[4],
+
         r[5],
+
         r[6],
+
         r[7],
+
         'pending',
+
         DateTime.now().toIso8601String(),
+
         DateTime.now().toIso8601String(),
+
       ]);
+
     }
+
+
 
     print("Seed supply requests created");
+
   }
+
     Future<List<Map<String, Object?>>> getSupplyRequestDetails() async {
+
       final result = await select('''
+
         SELECT
+
           sr.requestId,
+
           sr.userId,
+
           sr.itemId,
+
           i.name AS itemName,
+
           i.unit AS unit,
+
           sr.qty,
+
           sr.lat,
+
           sr.lng,
+
           sr.receiverAdminId,
+
           sr.hopCount,
+
           sr.status,
+
           sr.createdAt,
+
           sr.receivedAt,
+
           sr.address,
+
           sr.volunteerId,
+
           sr.claimedAt
+
         FROM supply_requests sr
+
         JOIN inventory i
+
         ON sr.itemId = i.id
+
         ORDER BY sr.createdAt DESC
+
       ''');
 
+
+
       return result.toList();
+
     }
+
+
 
   Future<void> seedEmergencyRequests() async {
 
+
+
     final existing =
+
       await select("SELECT id FROM emergency_requests LIMIT 1");
 
+
+
       if (existing.isNotEmpty) {
+
         print("Emergency requests 已存在，跳過 seed");
+
         return;
+
       }
+
+
 
   final now = DateTime.now();
 
+
+
   // [emergencyId, userId, userName, phone, lat, lng, address, status, receiverAdminId, hopCount, sentAt, receivedAt]
+
   final sosData = [
 
+
+
     [
+
       'SOS002',
+
       'U011',
+
       '黃甲玲',
+
       '0965924783',
+
       23.9616,
+
       120.9238,
+
       '南投縣埔里鎮大學路47號',
+
       'active',
+
       'admin_ncnu',
+
       3,
+
       now.subtract(Duration(minutes: 20)),
+
       now.subtract(Duration(minutes: 12)),
+
     ],
 
+
+
     [
+
       'SOS003',
+
       'U012',
+
       '張員安',
+
       '0951849635',
+
       23.9503,
+
       120.9247,
+
       '南投縣埔里鎮大學路503號',
+
       'processing',
+
       'admin_ncnu',
+
       1,
+
       now.subtract(Duration(minutes: 30)),
+
       now.subtract(Duration(minutes: 25)),
+
     ],
 
+
+
     [
+
       'SOS004',
+
       'U013',
+
       '楊意涵',
+
       '0949668511',
+
       23.9497,
+
       120.9333,
+
       '南投縣埔里鎮大學路490號',
+
       'resolved',
+
       'admin_ncnu',
+
       4,
+
       now.subtract(Duration(hours: 1)),
+
       now.subtract(Duration(minutes: 50)),
+
     ],
 
+
+
     [
+
       'SOS005',
+
       'U012',
+
       '周延依',
+
       '0933875619',
+
       23.9660,
+
       120.9255,
+
       '南投縣埔里鎮大學路485號',
+
       'active',
+
       'admin_ncnu',
+
       2,
+
       now.subtract(Duration(minutes: 8)),
+
       now.subtract(Duration(minutes: 5)),
+
     ],
+
+
 
   ];
 
+
+
   for (final s in sosData) {
 
+
+
     await execute('''
+
       INSERT OR REPLACE INTO emergency_requests (
+
         emergencyId,
+
         userId,
+
         userName,
+
         phone,
+
         latitude,
+
         longitude,
+
         address,
+
         status,
+
         receiverAdminId,
+
         hopCount,
+
         sentAt,
+
         receivedAt
+
       )
+
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+
     ''', [
+
       s[0],
+
       s[1],
+
       s[2],
+
       s[3],
+
       s[4],
+
       s[5],
+
       s[6],
+
       s[7],
+
       s[8],
+
       s[9],
+
       (s[10] as DateTime).toIso8601String(),
+
       (s[11] as DateTime).toIso8601String(),
+
     ]);
+
   }
+
+
 
   print("Seed emergency requests created");
+
 }
-  
+
+
+
+
 
   AppUser _rowToUser(Row row) {
+
     return AppUser(
+
       id: row['id']?.toString() ?? '',
+
       name: row['name']?.toString() ?? '',
+
       phone: row['phone']?.toString() ?? '',
+
       area: row['area']?.toString() ?? '',
+
       emergencyContactName: row['emergencyContactName']?.toString() ?? '',
+
       emergencyContactPhone: row['emergencyContactPhone']?.toString() ?? '',
+
       emergencyContactRelation: row['emergencyContactRelation']?.toString() ?? '',
+
       bloodType: row['bloodType']?.toString(),
+
       medicalInfo: row['medicalInfo']?.toString(),
+
       registeredAt: DateTime.tryParse(row['registeredAt']?.toString() ?? '') ?? DateTime.now(),
+
     );
+
   }
 
-  HealthReport _rowToHealthReport(Row row) {
-    return HealthReport(
-      uuid: row['uuid']?.toString() ?? '',
-      reporterId: row['reporterId']?.toString() ?? '',
-      name: row['name']?.toString() ?? '',
-      phone: row['phone']?.toString() ?? '',
-      bloodType: row['bloodType']?.toString(),
-      status: row['status']?.toString() ?? '',
-      description: row['description']?.toString() ?? '',
-      lat: (row['lat'] as num?)?.toDouble(),
-      lng: (row['lng'] as num?)?.toDouble(),
-      address: row['address']?.toString() ?? '',
-      reportTime: DateTime.tryParse(row['reportTime']?.toString() ?? '') ?? DateTime.now(),
+
+
+  Future<void> seedStations() async {
+
+    final result = await select(
+
+      'SELECT COUNT(*) AS count FROM stations',
+
     );
+
+
+
+    final count = result.first['count'] as int;
+
+
+
+    // 已經有據點就不要重複新增
+
+    if (count > 0) {
+
+      return;
+
+    }
+
+
+
+    final stations = [
+
+      {
+
+        'stationId': 'OFFICE001',
+
+        'name': '物資中心',
+
+        'type': 'office',
+
+        'lat': 23.9500,
+
+        'lng': 120.9300,
+
+        'address': 'Demo 物資中心',
+
+      },
+
+      {
+
+        'stationId': 'S001',
+
+        'name': 'A收容中心',
+
+        'type': 'shelter',
+
+        'lat': 23.9510,
+
+        'lng': 120.9270,
+
+        'address': 'Demo A收容中心',
+
+      },
+
+      {
+
+        'stationId': 'S002',
+
+        'name': 'B收容中心',
+
+        'type': 'shelter',
+
+        'lat': 23.9600,
+
+        'lng': 120.9400,
+
+        'address': 'Demo B收容中心',
+
+      },
+
+    ];
+
+
+
+    for (final station in stations) {
+
+      await execute(
+
+        '''
+
+        INSERT INTO stations (
+
+          stationId,
+
+          name,
+
+          type,
+
+          lat,
+
+          lng,
+
+          address
+
+        )
+
+        VALUES (?, ?, ?, ?, ?, ?)
+
+        ''',
+
+        [
+
+          station['stationId'],
+
+          station['name'],
+
+          station['type'],
+
+          station['lat'],
+
+          station['lng'],
+
+          station['address'],
+
+        ],
+
+      );
+
+    }
+
   }
+
+
+
+  Future<void> seedStationInventory() async {
+
+  // 已經有資料就不要重複建立
+
+    final existing = await select(
+
+      'SELECT COUNT(*) AS count FROM station_inventory',
+
+    );
+
+
+
+    final count = existing.first['count'] as int;
+
+
+
+    if (count > 0) {
+
+      return;
+
+    }
+
+
+
+    // 取得目前所有物資
+
+    final items = await select('''
+
+      SELECT id, stockQty
+
+      FROM inventory
+
+      ORDER BY id
+
+    ''');
+
+
+
+    for (final item in items) {
+
+      final itemId = item['id'] as int;
+
+      final totalStock = item['stockQty'] as int;
+
+
+
+      // Demo 分配：
+
+      // 物資中心 50%
+
+      // A 收容中心 30%
+
+      // B 收容中心拿剩下的，確保總數完全一致
+
+      final officeStock = (totalStock * 0.5).floor();
+
+      final aStock = (totalStock * 0.3).floor();
+
+      final bStock = totalStock - officeStock - aStock;
+
+
+
+      final now = DateTime.now().toIso8601String();
+
+
+
+      await execute(
+
+        '''
+
+        INSERT INTO station_inventory
+
+        (stationId, itemId, stockQty, reservedQty, updatedAt)
+
+        VALUES (?, ?, ?, ?, ?)
+
+        ''',
+
+        [
+
+          'OFFICE001',
+
+          itemId,
+
+          officeStock,
+
+          0,
+
+          now,
+
+        ],
+
+      );
+
+
+
+      await execute(
+
+        '''
+
+        INSERT INTO station_inventory
+
+        (stationId, itemId, stockQty, reservedQty, updatedAt)
+
+        VALUES (?, ?, ?, ?, ?)
+
+        ''',
+
+        [
+
+          'S001',
+
+          itemId,
+
+          aStock,
+
+          0,
+
+          now,
+
+        ],
+
+      );
+
+
+
+      await execute(
+
+        '''
+
+        INSERT INTO station_inventory
+
+        (stationId, itemId, stockQty, reservedQty, updatedAt)
+
+        VALUES (?, ?, ?, ?, ?)
+
+        ''',
+
+        [
+
+          'S002',
+
+          itemId,
+
+          bStock,
+
+          0,
+
+          now,
+
+        ],
+
+      );
+
+    }
+
+  }
+
+
+
+  HealthReport _rowToHealthReport(Row row) {
+
+    return HealthReport(
+
+      uuid: row['uuid']?.toString() ?? '',
+
+      reporterId: row['reporterId']?.toString() ?? '',
+
+      name: row['name']?.toString() ?? '',
+
+      phone: row['phone']?.toString() ?? '',
+
+      bloodType: row['bloodType']?.toString(),
+
+      status: row['status']?.toString() ?? '',
+
+      description: row['description']?.toString() ?? '',
+
+      lat: (row['lat'] as num?)?.toDouble(),
+
+      lng: (row['lng'] as num?)?.toDouble(),
+
+      address: row['address']?.toString() ?? '',
+
+      reportTime: DateTime.tryParse(row['reportTime']?.toString() ?? '') ?? DateTime.now(),
+
+    );
+
+  }
+
 }
