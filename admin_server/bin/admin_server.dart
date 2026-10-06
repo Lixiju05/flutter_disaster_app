@@ -214,6 +214,27 @@ Future<void> handleRequest(HttpRequest request) async {
         await handleCancelAllocation(jsonData, request);
         break;
 
+      case 'cancelSupplyRequestClaim':
+        await handleCancelSupplyRequestClaim(
+          request,
+          jsonData,
+        );
+        break;
+
+      case 'reserveSupplyRequest':
+        await handleReserveSupplyRequest(
+          request,
+          jsonData,
+        );
+        break;
+
+        case 'completeSupplyRequest':
+          await handleCompleteSupplyRequest(
+            jsonData,
+            request,
+          );
+          break;
+
       default:
         sendJson(request, HttpStatus.badRequest, {
           "success": false,
@@ -872,6 +893,151 @@ Future<void> handleCancelAllocation(
     sendJson(request, HttpStatus.badRequest, {
       'success': false,
       'message': e.toString().replaceFirst('Exception: ', ''),
+    });
+  }
+}
+
+Future<void> handleCancelSupplyRequestClaim(
+  HttpRequest request,
+  Map<String, dynamic> data,
+) async {
+  try {
+    final requestId =
+        data['requestId']?.toString();
+
+    final volunteerId =
+        data['volunteerId']?.toString();
+
+    if (requestId == null ||
+        requestId.isEmpty ||
+        volunteerId == null ||
+        volunteerId.isEmpty) {
+
+      sendJson(
+        request,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'message':
+              'requestId 和 volunteerId 為必填',
+        },
+      );
+
+      return;
+    }
+
+    final service = SupplyRequestService(
+      DatabaseService.instance,
+    );
+
+    await service.cancelClaim(
+      requestId: requestId,
+      volunteerId: volunteerId,
+    );
+
+    sendJson(
+      request,
+      HttpStatus.ok,
+      {
+        'success': true,
+        'message': '取消配送成功',
+        'requestId': requestId,
+      },
+    );
+
+  } catch (e) {
+
+    sendJson(
+      request,
+      HttpStatus.badRequest,
+      {
+        'success': false,
+        'message': e.toString(),
+      },
+    );
+  }
+}
+
+Future<void> handleReserveSupplyRequest(
+  HttpRequest request,
+  Map<String, dynamic> data,
+) async {
+  try {
+    final requestId =
+        data['requestId']?.toString();
+
+    if (requestId == null ||
+        requestId.isEmpty) {
+      sendJson(
+        request,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'message': 'requestId 為必填',
+        },
+      );
+      return;
+    }
+
+    final service = SupplyRequestService(
+      DatabaseService.instance,
+    );
+
+    await service.reserveSupplyRequest(
+      requestId: requestId,
+    );
+
+    sendJson(
+      request,
+      HttpStatus.ok,
+      {
+        'success': true,
+        'message': '物資預留成功',
+        'requestId': requestId,
+      },
+    );
+
+  } catch (e) {
+    sendJson(
+      request,
+      HttpStatus.badRequest,
+      {
+        'success': false,
+        'message': e.toString(),
+      },
+    );
+  }
+}
+
+Future<void> handleCompleteSupplyRequest(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  try {
+    final requestId = jsonData['requestId'];
+
+    if (requestId == null) {
+      sendJson(request, 400, {
+        "success": false,
+        "message": "missing requestId",
+      });
+      return;
+    }
+
+    final result =
+        await DatabaseService.instance.completeSupplyRequest(
+      requestId: requestId,
+    );
+
+    sendJson(request, 200, {
+      "success": true,
+      "message": "supply request completed",
+      "data": result,
+    });
+  } catch (e) {
+    sendJson(request, 500, {
+      "success": false,
+      "message": e.toString(),
     });
   }
 }

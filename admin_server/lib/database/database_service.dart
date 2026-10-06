@@ -743,85 +743,166 @@ class DatabaseService {
     return list;
   }
 
- Future<Map<String, dynamic>> dispatchSupplyRequest({
-  required String requestId,
-}) async {
-  Map<String, dynamic>? dispatchResult;
+  Future<Map<String, dynamic>> dispatchSupplyRequest({
+    required String requestId,
+  }) async {
+    Map<String, dynamic>? dispatchResult;
 
-  await transaction(() async {
-    final reqResult = await select('''
-      SELECT *
-      FROM supply_requests
-      WHERE requestId = ?
-    ''', [requestId]);
+    await transaction(() async {
 
-    if (reqResult.isEmpty) {
-      throw Exception("Supply request not found");
-    }
+      // 1. 找物資需求
+      final reqResult = await select(
+        '''
+        SELECT *
+        FROM supply_requests
+        WHERE requestId = ?
+        ''',
+        [requestId],
+      );
 
-    final req = reqResult.first;
-
-    final itemId = req['itemId'] as int;
-    final qty = req['qty'] as int;
-    final status = req['status']?.toString() ?? 'pending';
-
-    if (status == 'dispatched') {
-      throw Exception("Already dispatched");
-    }
-
-    final itemResult = await select('''
-      SELECT *
-      FROM inventory
-      WHERE id = ?
-    ''', [itemId]);
-
-    if (itemResult.isEmpty) {
-      throw Exception("Inventory item not found");
-    }
-
-    final item = itemResult.first;
-
-    final stockQty = item['stockQty'] as int;
-    final itemName = item['name']?.toString() ?? '';
-    final unit = item['unit']?.toString() ?? '';
-
-    // 義工認領（claimed）時已經扣過庫存，這裡只有 pending 才需要扣
-    if (status != 'claimed') {
-      if (stockQty < qty) {
-        throw Exception("Not enough stock");
+      if (reqResult.isEmpty) {
+        throw Exception("Supply request not found");
       }
 
-      await execute('''
+      final req = reqResult.first;
+
+      final itemId = req['itemId'] as int;
+      final qty = req['qty'] as int;
+      final status = req['status']?.toString() ?? 'pending';
+
+      // 2. 只有 claimed 才可以確認取貨
+      if (status != 'claimed') {
+        throw Exception("Only claimed request can be dispatched");
+      }
+
+      // 3. 找庫存
+      final itemResult = await select(
+        '''
+        SELECT *
+        FROM inventory
+        WHERE id = ?
+        ''',
+        [itemId],
+      );
+
+      if (itemResult.isEmpty) {
+        throw Exception("Inventory item not found");
+      }
+
+      final item = itemResult.first;
+
+      final stockQty = item['stockQty'] as int;
+      final reservedQty = item['reservedQty'] as int;
+
+      final itemName = item['name']?.toString() ?? '';
+      final unit = item['unit']?.toString() ?? '';
+
+      // 4. 檢查實際庫存
+      if (stockQty < qty) {
+        throw Exception(
+          "Not enough stock. stock=$stockQty, required=$qty",
+        );
+      }
+
+      // 5. 檢查這筆需求是否真的有預留物資
+      if (reservedQty < qty) {
+        throw Exception(
+          "Reserved quantity is not enough. reserved=$reservedQty, required=$qty",
+        );
+      }
+
+      final now = DateTime.now().toIso8601String();
+
+      // 6. 義工真正取貨
+      // 此時物資才真正離開收容中心
+      await execute(
+        '''
         UPDATE inventory
         SET stockQty = stockQty - ?,
+            reservedQty = reservedQty - ?,
             updatedAt = ?
         WHERE id = ?
-      ''', [
-        qty,
-        DateTime.now().toIso8601String(),
-        itemId,
-      ]);
-    }
+        ''',
+        [
+          qty,
+          qty,
+          now,
+          itemId,
+        ],
+      );
 
-    await execute('''
-      UPDATE supply_requests
-      SET status = 'dispatched'
-      WHERE requestId = ?
-    ''', [requestId]);
+      // 7. 更新需求狀態
+      await execute(
+        '''
+        UPDATE supply_requests
+        SET status = 'dispatched'
+        WHERE requestId = ?
+        ''',
+        [requestId],
+      );
 
-    dispatchResult = {
-      "requestId": requestId,
-      "itemId": itemId,
-      "itemName": itemName,
-      "unit": unit,
-      "qty": qty,
-      "status": "dispatched",
-    };
-  });
+      // 8. 回傳結果
+      dispatchResult = {
+        "requestId": requestId,
+        "itemId": itemId,
+        "itemName": itemName,
+        "unit": unit,
+        "qty": qty,
+        "status": "dispatched",
+      };
+    });
 
-  return dispatchResult!;
-}
+    return dispatchResult!;
+  }
 
+  Future<Map<String, dynamic>> completeSupplyRequest({
+    required String requestId,
+  }) async {
+    Map<String, dynamic>? result;
+
+    await transaction(() async {
+      // 1. 找需求
+      final reqResult = await select(
+        '''
+        SELECT *
+        FROM supply_requests
+        WHERE requestId = ?
+        ''',
+        [requestId],
+      );
+
+      if (reqResult.isEmpty) {
+        throw Exception("Supply request not found");
+      }
+
+      final req = reqResult.first;
+      final status = req['status']?.toString();
+
+      // 2. 只有 dispatched 才能完成
+      if (status != 'dispatched') {
+        throw Exception(
+          "Only dispatched request can be completed",
+        );
+      }
+
+      // 3. 只改狀態，不動 inventory
+      await execute(
+        '''
+        UPDATE supply_requests
+        SET status = 'completed'
+        WHERE requestId = ?
+        ''',
+        [requestId],
+      );
+
+      result = {
+        "requestId": requestId,
+        "status": "completed",
+      };
+    });
+
+    return result!;
+  }
   // =====================
   // SEED & HELPERS 
   // =====================
