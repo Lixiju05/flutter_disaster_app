@@ -886,6 +886,14 @@ class DatabaseService {
   }
 
   Future<void> seedHealthReports() async {
+
+    final existing =
+      await select("SELECT id FROM health_reports LIMIT 1");
+
+      if (existing.isNotEmpty) {
+        print("Health reports 已存在，跳過 seed");
+        return;
+      }
     final reports = [
 
   [
@@ -1055,46 +1063,95 @@ Future<void> seedInventory() async {
 
 Future<void> seedAllocations() async {
 
-  await execute('''
-    INSERT INTO allocations (
-      itemId,
-      zoneId,
-      quantity,
-      status,
-      createdAt
-    )
-    VALUES (?, ?, ?, ?, ?)
-  ''', [
+  // ===== 測試資料 1 =====
+  final existing1 = await select(
+    '''
+    SELECT id
+    FROM allocations
+    WHERE itemId = ?
+      AND zoneId = ?
+      AND quantity = ?
+    LIMIT 1
+    ''',
+    [
+      1,
+      '宿舍區物資站',
+      30,
+    ],
+  );
 
-    1,
-    '宿舍區物資站',
-    30,
-    'reserved',
-    DateTime.now().toIso8601String(),
+  if (existing1.isEmpty) {
+    await execute(
+      '''
+      INSERT INTO allocations (
+        itemId,
+        zoneId,
+        quantity,
+        status,
+        createdAt
+      )
+      VALUES (?, ?, ?, ?, ?)
+      ''',
+      [
+        1,
+        '宿舍區物資站',
+        30,
+        'reserved',
+        DateTime.now().toIso8601String(),
+      ],
+    );
 
-  ]);
-
-  await execute('''
-    INSERT INTO allocations (
-      itemId,
-      zoneId,
-      quantity,
-      status,
-      createdAt
-    )
-    VALUES (?, ?, ?, ?, ?)
-  ''', [
-
-    2,
-    '教學大樓物資站',
-    20,
-    'shipped',
-    DateTime.now().toIso8601String(),
-
-  ]);
-
-  print("Seed allocations created");
+    print('新增 Allocation：宿舍區物資站');
+  } else {
+    print('Allocation 已存在，跳過：宿舍區物資站');
   }
+
+
+  // ===== 測試資料 2 =====
+  final existing2 = await select(
+    '''
+    SELECT id
+    FROM allocations
+    WHERE itemId = ?
+      AND zoneId = ?
+      AND quantity = ?
+    LIMIT 1
+    ''',
+    [
+      2,
+      '教學大樓物資站',
+      20,
+    ],
+  );
+
+  if (existing2.isEmpty) {
+    await execute(
+      '''
+      INSERT INTO allocations (
+        itemId,
+        zoneId,
+        quantity,
+        status,
+        createdAt
+      )
+      VALUES (?, ?, ?, ?, ?)
+      ''',
+      [
+        2,
+        '教學大樓物資站',
+        20,
+        'shipped',
+        DateTime.now().toIso8601String(),
+      ],
+    );
+
+    print('新增 Allocation：教學大樓物資站');
+  } else {
+    print('Allocation 已存在，跳過：教學大樓物資站');
+  }
+
+  print('Seed allocations finished');
+}
 
   Future<void> seedSupplyRequests() async {
     final result = await select("SELECT id FROM supply_requests LIMIT 1");
@@ -1102,9 +1159,9 @@ Future<void> seedAllocations() async {
 
     final requests = [
       ['REQ001', 'U009', 1, 20, 23.9512, 120.9285, 'admin_ncnu', 1],
-      ['REQ002', 'U0010', 1, 35, 23.9520, 120.9290, 'admin_ncnu', 2],
-      ['REQ003', 'U0011', 2, 15, 23.9505, 120.9278, 'admin_ncnu', 1],
-      ['REQ004', 'U0012', 7, 10, 23.9531, 120.9302, 'admin_ncnu', 3],
+      ['REQ002', 'U010', 1, 35, 23.9520, 120.9290, 'admin_ncnu', 2],
+      ['REQ003', 'U011', 2, 15, 23.9505, 120.9278, 'admin_ncnu', 1],
+      ['REQ004', 'U012', 7, 10, 23.9531, 120.9302, 'admin_ncnu', 3],
     ];
 
     for (final r in requests) {
@@ -1169,6 +1226,14 @@ Future<void> seedAllocations() async {
     }
 
   Future<void> seedEmergencyRequests() async {
+
+    final existing =
+      await select("SELECT id FROM emergency_requests LIMIT 1");
+
+      if (existing.isNotEmpty) {
+        print("Emergency requests 已存在，跳過 seed");
+        return;
+      }
 
   final now = DateTime.now();
 
