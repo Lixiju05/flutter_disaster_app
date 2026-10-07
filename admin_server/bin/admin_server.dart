@@ -478,6 +478,16 @@ Future<void> handleRequest(HttpRequest request) async {
 
           break;
 
+        case 'getVolunteerClaims':
+          
+          await handleGetVolunteerClaims(jsonData, request);
+          
+          break;
+        case 'getVolunteerHistory':
+
+          await handleGetVolunteerHistory(jsonData, request);
+        
+          break;
 
 
       default:
@@ -2043,4 +2053,56 @@ Future<void> handleAutoAssignSupplyRequest(
 
   }
 
+}
+
+Future<void> handleGetVolunteerHistory(
+  Map<String, dynamic> jsonData,
+  HttpRequest request,
+) async {
+  try {
+    final volunteerId = jsonData['volunteerId']?.toString();
+    final stationId = jsonData['stationId']?.toString();
+
+    if (volunteerId == null ||
+        volunteerId.isEmpty ||
+        stationId == null ||
+        stationId.isEmpty) {
+      sendJson(
+        request,
+        HttpStatus.badRequest,
+        {
+          'success': false,
+          'message': 'volunteerId、stationId 為必填',
+        },
+      );
+      return;
+    }
+
+    final service = SupplyRequestService(
+      DatabaseService.instance,
+    );
+
+    final history = await service.getVolunteerHistory(
+      volunteerId: volunteerId,
+      stationId: stationId,
+    );
+
+    sendJson(
+      request,
+      HttpStatus.ok,
+      {
+        'success': true,
+        'data': history,
+      },
+    );
+  } catch (e) {
+    sendJson(
+      request,
+      HttpStatus.internalServerError,
+      {
+        'success': false,
+        'message': e.toString(),
+      },
+    );
+  }
 }

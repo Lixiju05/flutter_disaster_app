@@ -152,8 +152,14 @@ class DatabaseService {
 
       );
 
-}
+    }
+    if (!columnNames.contains('completedAt')) {
+      db.execute(
+        'ALTER TABLE supply_requests ADD COLUMN completedAt TEXT'
+      );
 
+      print('Added completedAt to supply_requests');
+    }
   }
 
 
@@ -1824,34 +1830,31 @@ class DatabaseService {
 
 
 
-      // 3. 只改狀態，不動 inventory
+      // 3. 完成配送
+      // 不再動 inventory，因為確認取貨時已經扣過庫存
+      final completedAt = DateTime.now().toIso8601String();
 
       await execute(
-
         '''
-
         UPDATE supply_requests
-
-        SET status = 'completed'
-
+            SET status = 'completed',
+        completedAt = ?
         WHERE requestId = ?
-
         ''',
-
-        [requestId],
+        [
+          completedAt,
+          requestId,
+        ],
 
       );
 
 
 
       result = {
-
         "requestId": requestId,
-
         "status": "completed",
-
+        "completedAt": completedAt,
       };
-
     });
 
 

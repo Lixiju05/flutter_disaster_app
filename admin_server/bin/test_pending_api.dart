@@ -12,6 +12,7 @@ Future<void> main() async {
       },
       body: jsonEncode({
         'type': 'getPendingSupplyRequests',
+        'stationId': 'S001',
       }),
     );
 

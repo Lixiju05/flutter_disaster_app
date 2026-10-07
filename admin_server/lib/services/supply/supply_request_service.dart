@@ -830,6 +830,44 @@ class SupplyRequestService {
     return result.toList();
   }
 
+  Future<List<Map<String, Object?>>> getVolunteerHistory({
+    required String volunteerId,
+    required String stationId,
+  }) async {
+    final result = await db.select(
+      '''
+      SELECT
+        sr.requestId,
+        sr.userId,
+        sr.itemId,
+        i.name AS itemName,
+        i.unit,
+        sr.qty,
+        sr.lat,
+        sr.lng,
+        sr.address,
+        sr.status,
+        sr.createdAt,
+        sr.claimedAt,
+        sr.completedAt,
+        sr.stationId,
+        st.name AS stationName
+      FROM supply_requests sr
+      LEFT JOIN inventory i
+        ON sr.itemId = i.id
+      LEFT JOIN stations st
+        ON sr.stationId = st.stationId
+      WHERE sr.volunteerId = ?
+        AND sr.stationId = ?
+        AND sr.status = 'completed'
+      ORDER BY sr.completedAt DESC
+      ''',
+      [volunteerId, stationId],
+    );
+
+    return result.toList();
+  }
+
   // =========================================================
 
   // 5. 義工取消認領
