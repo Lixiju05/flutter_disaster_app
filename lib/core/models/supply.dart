@@ -17,7 +17,11 @@ class SupplyItem {
     required this.neededQty,
   });
 
-  int get availableQty => stockQty - reservedQty;
+  /// 後端偶爾會出現負的預留數（資料異常），計算時當作 0
+  int get safeReservedQty => reservedQty < 0 ? 0 : reservedQty;
+  bool get hasReservedError => reservedQty < 0;
+
+  int get availableQty => stockQty - safeReservedQty;
 
   int get shortageQty {
     final shortage = neededQty - availableQty;

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_disaster_app/admin_APP/widgets/page_header.dart';
 import 'package:http/http.dart' as http;
 
 import '../../core/models/healthReport.dart';
@@ -139,13 +140,12 @@ class _HealthReportPageState extends State<HealthReportPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // ── 固定頂部（不隨清單滾動）──────────────
+                      if (widget.showSearch) _buildPageHeader(urgentCount),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+                        padding: EdgeInsets.fromLTRB(24, widget.showSearch ? 12 : 14, 24, 0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (widget.showSearch) _buildPageHeader(urgentCount),
-                            if (widget.showSearch) const SizedBox(height: 12),
                             _buildStatsRow(
                               total: _allReports.length,
                               safe: safeCount,
@@ -232,15 +232,10 @@ class _HealthReportPageState extends State<HealthReportPage> {
 
   // ── 完整頁面標題（管理員側欄使用）──────────────────────
   Widget _buildPageHeader(int urgentCount) {
-    return Row(children: [
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('健康回報',
-            style: TextStyle(color: _kTextMain, fontSize: 26, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 1),
-        const Text('HEALTH REPORT MANAGEMENT',
-            style: TextStyle(color: _kTextSub, fontSize: 13, letterSpacing: 1.3)),
-      ]),
-      const SizedBox(width: 12),
+    return PageHeader(
+      title: '健康回報',
+      subtitle: 'HEALTH REPORT MANAGEMENT',
+      badges: [
       if (urgentCount > 0)
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
@@ -252,20 +247,12 @@ class _HealthReportPageState extends State<HealthReportPage> {
           child: Text('傷患 $urgentCount 件',
               style: const TextStyle(color: _kRed, fontSize: 12, fontWeight: FontWeight.w700)),
         ),
-      const Spacer(),
-      GestureDetector(
-        onTap: _loadReports,
-        child: Container(
-          width: 34, height: 34,
-          decoration: BoxDecoration(
-            color: _kCardBg,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: _kBorder),
-          ),
-          child: const Icon(Icons.refresh_rounded, color: _kBlue, size: 16),
-        ),
-      ),
-    ]);
+      ],
+      actions: [
+        PageHeaderButton(
+            icon: Icons.refresh_rounded, tooltip: '重新整理', onPressed: _loadReports),
+      ],
+    );
   }
 
   // ── 搜尋結果筆數提示 ─────────────────────────────────

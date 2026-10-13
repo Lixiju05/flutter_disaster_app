@@ -2,6 +2,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_disaster_app/admin_APP/widgets/page_header.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'admin_setup_page.dart' show kAreaList;
@@ -215,39 +216,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
   // ── Header ──────────────────────────────────────────────────
   Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 20, 14),
-      decoration: const BoxDecoration(
-        color: _kCardBg,
-        border: Border(bottom: BorderSide(color: _kBorder)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
-                Text(
-                  '用戶管理',
-                  style: TextStyle(
-                    color: _kTextMain,
-                    fontSize: 26,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                SizedBox(height: 2),
-                Text(
-                  'USER MANAGEMENT',
-                  style: TextStyle(
-                    color: _kTextSub,
-                    fontSize: 13,
-                    letterSpacing: 1.4,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
+    return PageHeader(
+      title: '用戶管理',
+      subtitle: 'USER MANAGEMENT',
+      actions: [
           // 本區 / 全部 toggle
           InkWell(
             borderRadius: BorderRadius.circular(10),
@@ -292,25 +264,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
               ),
             ),
           ),
-          const SizedBox(width: 8),
           // 刷新
-          InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: _loadUsers,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: _kCardBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _kBorder),
-              ),
-              child: const Icon(Icons.refresh_rounded,
-                  color: _kBlue, size: 17),
-            ),
-          ),
-        ],
-      ),
+          PageHeaderButton(
+              icon: Icons.refresh_rounded, tooltip: '重新整理', onPressed: _loadUsers),
+      ],
     );
   }
 
