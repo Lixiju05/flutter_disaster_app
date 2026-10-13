@@ -1,6 +1,7 @@
 ﻿import 'dart:async';
 import 'dart:math' as Math;
 import 'package:flutter/material.dart';
+import 'package:flutter_disaster_app/admin_APP/widgets/page_header.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +9,8 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart'  as ll ;
 import 'package:flutter_disaster_app/core/models/emergency_request.dart';
 import 'package:flutter_disaster_app/core/api_config.dart';
+import 'package:flutter_disaster_app/core/models/supply_request.dart';
+import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
 
 import 'citizen_page.dart';
 import 'emergency_page.dart';
@@ -140,19 +143,6 @@ List<AlertRadarNode> buildAlertNodes(List<DisasterAlert> alerts, String adminAre
 }
 
 // ══════════════════════════════════════════════════════════
-//  TIMELINE EVENT
-// ══════════════════════════════════════════════════════════
-class TimelineEvent {
-  final String id, title, subtitle, category;
-  final DateTime time;
-  final Color color;
-  const TimelineEvent({
-    required this.id, required this.title, required this.subtitle,
-    required this.time, required this.color, required this.category,
-  });
-}
-
-// ══════════════════════════════════════════════════════════
 //  DASHBOARD PAGE
 // ══════════════════════════════════════════════════════════
 class DashboardPage extends StatefulWidget {
@@ -170,16 +160,13 @@ class _DashboardPageState extends State<DashboardPage> {
 
   late Timer _clockTimer, _alertTimer, _envTimer;
   DateTime _now = DateTime.now();
-  DateTime? _lastSyncTime;
 
   List<DisasterAlert> _disasterAlerts = [];
-  List<TimelineEvent> _timeline = [];
   bool _alertsLoading = false;
   int  _notificationCount = 0;
 
   // 後端連線狀態（實際測量，不再寫死）
   bool? _backendOk;   // null = 檢查中
-  int?  _latencyMs;
   late Timer _backendTimer;
 
   final ScrollController _vCtrl = ScrollController();
@@ -218,14 +205,6 @@ class _DashboardPageState extends State<DashboardPage> {
     return '${_now.year}年${months[_now.month-1]}${_now.day}日';
   }
 
-  String get _lastSyncText {
-    if (_lastSyncTime == null) return '從未同步';
-    final diff = DateTime.now().difference(_lastSyncTime!);
-    if (diff.inSeconds < 60) return '剛剛';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} 分鐘前';
-    return '${diff.inHours} 小時前';
-  }
-
   String get _pageTitle {
     const t = ['指揮中心','用戶管理','災民管理','緊急事件','物資管理','健康回報'];
     return t[selectedIndex];
@@ -255,18 +234,12 @@ class _DashboardPageState extends State<DashboardPage> {
     }
     sw.stop();
     if (!mounted) return;
-    setState(() {
-      _backendOk = ok;
-      _latencyMs = ok ? sw.elapsedMilliseconds : null;
-    });
+    setState(() => _backendOk = ok);
   }
 
   String get _backendLabel => _backendOk == null
       ? '連線檢查中'
       : (_backendOk! ? '後端連線正常' : '後端未連線');
-  Color get _backendColor => _backendOk == null
-      ? kTextSub
-      : (_backendOk! ? kGreen : kRed);
 
   void _loadCounts() {
     context.read<CitizenViewmodel>().loadCitizens();
@@ -286,52 +259,17 @@ class _DashboardPageState extends State<DashboardPage> {
       setState(() {
         _disasterAlerts = result.take(30).toList();
         _notificationCount = _disasterAlerts.length;
-        _lastSyncTime = DateTime.now();
-        _rebuildTimeline();
       });
     } catch (e) {
       debugPrint('alert error: $e');
       if (!mounted) return;
       setState(() {
         _disasterAlerts = []; _notificationCount = 0;
-        _lastSyncTime = DateTime.now();
-        _rebuildTimeline();
       });
     }
     if (mounted) setState(() => _alertsLoading = false);
   }
 
-  void _rebuildTimeline() {
-    final supplyCount = context.read<AdminSupplyViewModel>().supplies.length;
-    final List<TimelineEvent> events = [];
-    for (final alert in _disasterAlerts.take(15)) {
-      events.add(TimelineEvent(
-        id: alert.id, title: alert.title,
-        subtitle: '${alert.location} · ${alert.severity}',
-        time: alert.time, color: _alertColor(alert.type), category: 'disaster',
-      ));
-    }
-    if (supplyCount > 0) {
-      events.add(TimelineEvent(
-        id: 'supply_check', title: '物資盤點完成',
-        subtitle: '共 $supplyCount 項物資，庫存狀態更新',
-        time: DateTime.now().subtract(const Duration(hours: 1)),
-        color: kGreen, category: 'supply',
-      ));
-    }
-    events.sort((a, b) => b.time.compareTo(a.time));
-    _timeline = events;
-  }
-
-  Color _alertColor(DisasterType type) {
-    switch (type) {
-      case DisasterType.earthquake: return kRed;
-      case DisasterType.typhoon:    return kOrange;
-      case DisasterType.flood:      return kBlue;
-      case DisasterType.rain:       return kBlue;
-      default:                      return kMuted;
-    }
-  }
 
   void _go(int i) => setState(() => selectedIndex = i);
 
@@ -523,16 +461,14 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildDashboard() {
     final vm = context.watch<WeatherViewModel>();
     return SafeArea(
-      child: Scrollbar(
+      child: Column(children: [
+      _buildTopBar(vm),
+      Expanded(child: Scrollbar(
         controller: _vCtrl, thumbVisibility: true,
         child: SingleChildScrollView(
           controller: _vCtrl,
-          padding: const EdgeInsets.fromLTRB(22, 18, 22, 24),
+          padding: const EdgeInsets.fromLTRB(22, 12, 22, 24),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _buildTopBar(vm),
-            const SizedBox(height: 14),
-            _buildStatusStrip(vm),
-            const SizedBox(height: 16),
             _buildStatsRow(),
             const SizedBox(height: 16),
             SizedBox(
@@ -557,31 +493,27 @@ class _DashboardPageState extends State<DashboardPage> {
                 alerts: _disasterAlerts, isLoading: _alertsLoading,
                 onRefresh: _loadAlerts, onAlertTap: _showAlertDetail))),
               const SizedBox(width: 16),
-              Expanded(child: SizedBox(height: 420, child: _TimelineCard(
-                events: _timeline, alerts: _disasterAlerts, onEventTap: _showAlertDetail))),
+              // 右邊：管理員現在要處理的事（全部是後端真實資料）
+              Expanded(child: SizedBox(height: 420, child: _TodoCard(onGo: _go))),
             ]),
           ]),
         ),
-      ),
+      )),
+      ]),
     );
   }
 
-  Widget _buildTopBar(WeatherViewModel vm) => Row(children: [
-    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(_pageTitle, style: const TextStyle(color: kTextMain, fontSize: 28, fontWeight: FontWeight.w800),
-          overflow: TextOverflow.ellipsis, maxLines: 1),
-      const SizedBox(height: 2),
-      const Text('DISASTER MANAGEMENT SYSTEM',
-          style: TextStyle(color: kTextSub, fontSize: 13, letterSpacing: 1.4),
-          overflow: TextOverflow.ellipsis, maxLines: 1),
-    ])),
-    const SizedBox(width: 12),
-    _statusChip(_backendOk == false ? '後端未連線' : '系統正常', _backendOk == false ? kRed : kGreen),
-    const SizedBox(width: 12),
-    _timeBox(),
-    const SizedBox(width: 12),
-    _notificationButton(),
-  ]);
+  Widget _buildTopBar(WeatherViewModel vm) => PageHeader(
+    title: _pageTitle,
+    subtitle: 'DISASTER MANAGEMENT SYSTEM',
+    actions: [
+      _statusChip(_backendOk == false ? '後端未連線' : '系統正常', _backendOk == false ? kRed : kGreen),
+      const SizedBox(width: 4),
+      _timeBox(),
+      const SizedBox(width: 4),
+      _notificationButton(),
+    ],
+  );
 
   Widget _timeBox() => Container(
     padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
@@ -615,33 +547,12 @@ class _DashboardPageState extends State<DashboardPage> {
           style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800))))),
   ]);
 
-  Widget _buildStatusStrip(WeatherViewModel vm) => Container(
-    height: 46, padding: const EdgeInsets.symmetric(horizontal: 16),
-    decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
-    child: Row(children: [
-      _statusDot(_backendLabel, _backendColor),
-      if (_latencyMs != null) ...[
-        _vline(), Flexible(child: _statusText('延遲 ${_latencyMs}ms', kBlue)),
-      ],
-      _vline(),
-      if (_alertsLoading)
-        const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: kBlue))
-      else
-        Flexible(child: _statusText(_disasterAlerts.isNotEmpty ? '${_disasterAlerts.length} 則通報' : '近期無重大警報',
-            _disasterAlerts.isNotEmpty ? kOrange : kGreen)),
-      const Spacer(),
-      Flexible(child: Text('上次同步：$_lastSyncText', style: const TextStyle(color: kTextSub, fontSize: 14), overflow: TextOverflow.ellipsis)),
-      const SizedBox(width: 8),
-      _pillBtn('即時監控中', kBlue),
-    ]),
-  );
-
   Widget _buildStatsRow() {
     final citizenVm   = context.watch<CitizenViewmodel>();
     final supplyVm    = context.watch<AdminSupplyViewModel>();
     final emergencyVm = context.watch<EmergencyViewModel>();
     if (citizenVm.isLoading || supplyVm.isLoading || emergencyVm.isLoading) {
-      return _card(height: 104, child: const Center(child: CircularProgressIndicator(color: kBlue)));
+      return _card(height: 68, child: const Center(child: CircularProgressIndicator(color: kBlue)));
     }
     final pendingSos = emergencyVm.emergencies.where((e) => e.status != 'resolved').length;
 return Row(children: [
@@ -655,43 +566,34 @@ return Row(children: [
 ]);
   }
 
+  /// 橫向統計卡：左圖示、中間數字＋名稱、右邊箭頭（點擊跳到該頁）
   Widget _statCard(IconData icon, String value, String label, Color color, String badge, VoidCallback onTap) {
     return InkWell(
       borderRadius: BorderRadius.circular(14), onTap: onTap,
-      child: _card(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12), child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 34, height: 34,
+      child: _card(
+        height: 68,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Row(children: [
+          Container(width: 40, height: 40,
               decoration: BoxDecoration(color: color.withValues(alpha: .10), borderRadius: BorderRadius.circular(10)),
-              child: Icon(icon, color: color, size: 17)),
-          const SizedBox(height: 8),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(value, style: TextStyle(color: color, fontSize: 26, fontWeight: FontWeight.w800, height: 1.1)),
+              child: Icon(icon, color: color, size: 20)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value, style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.w800, height: 1.1)),
+                Text(label, style: const TextStyle(color: kTextSub, fontSize: 13), overflow: TextOverflow.ellipsis, maxLines: 1),
+              ],
+            ),
           ),
-          const SizedBox(height: 3),
-          Text(label, style: const TextStyle(color: kTextSub, fontSize: 13), overflow: TextOverflow.ellipsis, maxLines: 1),
-        ],
-      )),
+          const Icon(Icons.chevron_right_rounded, color: Color(0xFFCBD5E1), size: 20),
+        ]),
+      ),
     );
   }
 
-  static Widget _statusDot(String text, Color color) => Row(children: [
-    Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-    const SizedBox(width: 7),
-    Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 14)),
-  ]);
-  static Widget _statusText(String text, Color color) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 10),
-    child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 14),
-        overflow: TextOverflow.ellipsis, maxLines: 1));
-  static Widget _vline() => Container(width: 1, height: 20, color: kBorder, margin: const EdgeInsets.symmetric(horizontal: 4));
-  static Widget _pillBtn(String text, Color color) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-    decoration: BoxDecoration(color: color.withOpacity(.08), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(.18))),
-    child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)));
   static Widget _statusChip(String text, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
     decoration: BoxDecoration(color: color.withOpacity(.08), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(.18))),
@@ -1432,7 +1334,7 @@ class _EventListCard extends StatelessWidget {
     Row(children: [
       const Icon(Icons.flash_on_rounded, color: kTextMain, size: 18),
       const SizedBox(width: 6),
-      const Expanded(child: Text('即時事件動態', style: TextStyle(color: kTextMain, fontSize: 16, fontWeight: FontWeight.w800))),
+      const Expanded(child: Text('災害警報（氣象署）', style: TextStyle(color: kTextMain, fontSize: 16, fontWeight: FontWeight.w800))),
       _smallBadge('30天｜最多30笔', kBlue),
       IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh, color: kBlue, size: 18)),
     ]),
@@ -1478,46 +1380,159 @@ class _EventListCard extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════
-//  TIMELINE CARD
+//  待處理事項：SOS / 物資待認領 / 配送中 / 庫存不足
+//  全部來自後端真實資料，點一下跳到對應頁面
 // ══════════════════════════════════════════════════════════
-class _TimelineCard extends StatelessWidget {
-  final List<TimelineEvent> events;
-  final List<DisasterAlert> alerts;
-  final ValueChanged<DisasterAlert> onEventTap;
-  const _TimelineCard({required this.events, required this.alerts, required this.onEventTap});
+class _TodoCard extends StatefulWidget {
+  /// 跳頁：1 用戶 / 2 災民 / 3 緊急事件 / 4 物資管理
+  final ValueChanged<int> onGo;
+  const _TodoCard({required this.onGo});
 
   @override
-  Widget build(BuildContext context) => _card(padding: const EdgeInsets.all(16), child: Column(children: [
-    const Row(children: [
-      Icon(Icons.timeline_rounded, color: kTextMain, size: 18), SizedBox(width: 7),
-      Expanded(child: Text('事件時間轴', style: TextStyle(color: kTextMain, fontSize: 16, fontWeight: FontWeight.w800))),
-      Text('最近 30 天', style: TextStyle(color: kTextSub, fontSize: 13)),
-    ]),
-    const SizedBox(height: 14),
-    if (events.isEmpty)
-      const Expanded(child: Center(child: Text('目前沒有事件紀錄', style: TextStyle(color: kTextSub))))
-    else
-      Expanded(child: ListView.builder(itemCount: events.length, itemBuilder: (ctx, i) {
-        final e = events[i];
-        return InkWell(
-          onTap: () { final m = alerts.where((a) => a.id == e.id).toList(); if (m.isNotEmpty) onEventTap(m.first); },
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Column(children: [
-              Container(width: 10, height: 10, decoration: BoxDecoration(color: e.color, shape: BoxShape.circle)),
-              Container(width: 1, height: 54, color: kBorder),
-            ]),
+  State<_TodoCard> createState() => _TodoCardState();
+}
+
+class _TodoCardState extends State<_TodoCard> {
+  final AdminRepository _repo = AdminRepository();
+  List<SupplyRequest> _requests = [];
+  bool _loading = true;
+  bool _requestsFailed = false;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRequests();
+    // 物資需求狀態會被義工改變，每 30 秒更新一次
+    _timer = Timer.periodic(const Duration(seconds: 30), (_) => _loadRequests());
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadRequests() async {
+    try {
+      final list = await _repo.getAllSupplyRequests();
+      if (!mounted) return;
+      setState(() { _requests = list; _requestsFailed = false; _loading = false; });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() { _requestsFailed = true; _loading = false; });
+    }
+  }
+
+  Future<void> _refreshAll() async {
+    context.read<EmergencyViewModel>().loadEmergencies();
+    context.read<AdminSupplyViewModel>().loadSupplies();
+    await _loadRequests();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final emergencyVm = context.watch<EmergencyViewModel>();
+    final supplyVm    = context.watch<AdminSupplyViewModel>();
+
+    final sos       = emergencyVm.emergencies.where((e) => e.status != 'resolved').toList()
+      ..sort((a, b) => b.sentAt.compareTo(a.sentAt));
+    final waiting   = _requests.where((r) => r.isPending).toList();
+    final delivering = _requests.where((r) => r.isDelivering).toList();
+    final lowStock  = supplyVm.supplies.where((s) => s.isLowStock).toList();
+
+    String names(Iterable<String> list, {int max = 3}) {
+      final l = list.where((s) => s.isNotEmpty).toList();
+      if (l.isEmpty) return '';
+      return l.length <= max ? l.join('・') : '${l.take(max).join('・')} 等 ${l.length} 筆';
+    }
+
+    final total = sos.length + waiting.length + delivering.length + lowStock.length;
+
+    return _card(padding: const EdgeInsets.all(16), child: Column(children: [
+      Row(children: [
+        const Icon(Icons.checklist_rounded, color: kTextMain, size: 18),
+        const SizedBox(width: 6),
+        const Expanded(child: Text('待處理事項', style: TextStyle(color: kTextMain, fontSize: 16, fontWeight: FontWeight.w800))),
+        _smallBadge(total == 0 ? '目前無待辦' : '共 $total 項', total == 0 ? kGreen : kOrange),
+        IconButton(onPressed: _refreshAll, icon: const Icon(Icons.refresh, color: kBlue, size: 18)),
+      ]),
+      const SizedBox(height: 8),
+      Expanded(child: _loading
+          ? const Center(child: CircularProgressIndicator(color: kBlue))
+          : ListView(children: [
+              _todoRow(
+                icon: Icons.sos_rounded, color: kRed,
+                title: 'SOS 求救待處理', count: sos.length, unit: '件',
+                detail: names(sos.map((e) => e.userName)),
+                onTap: () => widget.onGo(3),
+              ),
+              _todoRow(
+                icon: Icons.inventory_2_outlined, color: kBlue,
+                title: '物資待義工認領', count: waiting.length, unit: '筆',
+                detail: _requestsFailed
+                    ? '無法取得物資需求資料'
+                    : names(waiting.map((r) => '${r.itemName} × ${r.qty} ${r.unit}'), max: 2),
+                onTap: () => widget.onGo(4),
+              ),
+              _todoRow(
+                icon: Icons.local_shipping_outlined, color: kOrange,
+                title: '物資配送中', count: delivering.length, unit: '筆',
+                detail: names(delivering.map((r) =>
+                    '${r.itemName} × ${r.qty}${r.volunteerId != null ? '（${r.volunteerId}）' : ''}'), max: 2),
+                onTap: () => widget.onGo(4),
+              ),
+              _todoRow(
+                icon: Icons.warning_amber_rounded, color: const Color(0xFFD97706),
+                title: '庫存不足', count: lowStock.length, unit: '項',
+                detail: names(lowStock.map((s) => s.name)),
+                onTap: () => widget.onGo(4),
+              ),
+            ])),
+    ]));
+  }
+
+  /// 一列待辦：數量為 0 時變灰、顯示「無」
+  Widget _todoRow({
+    required IconData icon, required Color color,
+    required String title, required int count, required String unit,
+    required String detail, required VoidCallback onTap,
+  }) {
+    final active = count > 0;
+    final c = active ? color : const Color(0xFF94A3B8);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10), onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: active ? color.withValues(alpha: .05) : kCardBg2,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: active ? color.withValues(alpha: .25) : kBorder),
+          ),
+          child: Row(children: [
+            Container(width: 38, height: 38,
+                decoration: BoxDecoration(color: c.withValues(alpha: .12), borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, color: c, size: 19)),
             const SizedBox(width: 12),
-            Expanded(child: Padding(padding: const EdgeInsets.only(bottom: 15), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(e.title, style: const TextStyle(color: kTextMain, fontWeight: FontWeight.w800, fontSize: 15)),
-              const SizedBox(height: 4),
-              Text(e.subtitle, style: const TextStyle(color: kTextSub, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 4),
-              Text(_relativeTime(e.time), style: const TextStyle(color: kTextSub, fontSize: 13)),
-            ]))),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: TextStyle(color: active ? kTextMain : kTextSub, fontWeight: FontWeight.w800, fontSize: 15)),
+              if (active && detail.isNotEmpty) ...[
+                const SizedBox(height: 3),
+                Text(detail, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: kTextSub, fontSize: 13)),
+              ],
+            ])),
+            const SizedBox(width: 8),
+            Text(active ? '$count $unit' : '無',
+                style: TextStyle(color: c, fontSize: active ? 18 : 15, fontWeight: FontWeight.w800)),
+            Icon(Icons.chevron_right_rounded, color: c, size: 20),
           ]),
-        );
-      })),
-  ]));
+        ),
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════

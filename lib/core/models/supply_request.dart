@@ -31,16 +31,29 @@ class SupplyRequest {
     this.claimedAt,
   });
 
-  bool get isPending => status == 'pending';
+  /// 後端可能回傳 pending 或 reserved（已預留庫存），對義工來說都是「待認領」
+  bool get isPending => status == 'pending' || status == 'reserved';
   bool get isClaimed => status == 'claimed';
+  /// 配送中：義工已取貨（dispatched），尚未交給災民
+  bool get isDelivering => status == 'dispatched';
+  /// 已完成：已交給災民
+  bool get isDone => status == 'completed';
+
+  /// 有沒有可用的座標（0,0 視為沒有）
+  bool get hasLocation => lat != null && lng != null && !(lat == 0 && lng == 0);
 
   /// 狀態中文顯示
   String get statusLabel {
     switch (status) {
       case 'pending':
+      case 'reserved':
         return '待認領';
       case 'claimed':
-        return '已認領／待配送';
+        return '已認領';
+      case 'dispatched':
+        return '配送中';
+      case 'completed':
+        return '已完成';
       default:
         return status;
     }

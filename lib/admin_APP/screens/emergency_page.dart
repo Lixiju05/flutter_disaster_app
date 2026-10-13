@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_disaster_app/admin_APP/widgets/page_header.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_disaster_app/core/models/emergency_request.dart';
@@ -112,13 +113,12 @@ class _EmergencyPageState extends State<EmergencyPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            _buildHeader(vm, pending),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildHeader(vm, pending),
-                  const SizedBox(height: 12),
                   _buildStatsBar(all.length, pending, processing, resolved),
                   const SizedBox(height: 10),
                   _buildSearchBar(),
@@ -141,19 +141,15 @@ class _EmergencyPageState extends State<EmergencyPage> {
   }
 
   Widget _buildHeader(EmergencyViewModel vm, int pending) {
-    return Row(children: [
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('緊急事件',
-            style: TextStyle(color: _kTextMain, fontSize: 26, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 1),
-        const Text('EMERGENCY MANAGEMENT',
-            style: TextStyle(color: _kTextSub, fontSize: 13, letterSpacing: 1.3)),
-      ]),
-      const SizedBox(width: 12),
-      if (pending > 0) _tag('待處理 $pending 件', _kOrange),
-      const Spacer(),
-      _iconBtn(Icons.refresh_rounded, _kBlue, vm.loadEmergencies),
-    ]);
+    return PageHeader(
+      title: '緊急事件',
+      subtitle: 'EMERGENCY MANAGEMENT',
+      badges: [if (pending > 0) _tag('待處理 $pending 件', _kOrange)],
+      actions: [
+        PageHeaderButton(
+            icon: Icons.refresh_rounded, tooltip: '重新整理', onPressed: vm.loadEmergencies),
+      ],
+    );
   }
 
   Widget _buildStatsBar(int total, int pending, int processing, int resolved) {
@@ -752,17 +748,4 @@ class _EmergencyPageState extends State<EmergencyPage> {
         border:       Border.all(color: color.withValues(alpha:.18))),
     child: Text(text, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
   );
-
-  static Widget _iconBtn(IconData icon, Color color, VoidCallback onTap) =>
-      GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 34, height: 34,
-          decoration: BoxDecoration(
-              color:        _kCardBg,
-              borderRadius: BorderRadius.circular(8),
-              border:       Border.all(color: _kBorder)),
-          child: Icon(icon, color: color, size: 16),
-        ),
-      );
 }

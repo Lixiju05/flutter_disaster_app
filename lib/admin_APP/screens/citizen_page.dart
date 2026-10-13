@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_disaster_app/admin_APP/widgets/page_header.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
@@ -107,27 +108,10 @@ class _CitizenPageState extends State<CitizenPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Header ──────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
-              child: Row(children: [
-                Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: const [
-                  Text('災民管理',
-                      style: TextStyle(
-                          color: _kTextMain,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800)),
-                  SizedBox(height: 1),
-                  Text('CITIZEN MANAGEMENT CENTER',
-                      style: TextStyle(
-                          color: _kTextSub,
-                          fontSize: 13,
-                          letterSpacing: 1.3)),
-                ]),
-                const SizedBox(width: 12),
-                _tag('即時同步', _kGreen),
-              ]),
+            PageHeader(
+              title: '災民管理',
+              subtitle: 'CITIZEN MANAGEMENT CENTER',
+              badges: [_tag('即時同步', _kGreen)],
             ),
             const SizedBox(height: 12),
             // ── Tab Bar ─────────────────────────────────────────
@@ -296,7 +280,9 @@ class _TotalTabState extends State<_TotalTab> {
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
         final loaded = List<Map<String, dynamic>>.from(data['data']);
-        if (mounted) setState(() => _supplyRequests = loaded.where((r) => r['status'] == 'pending').toList());
+        // 尚未送達的需求都顯示（待處理、待認領、已認領、配送中）
+        const active = {'pending', 'reserved', 'claimed', 'dispatched'};
+        if (mounted) setState(() => _supplyRequests = loaded.where((r) => active.contains(r['status'])).toList());
       }
     } catch (_) {}
   }
