@@ -156,7 +156,6 @@ class _DashboardPageState extends State<DashboardPage> {
 
   int selectedIndex = 0;
   String _adminArea = '南投縣';
-  String? _radarArea; // 雷達圖目前查看的地區（null = 自己的轄區）
 
   late Timer _clockTimer, _alertTimer, _envTimer;
   DateTime _now = DateTime.now();
@@ -253,7 +252,7 @@ class _DashboardPageState extends State<DashboardPage> {
     try {
       final all = await WeatherService.fetchAllAlerts(apiKey: _cwaKey);
       final result = all
-          .where((a) => DateTime.now().difference(a.time).inDays < 30)
+          .where((a) => DateTime.now().difference(a.time).inDays < 7)
           .toList()..sort((a, b) => b.time.compareTo(a.time));
       if (!mounted) return;
       setState(() {
@@ -271,7 +270,11 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
 
-  void _go(int i) => setState(() => selectedIndex = i);
+  void _go(int i) => setState(() { selectedIndex = i; _supplyTab = 0; });
+
+  /// 物資管理要打開哪個分頁（0 庫存管理 / 1 據點管理 / 2 出貨紀錄）
+  int _supplyTab = 0;
+  void _goSupply(int tab) => setState(() { selectedIndex = 4; _supplyTab = tab; });
 
   void _logout() {
     showDialog(
@@ -331,7 +334,7 @@ class _DashboardPageState extends State<DashboardPage> {
       case 1: return const UserManagementPage();
       case 2: return const CitizenPage();
       case 3: return EmergencyPage();
-      case 4: return const SupplyPage();
+      case 4: return SupplyPage(key: ValueKey('supply-$_supplyTab'), initialTab: _supplyTab);
       case 5: return const HealthReportPage(showSearch: true);
       default: return _buildDashboard();
     }
@@ -471,21 +474,10 @@ class _DashboardPageState extends State<DashboardPage> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _buildStatsRow(),
             const SizedBox(height: 16),
+            // GPS 即時地圖佔滿整排（拿掉雷達圖）
             SizedBox(
-              height: 360,
-              child: Row(children: [
-                Expanded(flex: 5, child: Builder(builder: (context) {
-                  final viewArea = _radarArea ?? _adminArea;
-                  return _TacticalMapCard(
-                    alerts: _disasterAlerts,
-                    adminArea: viewArea, homeArea: _adminArea,
-                    onAreaChanged: (area) => setState(() =>
-                        _radarArea = area == _adminArea ? null : area),
-                    onAlertTap: _showAlertDetail);
-                })),
-                const SizedBox(width: 16),
-                Expanded(flex: 7, child: _GpsEmergencyMapCard(adminArea: _adminArea, onViewAll: () => _go(3))),
-              ]),
+              height: 420,
+              child: _GpsEmergencyMapCard(adminArea: _adminArea, onViewAll: () => _go(3)),
             ),
             const SizedBox(height: 16),
             Row(children: [
@@ -494,7 +486,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 onRefresh: _loadAlerts, onAlertTap: _showAlertDetail))),
               const SizedBox(width: 16),
               // 右邊：管理員現在要處理的事（全部是後端真實資料）
-              Expanded(child: SizedBox(height: 420, child: _TodoCard(onGo: _go))),
+              Expanded(child: SizedBox(height: 420, child: _TodoCard(onGo: _go, onGoSupply: _goSupply))),
             ]),
           ]),
         ),
@@ -560,7 +552,7 @@ return Row(children: [
   const SizedBox(width: 12),
   Expanded(child: _statCard(Icons.sos_rounded, '$pendingSos', 'SOS 求救中', kRed, '處理中', () => _go(3))),
   const SizedBox(width: 12),
-  Expanded(child: _statCard(Icons.favorite_border, '${emergencyVm.emergencies.where((e) => e.status == 'resolved').length}', '已處理事件', kGreen, '今日', () => _go(3))),
+  Expanded(child: _statCard(Icons.task_alt_rounded, '${emergencyVm.emergencies.where((e) => e.status == 'resolved').length}', '已處理事件', kGreen, '今日', () => _go(3))),
   const SizedBox(width: 12),
   Expanded(child: _statCard(Icons.inventory_2_outlined, '${supplyVm.supplies.length}', '物資項目', kOrange, '庫存', () => _go(4))),
 ]);
@@ -600,273 +592,6 @@ return Row(children: [
     child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 14)));
 }
 
-// ══════════════════════════════════════════════════════════
-//  TACTICAL MAP CARD（雷達圖）
-// ══════════════════════════════════════════════════════════
-class _TacticalMapCard extends StatefulWidget {
-  final List<DisasterAlert> alerts; // 全台警報，卡片內再依地區篩選
-  final String adminArea;   // 目前雷達查看的地區
-  final String homeArea;    // 帳號本身的轄區
-  final ValueChanged<String> onAreaChanged;
-  final ValueChanged<DisasterAlert> onAlertTap;
-  const _TacticalMapCard({required this.alerts, required this.adminArea,
-      required this.homeArea, required this.onAreaChanged, required this.onAlertTap});
-
-  /// 雷達可切換查看的地區（需在 kAreaCenterLatLng 有座標）
-  static const List<String> kRadarAreas = ['南投縣', '台北市', '新北市', '桃園市', '台中市', '彰化縣', '雲林縣', '嘉義縣', '台南市', '高雄市', '宜蘭縣', '花蓮縣', '台東縣', '屏東縣'];
-  @override
-  State<_TacticalMapCard> createState() => _TacticalMapCardState();
-}
-
-class _TacticalMapCardState extends State<_TacticalMapCard> with TickerProviderStateMixin {
-  late final AnimationController _radarCtrl;
-  late final AnimationController _blinkCtrl;
-  @override
-  void initState() {
-    super.initState();
-    _radarCtrl = AnimationController(vsync: this, duration: const Duration(seconds: 4))..repeat();
-    _blinkCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 900))..repeat(reverse: true);
-  }
-  @override
-  void dispose() { _radarCtrl.dispose(); _blinkCtrl.dispose(); super.dispose(); }
-
-  bool get _isHome => widget.adminArea == widget.homeArea;
-
-  /// 地區切換下拉選單
-  Widget _areaPicker() {
-    final areas = [
-      widget.homeArea,
-      ..._TacticalMapCard.kRadarAreas.where((a) => a != widget.homeArea),
-    ];
-    return PopupMenuButton<String>(
-      tooltip: '切換查看地區',
-      onSelected: widget.onAreaChanged,
-      position: PopupMenuPosition.under,
-      itemBuilder: (_) => [
-        for (final a in areas)
-          PopupMenuItem(
-            value: a,
-            height: 38,
-            child: Row(children: [
-              Icon(a == widget.adminArea ? Icons.radio_button_checked : Icons.radio_button_off,
-                  size: 16, color: a == widget.adminArea ? kBlue : kTextSub),
-              const SizedBox(width: 8),
-              Text(a, style: const TextStyle(fontSize: 14)),
-              if (a == widget.homeArea) ...[
-                const SizedBox(width: 6),
-                const Text('我的轄區', style: TextStyle(fontSize: 13, color: kTextSub)),
-              ],
-              const SizedBox(width: 16),
-              const Spacer(),
-              // 該地區目前的真實警報數
-              Builder(builder: (_) {
-                final n = alertsForArea(widget.alerts, a).length;
-                return n == 0
-                    ? const Text('無警報', style: TextStyle(fontSize: 13, color: kTextSub))
-                    : _smallBadge('$n 則警報', kOrange);
-              }),
-            ]),
-          ),
-      ],
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(8, 2, 4, 2),
-        decoration: BoxDecoration(
-          color: kBlue.withOpacity(.06),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: kBlue.withOpacity(.25)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Text(widget.adminArea, style: const TextStyle(color: kBlue, fontSize: 13, fontWeight: FontWeight.w700)),
-          const Icon(Icons.arrow_drop_down_rounded, size: 18, color: kBlue),
-        ]),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final viewAlerts = alertsForArea(widget.alerts, widget.adminArea);
-    final alertNodes = buildAlertNodes(viewAlerts, widget.adminArea);
-    return _card(padding: EdgeInsets.zero, child: Column(children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
-        child: Row(children: [
-          Container(width: 38, height: 38,
-              decoration: BoxDecoration(color: kBlue.withOpacity(.10), borderRadius: BorderRadius.circular(11)),
-              child: const Icon(Icons.radar_rounded, color: kBlue)),
-          const SizedBox(width: 12),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('轄區防災雷達圖', style: TextStyle(color: kTextMain, fontSize: 16, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 3),
-            Row(children: [
-              _areaPicker(),
-              const SizedBox(width: 6),
-              const Flexible(child: Text('氣象署災害警報', overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: kTextSub, fontSize: 13))),
-            ]),
-          ])),
-          if (!_isHome) ...[
-            TextButton.icon(
-              onPressed: () => widget.onAreaChanged(widget.homeArea),
-              style: TextButton.styleFrom(visualDensity: VisualDensity.compact, foregroundColor: kBlue),
-              icon: const Icon(Icons.my_location_rounded, size: 14),
-              label: const Text('回到轄區', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-            ),
-            const SizedBox(width: 4),
-          ],
-          _smallBadge(viewAlerts.isEmpty ? '目前無警報' : '${viewAlerts.length} 則警報',
-              viewAlerts.isEmpty ? kGreen : kOrange),
-        ]),
-      ),
-      const Divider(height: 1, color: kBorder),
-      Expanded(child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(14)),
-        child: LayoutBuilder(builder: (ctx, constraints) {
-          final w = constraints.maxWidth, h = constraints.maxHeight;
-          return Stack(children: [
-            Positioned.fill(child: AnimatedBuilder(
-              animation: _radarCtrl,
-              builder: (_, __) => CustomPaint(painter: _RadarMapPainter(
-                angle: _radarCtrl.value * Math.pi * 2,
-                hasAlerts: viewAlerts.isNotEmpty)))),
-            Center(child: _buildCenterNode(widget.adminArea)),
-            for (final an in alertNodes) _buildAlertNode(an, w, h),
-            Positioned(left: 18, bottom: 18, child: _RadarLegend(hasAlerts: viewAlerts.isNotEmpty)),
-            Positioned(right: 14, bottom: 18,
-                child: Text('點擊節點查看詳情', style: TextStyle(color: kTextSub.withOpacity(.6), fontSize: 13))),
-          ]);
-        }),
-      )),
-    ]));
-  }
-
-  Widget _buildCenterNode(String adminArea) {
-    final label = adminArea.replaceAll('县','').replaceAll('市','');
-    return Container(
-      width: 74, height: 74,
-      decoration: BoxDecoration(color: Colors.white, shape: BoxShape.circle,
-          border: Border.all(color: kBlue, width: 2),
-          boxShadow: [BoxShadow(color: kBlue.withOpacity(.18), blurRadius: 18, spreadRadius: 2)]),
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: kBlue, fontSize: 14, fontWeight: FontWeight.w900)),
-        const SizedBox(height: 2),
-        Text(_isHome ? '指揮區' : '觀察中', style: const TextStyle(color: kTextSub, fontSize: 12)),
-      ]),
-    );
-  }
-
-  Widget _buildAlertNode(AlertRadarNode an, double w, double h) {
-    final color = _typeColor(an.alert.type);
-    return Positioned(
-      left: w * an.relX - 44, top: h * an.relY - 42,
-      child: GestureDetector(
-        onTap: () => widget.onAlertTap(an.alert),
-        child: AnimatedBuilder(
-          animation: _blinkCtrl,
-          builder: (_, __) => Opacity(
-            opacity: 0.5 + _blinkCtrl.value * 0.5,
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: color.withOpacity(.15), borderRadius: BorderRadius.circular(6), border: Border.all(color: color.withOpacity(.6))),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Icon(_typeIcon(an.alert.type), color: color, size: 10),
-                  const SizedBox(width: 4),
-                  Text(an.alert.title.length > 8 ? '${an.alert.title.substring(0,8)}…' : an.alert.title,
-                      style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w800)),
-                ]),
-              ),
-              const SizedBox(height: 4),
-              Container(width: 12, height: 12,
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle,
-                      boxShadow: [BoxShadow(color: color.withOpacity(.6), blurRadius: 10, spreadRadius: 2)])),
-            ]),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RadarMapPainter extends CustomPainter {
-  final double angle;
-  final bool hasAlerts;
-  const _RadarMapPainter({required this.angle, required this.hasAlerts});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawRect(Offset.zero & size, Paint()..color = const Color(0xFFF8FAFC));
-    final center = Offset(size.width / 2, size.height / 2);
-    final maxR   = size.height * .46;
-    final axis   = Paint()..color = const Color(0xFFE2E8F0)..strokeWidth = 1;
-    canvas
-      ..drawLine(Offset(center.dx, 0), Offset(center.dx, size.height), axis)
-      ..drawLine(Offset(0, center.dy), Offset(size.width, center.dy), axis)
-      ..drawLine(Offset(0, 0), Offset(size.width, size.height), axis)
-      ..drawLine(Offset(size.width, 0), Offset(0, size.height), axis);
-    final ringColor = hasAlerts ? kOrange.withOpacity(.35) : const Color(0xFFBFDBFE).withOpacity(.55);
-    final ring = Paint()..color = ringColor..style = PaintingStyle.stroke..strokeWidth = 1;
-    for (int i = 1; i <= 4; i++) canvas.drawCircle(center, maxR * i / 4, ring);
-    final sweep = Path()..moveTo(center.dx, center.dy)
-      ..arcTo(Rect.fromCircle(center: center, radius: maxR), angle, 0.78, false)..close();
-    canvas.drawPath(sweep, Paint()..color = kBlue.withOpacity(.12)..style = PaintingStyle.fill);
-    final armColor = kBlue.withOpacity(.50);
-    final end = Offset(center.dx + maxR * Math.cos(angle), center.dy + maxR * Math.sin(angle));
-    canvas.drawLine(center, end, Paint()..color = armColor..strokeWidth = 2.4..strokeCap = StrokeCap.round);
-    final glow = Offset(center.dx + maxR * .72 * Math.cos(angle), center.dy + maxR * .72 * Math.sin(angle));
-    canvas.drawCircle(glow, 4, Paint()..color = armColor.withOpacity(.80));
-    final ns = TextStyle(color: kBlue.withOpacity(.35), fontSize: 12, fontWeight: FontWeight.w700);
-    void dn(String t, Offset o) => (TextPainter(text: TextSpan(text: t, style: ns), textDirection: TextDirection.ltr)..layout()).paint(canvas, o);
-    dn('1', Offset(center.dx + maxR*.34, center.dy - maxR*.34));
-    dn('2', Offset(center.dx + maxR*.62, center.dy - maxR*.62));
-    dn('3', Offset(center.dx - maxR*.18, center.dy + maxR*.66));
-    dn('4', Offset(center.dx + maxR*.02, center.dy + maxR*.92));
-  }
-
-  @override
-  bool shouldRepaint(covariant _RadarMapPainter old) =>
-      old.angle != angle || old.hasAlerts != hasAlerts;
-}
-
-class _RadarLegend extends StatelessWidget {
-  final bool hasAlerts;
-  const _RadarLegend({this.hasAlerts = false});
-  @override
-  Widget build(BuildContext context) => Container(
-    width: 130, padding: const EdgeInsets.all(10),
-    decoration: BoxDecoration(color: Colors.white.withOpacity(.94), borderRadius: BorderRadius.circular(10), border: Border.all(color: kBorder)),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-      const Text('圖例', style: TextStyle(color: kTextSub, fontSize: 10, fontWeight: FontWeight.w800)),
-      const SizedBox(height: 6),
-      if (hasAlerts) ...[
-        const Divider(height: 10, color: kBorder),
-        const _MiniLegend(color: kRed,    text: '地震警報', isAlert: true),
-        const _MiniLegend(color: kOrange, text: '颱風警報', isAlert: true),
-        const _MiniLegend(color: kBlue,   text: '水災警報', isAlert: true),
-      ] else const Text('目前轄區無警報', style: TextStyle(color: kTextSub, fontSize: 12)),
-    ]),
-  );
-}
-
-class _MiniLegend extends StatelessWidget {
-  final Color color; final String text; final bool isAlert;
-  const _MiniLegend({required this.color, required this.text, this.isAlert = false});
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 3),
-    child: Row(children: [
-      Container(width: 7, height: 7,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle,
-              border: isAlert ? Border.all(color: color.withOpacity(.4), width: 2) : null)),
-      const SizedBox(width: 6),
-      Text(text, style: const TextStyle(color: kTextSub, fontSize: 12)),
-    ]),
-  );
-}
-
-// ══════════════════════════════════════════════════════════
-//  ADMIN AREA BOUNDS
 // ══════════════════════════════════════════════════════════
 /// 暨南國際大學校園範圍（資料來源：OpenStreetMap way 207630685），用來讓地圖框住校園
 final List<ll.LatLng> kNcnuCampus = [
@@ -935,19 +660,19 @@ class _GpsEmergencyMapCard extends StatelessWidget {
       Padding(
         padding: const EdgeInsets.fromLTRB(18, 16, 18, 12),
         child: Row(children: [
-          Container(width: 38, height: 38,
-              decoration: BoxDecoration(color: kRed.withOpacity(.10), borderRadius: BorderRadius.circular(11)),
-              child: const Icon(Icons.sos_rounded, color: kRed)),
-          const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('GPS 即時地圖 - ${bounds.label}',
-                style: const TextStyle(color: kTextMain, fontSize: 16, fontWeight: FontWeight.w800),
-                overflow: TextOverflow.ellipsis, maxLines: 1),
+            Row(children: [
+              const Icon(Icons.location_on_outlined, color: kTextMain, size: 18),
+              const SizedBox(width: 6),
+              Flexible(child: Text('GPS 即時地圖 - ${bounds.label}',
+                  style: const TextStyle(color: kTextMain, fontSize: 16, fontWeight: FontWeight.w800),
+                  overflow: TextOverflow.ellipsis, maxLines: 1)),
+            ]),
             const SizedBox(height: 3),
             const Text('只顯示未處理 SOS 求救位置', style: TextStyle(color: kTextSub, fontSize: 13),
                 overflow: TextOverflow.ellipsis, maxLines: 1),
           ])),
-          sosOnly.isEmpty ? _smallBadge('目前无 SOS', kGreen) : _SosPendingBadge(count: sosOnly.length),
+          _smallBadge(sosOnly.isEmpty ? '目前無 SOS' : '求救中 ${sosOnly.length}', sosOnly.isEmpty ? kGreen : kRed),
         ]),
       ),
       const Divider(height: 1, color: kBorder),
@@ -1113,36 +838,6 @@ class _TrianglePainter extends CustomPainter {
 // ══════════════════════════════════════════════════════════
 //  SOS PENDING BADGE
 // ══════════════════════════════════════════════════════════
-class _SosPendingBadge extends StatefulWidget {
-  final int count;
-  const _SosPendingBadge({required this.count});
-  @override
-  State<_SosPendingBadge> createState() => _SosPendingBadgeState();
-}
-
-class _SosPendingBadgeState extends State<_SosPendingBadge> with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  @override
-  void initState() { super.initState(); _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))..repeat(reverse: true); }
-  @override
-  void dispose() { _ctrl.dispose(); super.dispose(); }
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: _ctrl,
-    builder: (_, __) => Opacity(opacity: 0.55 + _ctrl.value * 0.45,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(color: kRed.withOpacity(.12), borderRadius: BorderRadius.circular(999), border: Border.all(color: kRed.withOpacity(.35))),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 7, height: 7, decoration: const BoxDecoration(color: kRed, shape: BoxShape.circle)),
-          const SizedBox(width: 5),
-          Text('求救中 ${widget.count}', style: const TextStyle(color: kRed, fontSize: 13, fontWeight: FontWeight.w800)),
-        ]),
-      )),
-  );
-}
-
 // ══════════════════════════════════════════════════════════
 //  BLINK DOT
 // ══════════════════════════════════════════════════════════
@@ -1177,10 +872,6 @@ class _SosEventList extends StatelessWidget {
   Widget build(BuildContext context) => Column(children: [
     Padding(padding: const EdgeInsets.fromLTRB(14,14,14,8), child: Row(children: [
       const Expanded(child: Text('轄區 SOS 清單', style: TextStyle(color: kTextMain, fontSize: 15, fontWeight: FontWeight.w800))),
-      if (events.isNotEmpty)
-        Container(padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-            decoration: BoxDecoration(color: kRed.withOpacity(.10), borderRadius: BorderRadius.circular(20), border: Border.all(color: kRed.withOpacity(.25))),
-            child: Text('${events.length} 件待處理', style: const TextStyle(color: kRed, fontSize: 13, fontWeight: FontWeight.w800))),
     ])),
     Expanded(child: events.isEmpty
         ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -1199,18 +890,14 @@ class _SosEventList extends StatelessWidget {
               final name = e.userName.isNotEmpty ? e.userName : '用戶 ${e.userId}';
               return Padding(padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Container(width: 30, height: 30,
-                      decoration: BoxDecoration(color: kRed.withOpacity(.10), shape: BoxShape.circle, border: Border.all(color: kRed.withOpacity(.25))),
-                      child: const Icon(Icons.sos_rounded, color: kRed, size: 16)),
-                  const SizedBox(width: 9),
                   Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                     Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: kTextMain, fontSize: 14, fontWeight: FontWeight.w800)),
+                        style: const TextStyle(color: kTextMain, fontSize: 15, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 2),
                     Text((e.address ?? '').isNotEmpty ? e.address! : e.phone, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: kTextSub, fontSize: 13)),
                   ])),
                   Column(crossAxisAlignment: CrossAxisAlignment.end, mainAxisSize: MainAxisSize.min, children: [
-                    Text(_relativeTime(e.sentAt), style: const TextStyle(color: kTextSub, fontSize: 12),
+                    Text(_relativeTime(e.sentAt), style: const TextStyle(color: kTextSub, fontSize: 13),
                         overflow: TextOverflow.ellipsis, maxLines: 1),
                     const SizedBox(height: 4),
                     Builder(builder: (_) {
@@ -1218,7 +905,7 @@ class _SosEventList extends StatelessWidget {
                       final c = processing ? kBlue : kOrange;
                       return Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                           decoration: BoxDecoration(color: c.withValues(alpha: .10), borderRadius: BorderRadius.circular(4)),
-                          child: Text(processing ? '處理中' : '待處理', style: TextStyle(color: c, fontSize: 12, fontWeight: FontWeight.w700)));
+                          child: Text(processing ? '處理中' : '待處理', style: TextStyle(color: c, fontSize: 13, fontWeight: FontWeight.w700)));
                     }),
                   ]),
                 ]));
@@ -1308,7 +995,7 @@ class _NotificationDialog extends StatelessWidget {
         ])),
         const Divider(height: 1, color: kBorder),
         if (alerts.isEmpty)
-          const Padding(padding: EdgeInsets.all(24), child: Text('近 30 天内没有災害通報', style: TextStyle(color: kTextSub)))
+          const Padding(padding: EdgeInsets.all(24), child: Text('近 7 天內沒有災害通報', style: TextStyle(color: kTextSub)))
         else
           Flexible(child: ListView.separated(
             padding: const EdgeInsets.all(12), itemCount: alerts.length,
@@ -1335,7 +1022,7 @@ class _EventListCard extends StatelessWidget {
       const Icon(Icons.flash_on_rounded, color: kTextMain, size: 18),
       const SizedBox(width: 6),
       const Expanded(child: Text('災害警報（氣象署）', style: TextStyle(color: kTextMain, fontSize: 16, fontWeight: FontWeight.w800))),
-      _smallBadge('30天｜最多30笔', kBlue),
+      _smallBadge('近 7 天｜最多 30 筆', kBlue),
       IconButton(onPressed: onRefresh, icon: const Icon(Icons.refresh, color: kBlue, size: 18)),
     ]),
     const SizedBox(height: 8),
@@ -1347,7 +1034,7 @@ class _EventListCard extends StatelessWidget {
         const SizedBox(height: 10),
         const Text('目前轄區平安', style: TextStyle(color: kGreen, fontWeight: FontWeight.w700, fontSize: 15)),
         const SizedBox(height: 4),
-        const Text('近 30 天內沒有重大通報', style: TextStyle(color: kTextSub, fontSize: 14)),
+        const Text('近 7 天內沒有重大通報', style: TextStyle(color: kTextSub, fontSize: 14)),
       ])))
     else
       Expanded(child: ListView.separated(
@@ -1386,7 +1073,9 @@ class _EventListCard extends StatelessWidget {
 class _TodoCard extends StatefulWidget {
   /// 跳頁：1 用戶 / 2 災民 / 3 緊急事件 / 4 物資管理
   final ValueChanged<int> onGo;
-  const _TodoCard({required this.onGo});
+  /// 跳到物資管理的指定分頁：0 庫存管理 / 1 據點管理
+  final ValueChanged<int> onGoSupply;
+  const _TodoCard({required this.onGo, required this.onGoSupply});
 
   @override
   State<_TodoCard> createState() => _TodoCardState();
@@ -1438,13 +1127,13 @@ class _TodoCardState extends State<_TodoCard> {
     final sos       = emergencyVm.emergencies.where((e) => e.status != 'resolved').toList()
       ..sort((a, b) => b.sentAt.compareTo(a.sentAt));
     final waiting   = _requests.where((r) => r.isPending).toList();
-    final delivering = _requests.where((r) => r.isDelivering).toList();
+    final delivering = _requests.where((r) => r.isClaimed || r.isDelivering).toList();
     final lowStock  = supplyVm.supplies.where((s) => s.isLowStock).toList();
 
-    String names(Iterable<String> list, {int max = 3}) {
+    String names(Iterable<String> list, {int max = 3, String unit = '筆'}) {
       final l = list.where((s) => s.isNotEmpty).toList();
       if (l.isEmpty) return '';
-      return l.length <= max ? l.join('・') : '${l.take(max).join('・')} 等 ${l.length} 筆';
+      return l.length <= max ? l.join('・') : '${l.take(max).join('・')} 等 ${l.length} $unit';
     }
 
     final total = sos.length + waiting.length + delivering.length + lowStock.length;
@@ -1463,8 +1152,8 @@ class _TodoCardState extends State<_TodoCard> {
           : ListView(children: [
               _todoRow(
                 icon: Icons.sos_rounded, color: kRed,
-                title: 'SOS 求救待處理', count: sos.length, unit: '件',
-                detail: names(sos.map((e) => e.userName)),
+                title: 'SOS 求救中', count: sos.length, unit: '件',
+                detail: names(sos.map((e) => e.userName), unit: '件'),
                 onTap: () => widget.onGo(3),
               ),
               _todoRow(
@@ -1473,20 +1162,20 @@ class _TodoCardState extends State<_TodoCard> {
                 detail: _requestsFailed
                     ? '無法取得物資需求資料'
                     : names(waiting.map((r) => '${r.itemName} × ${r.qty} ${r.unit}'), max: 2),
-                onTap: () => widget.onGo(4),
+                onTap: () => widget.onGoSupply(1),
               ),
               _todoRow(
                 icon: Icons.local_shipping_outlined, color: kOrange,
                 title: '物資配送中', count: delivering.length, unit: '筆',
                 detail: names(delivering.map((r) =>
-                    '${r.itemName} × ${r.qty}${r.volunteerId != null ? '（${r.volunteerId}）' : ''}'), max: 2),
-                onTap: () => widget.onGo(4),
+                    '${r.itemName} × ${r.qty} ${r.unit}${r.volunteerId != null ? '（${r.volunteerId}）' : ''}'), max: 2),
+                onTap: () => widget.onGoSupply(1),
               ),
               _todoRow(
                 icon: Icons.warning_amber_rounded, color: const Color(0xFFD97706),
                 title: '庫存不足', count: lowStock.length, unit: '項',
-                detail: names(lowStock.map((s) => s.name)),
-                onTap: () => widget.onGo(4),
+                detail: names(lowStock.map((s) => s.name), unit: '項'),
+                onTap: () => widget.onGoSupply(0),
               ),
             ])),
     ]));
@@ -1540,8 +1229,7 @@ class _TodoCardState extends State<_TodoCard> {
 // ══════════════════════════════════════════════════════════
 Widget _card({required Widget child, EdgeInsetsGeometry padding = const EdgeInsets.all(14), double? height}) =>
     Container(height: height, padding: padding,
-      decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(.035), blurRadius: 12, offset: const Offset(0,4))]),
+      decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(14), border: Border.all(color: kBorder)),
       child: child);
 
 Widget _smallBadge(String text, Color color) => Container(

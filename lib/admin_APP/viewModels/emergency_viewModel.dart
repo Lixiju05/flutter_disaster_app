@@ -33,21 +33,31 @@ class EmergencyViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> markHandled(EmergencyRequest emergency) async {
+  /// 標記完成：→ resolved。回傳是否成功，畫面用來顯示提示
+  Future<bool> markHandled(EmergencyRequest emergency) =>
+      _setStatus(emergency, 'resolved');
+
+  /// 開始處理：待處理 → processing
+  Future<bool> markProcessing(EmergencyRequest emergency) =>
+      _setStatus(emergency, 'processing');
+
+  Future<bool> _setStatus(EmergencyRequest emergency, String status) async {
     try {
       final success = await _repository.updateEmergencyStatus(
         emergencyId: emergency.emergencyId,
-        status: 'resolved',
+        status: status,
       );
       if (success) {
         final index = _emergencies.indexWhere((e) => e.emergencyId == emergency.emergencyId);
         if (index != -1) {
-         _emergencies[index] = _emergencies[index].copyWith(status: 'resolved');
+          _emergencies[index] = _emergencies[index].copyWith(status: status);
           notifyListeners();
         }
       }
+      return success;
     } catch (e) {
-      print('Mark handled error: $e');
+      debugPrint('Update emergency status error: $e');
+      return false;
     }
   }
 }

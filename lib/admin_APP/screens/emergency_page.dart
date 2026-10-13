@@ -51,43 +51,77 @@ class _EmergencyPageState extends State<EmergencyPage> {
     }
   }
 
-  Future<void> _confirmHandle(EmergencyRequest e, EmergencyViewModel vm) async {
+  /// 確認後改狀態，並提示成功 / 失敗
+  Future<void> _confirmStatus(
+    EmergencyRequest e,
+    EmergencyViewModel vm, {
+    required String title,
+    required String message,
+    required String confirmText,
+    required Color color,
+    required Future<bool> Function() action,
+    required String successText,
+  }) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha:.35),
+      barrierColor: Colors.black.withValues(alpha: .35),
       builder: (_) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        titlePadding:   const EdgeInsets.fromLTRB(20, 20, 20, 8),
-        contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-        title: const Text('確認標記已處理',
-            style: TextStyle(color: _kTextMain, fontSize: 15, fontWeight: FontWeight.w700)),
-        content: Text(
-          '確定將「${e.userName.isNotEmpty ? e.userName : e.userId}」的求救事件標記為已處理？此操作無法還原。',
-          style: const TextStyle(color: _kTextSub, fontSize: 15),
-        ),
-        actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        title: Text(title,
+            style: const TextStyle(color: _kTextMain, fontSize: 17, fontWeight: FontWeight.w800)),
+        content: Text(message, style: const TextStyle(color: _kTextMain, fontSize: 15)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消', style: TextStyle(color: _kTextSub)),
+            child: const Text('取消', style: TextStyle(color: _kTextSub, fontSize: 15)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: _kGreen,
+              backgroundColor: color,
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            child: const Text('標記已處理'),
+            child: Text(confirmText, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
     );
-    if (confirmed == true && mounted) vm.markHandled(e);
+    if (confirmed != true || !mounted) return;
+    final ok = await action();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      behavior: SnackBarBehavior.floating,
+      backgroundColor: ok ? _kGreen : _kRed,
+      content: Text(ok ? successText : '更新失敗，請確認後端連線後再試一次',
+          style: const TextStyle(fontWeight: FontWeight.w600)),
+    ));
   }
+
+  String _nameOf(EmergencyRequest e) => e.userName.isNotEmpty ? e.userName : e.userId;
+
+  Future<void> _confirmProcessing(EmergencyRequest e, EmergencyViewModel vm) => _confirmStatus(
+        e, vm,
+        title: '開始處理',
+        message: '將「${_nameOf(e)}」的求救事件改為「處理中」？',
+        confirmText: '開始處理',
+        color: _kBlue,
+        action: () => vm.markProcessing(e),
+        successText: '已改為處理中',
+      );
+
+  Future<void> _confirmHandle(EmergencyRequest e, EmergencyViewModel vm) => _confirmStatus(
+        e, vm,
+        title: '標記完成',
+        message: '確定將「${_nameOf(e)}」的求救事件標記為已完成？此操作無法還原。',
+        confirmText: '標記完成',
+        color: _kGreen,
+        action: () => vm.markHandled(e),
+        successText: '已標記完成',
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -105,7 +139,14 @@ class _EmergencyPageState extends State<EmergencyPage> {
       return e.userName.toLowerCase().contains(q) ||
              e.userId.toLowerCase().contains(q)   ||
              e.phone.toLowerCase().contains(q);
-    }).toList()..sort((a, b) => b.sentAt.compareTo(a.sentAt));
+    }).toList()
+      // 未完成的排前面，同狀態依時間新到舊
+      ..sort((a, b) {
+        final ra = a.status == 'resolved' ? 1 : 0;
+        final rb = b.status == 'resolved' ? 1 : 0;
+        if (ra != rb) return ra.compareTo(rb);
+        return b.sentAt.compareTo(a.sentAt);
+      });
 
     return Container(
       color: _kBg,
@@ -115,22 +156,21 @@ class _EmergencyPageState extends State<EmergencyPage> {
           children: [
             _buildHeader(vm, pending),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // 統計格同時是篩選（點一下就只看該狀態）
                   _buildStatsBar(all.length, pending, processing, resolved),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   _buildSearchBar(),
-                  const SizedBox(height: 10),
-                  _buildToolbar(filtered.length),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                 ],
               ),
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
                 child: _buildList(vm, filtered),
               ),
             ),
@@ -156,14 +196,12 @@ class _EmergencyPageState extends State<EmergencyPage> {
     return Container(
       decoration: BoxDecoration(
         color:        _kCardBg,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border:       Border.all(color: _kBorder),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: .028), blurRadius: 6, offset: const Offset(0, 2)),
-        ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Row(children: [
-        _tapStatCell(Icons.apps_rounded,           '$total',      '全部',   _kBlue,   '全部'),
+        _tapStatCell(Icons.list_alt_rounded,       '$total',      '全部',   _kBlue,   '全部'),
         _divider(),
         _tapStatCell(Icons.warning_amber_rounded,  '$pending',    '待處理', _kOrange, '待處理'),
         _divider(),
@@ -174,6 +212,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
     );
   }
 
+  /// 統計格：選中時淡底色 + 底部色條（同災民管理）
   Widget _tapStatCell(IconData icon, String val, String label, Color color, String filter) {
     final sel = _filter == filter;
     return Expanded(
@@ -184,93 +223,53 @@ class _EmergencyPageState extends State<EmergencyPage> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
             color: sel ? color.withValues(alpha: .06) : Colors.transparent,
+            border: Border(bottom: BorderSide(color: sel ? color : Colors.transparent, width: 3)),
           ),
           child: Row(children: [
-            Container(
-              width: 32, height: 32,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: .10),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: color, size: 16),
-            ),
+            Icon(icon, color: color, size: 20),
             const SizedBox(width: 10),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(val, style: TextStyle(color: sel ? color : _kTextMain, fontSize: 20, fontWeight: FontWeight.w800, height: 1.1)),
-              Text(label, style: const TextStyle(color: _kTextSub, fontSize: 13)),
+              Text(val, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.w800, height: 1.15)),
+              Text(label, style: TextStyle(
+                  color: sel ? _kTextMain : _kTextSub, fontSize: 14,
+                  fontWeight: sel ? FontWeight.w700 : FontWeight.w500)),
             ]),
-            if (sel) ...[const Spacer(), Icon(Icons.check_circle_rounded, color: color, size: 14)],
           ]),
         ),
       ),
     );
   }
 
-  Widget _divider() => Container(width: 1, height: 28, color: _kBorder);
+  Widget _divider() => Container(width: 1, height: 32, color: _kBorder);
 
   Widget _buildSearchBar() {
     return Container(
-      height: 38,
+      height: 46,
       decoration: BoxDecoration(
         color:        _kCardBg,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border:       Border.all(color: _kBorder),
       ),
       child: TextField(
         controller: _searchCtrl,
-        style: const TextStyle(color: _kTextMain, fontSize: 14),
+        style: const TextStyle(color: _kTextMain, fontSize: 16),
         decoration: InputDecoration(
           hintText:        '搜尋姓名、ID 或電話…',
-          hintStyle:       const TextStyle(color: _kTextSub, fontSize: 14),
-          prefixIcon:      const Icon(Icons.search_rounded, color: _kTextSub, size: 18),
+          hintStyle:       const TextStyle(color: _kTextSub, fontSize: 15),
+          prefixIcon:      const Icon(Icons.search_rounded, color: _kTextSub, size: 20),
           suffixIcon: _searchQuery.isNotEmpty
-              ? GestureDetector(
-                  onTap: () => setState(() {
+              ? IconButton(
+                  icon: const Icon(Icons.close_rounded, color: _kTextSub, size: 18),
+                  onPressed: () => setState(() {
                     _searchCtrl.clear();
                     _searchQuery = '';
                   }),
-                  child: const Icon(Icons.close_rounded, color: _kTextSub, size: 16),
                 )
               : null,
           border:          InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 10),
+          contentPadding: const EdgeInsets.symmetric(vertical: 13),
         ),
         onChanged: (v) => setState(() => _searchQuery = v),
-      ),
-    );
-  }
-
-  Widget _buildToolbar(int shown) {
-    return Row(children: [
-      _filterBtn('全部',   _kBlue),
-      const SizedBox(width: 4),
-      _filterBtn('待處理', _kOrange),
-      const SizedBox(width: 4),
-      _filterBtn('處理中', _kBlue),
-      const SizedBox(width: 4),
-      _filterBtn('已完成', _kGreen),
-      const Spacer(),
-      Text('共 $shown 筆', style: const TextStyle(color: _kTextSub, fontSize: 13)),
-    ]);
-  }
-
-  Widget _filterBtn(String label, Color color) {
-    final sel = _filter == label;
-    return GestureDetector(
-      onTap: () => setState(() => _filter = label),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 130),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color:        sel ? color.withValues(alpha: .08) : _kCardBg,
-          borderRadius: BorderRadius.circular(8),
-          border:       Border.all(color: sel ? color.withValues(alpha: .35) : _kBorder),
-        ),
-        child: Text(label,
-            style: TextStyle(
-                color:      sel ? color : _kTextSub,
-                fontSize:   13,
-                fontWeight: sel ? FontWeight.w700 : FontWeight.w500)),
       ),
     );
   }
@@ -284,69 +283,57 @@ class _EmergencyPageState extends State<EmergencyPage> {
         icon: Icons.cloud_off_outlined, iconColor: _kRed,
         title: '資料載入失敗',
         subtitle: vm.errorMessage,
-        action: GestureDetector(
-          onTap: vm.loadEmergencies,
-          child: Container(
-            margin: const EdgeInsets.only(top: 10),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color:        _kRed.withValues(alpha:.06),
-              borderRadius: BorderRadius.circular(7),
-              border:       Border.all(color: _kRed.withValues(alpha:.2)),
-            ),
-            child: const Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.refresh_rounded, color: _kRed, size: 14),
-              SizedBox(width: 5),
-              Text('重新載入', style: TextStyle(color: _kRed, fontSize: 13, fontWeight: FontWeight.w600)),
-            ]),
+        action: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: OutlinedButton.icon(
+            onPressed: vm.loadEmergencies,
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('重新載入'),
           ),
         ),
       );
     }
     if (vm.emergencies.isEmpty) return _placeholder(icon: Icons.inbox_outlined, iconColor: _kTextSub, title: '暫無緊急事件');
-    if (filtered.isEmpty) {
-      return _placeholder(icon: Icons.inbox_outlined, iconColor: _kTextSub, title: '沒有「$_filter」的事件');
-    }
 
     return Container(
       decoration: BoxDecoration(
         color:        _kCardBg,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border:       Border.all(color: _kBorder),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha:.028), blurRadius: 6, offset: const Offset(0, 2)),
-        ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(children: [
         Container(
-          padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
           decoration: const BoxDecoration(
-            color:        Color(0xFFF8FAFC),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-            border:       Border(bottom: BorderSide(color: _kBorder)),
+            color:  Color(0xFFF8FAFC),
+            border: Border(bottom: BorderSide(color: _kBorder)),
           ),
           child: Row(children: [
-            const Icon(Icons.bolt_rounded, color: _kTextMain, size: 16),
-            const SizedBox(width: 6),
-            const Text('求救事件列表',
-                style: TextStyle(color: _kTextMain, fontSize: 15, fontWeight: FontWeight.w700)),
+            Text(_filter == '全部' ? '求救事件' : '求救事件・$_filter',
+                style: const TextStyle(color: _kTextMain, fontSize: 16, fontWeight: FontWeight.w800)),
             const Spacer(),
-            Text('共 ${filtered.length} 筆', style: const TextStyle(color: _kTextSub, fontSize: 13)),
+            Text('共 ${filtered.length} 筆',
+                style: const TextStyle(color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w600)),
           ]),
         ),
         Expanded(
-          child: ListView.builder(
-            padding:   const EdgeInsets.all(10),
-            itemCount: filtered.length,
-            itemBuilder: (_, i) => _buildCard(filtered[i], vm),
-          ),
+          child: filtered.isEmpty
+              ? Center(child: Text(
+                  _searchQuery.trim().isNotEmpty ? '找不到符合「${_searchQuery.trim()}」的事件' : '沒有「$_filter」的事件',
+                  style: const TextStyle(color: _kTextSub, fontSize: 15)))
+              : ListView.separated(
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  itemBuilder: (_, i) => _buildCard(filtered[i], vm),
+                ),
         ),
       ]),
     );
   }
 
   // ══════════════════════════════════════════════════════════
-  //  事件卡片
+  //  事件列（白底、狀態標籤、右側操作按鈕）
   // ══════════════════════════════════════════════════════════
   Widget _buildCard(EmergencyRequest e, EmergencyViewModel vm) {
     final isResolved   = e.status == 'resolved';
@@ -354,133 +341,97 @@ class _EmergencyPageState extends State<EmergencyPage> {
     final color = isResolved ? _kGreen : (isProcessing ? _kBlue : _kOrange);
     final statusLabel = isResolved ? '已完成' : (isProcessing ? '處理中' : '待處理');
     final displayName = e.userName.isNotEmpty ? e.userName : '用戶 ${e.userId}';
+    final hasLocation = !(e.lat == 0 && e.lng == 0);
+    final address = e.address?.isNotEmpty == true ? e.address! : '位置未提供';
 
-    return Container(
-      margin:  const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color:        isResolved ? Colors.white : color.withValues(alpha: .025),
-        borderRadius: BorderRadius.circular(10),
-        border:       Border.all(color: isResolved ? _kBorder : color.withValues(alpha: .20)),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        // 左側圖示
         Container(
-          width: 38, height: 38,
-          decoration: BoxDecoration(color: color.withValues(alpha: .10), borderRadius: BorderRadius.circular(9)),
-          child: Icon(
-            isResolved ? Icons.check_circle_outline_rounded
-                : isProcessing ? Icons.sync_rounded
-                : Icons.warning_amber_rounded,
-            color: color, size: 19,
-          ),
+          width: 36, height: 36,
+          decoration: BoxDecoration(color: const Color(0xFFEFF4FF), borderRadius: BorderRadius.circular(10)),
+          child: Center(child: Text(
+            displayName.isNotEmpty ? displayName[0] : '?',
+            style: const TextStyle(color: Color(0xFF1E3A5F), fontSize: 16, fontWeight: FontWeight.w700),
+          )),
         ),
         const SizedBox(width: 12),
-
-        // 主要內容：姓名+ID、電話、位置
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // 姓名 + ID + 狀態
             Row(children: [
-              const Icon(Icons.person_outline_rounded, color: _kTextSub, size: 13),
-              const SizedBox(width: 4),
               Flexible(child: Text(displayName,
-                  style: const TextStyle(color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                      color: isResolved ? _kTextSub : _kTextMain,
+                      fontSize: 16, fontWeight: FontWeight.w700),
                   overflow: TextOverflow.ellipsis, maxLines: 1)),
-              const SizedBox(width: 6),
-              Flexible(child: Text('ID：${e.userId}', style: const TextStyle(color: _kTextSub, fontSize: 13),
-                  overflow: TextOverflow.ellipsis, maxLines: 1)),
-              const SizedBox(width: 4),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: .10),
-                  borderRadius: BorderRadius.circular(99),
-                  border: Border.all(color: color.withValues(alpha: .25)),
-                ),
-                child: Text(statusLabel,
-                    style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
-              ),
+              const SizedBox(width: 8),
+              Text(e.userId, style: const TextStyle(color: _kTextSub, fontSize: 14)),
+              const SizedBox(width: 8),
+              _tag(statusLabel, color),
+              const SizedBox(width: 8),
+              Text(_ago(e.sentAt), style: const TextStyle(color: _kTextSub, fontSize: 13)),
             ]),
-            const SizedBox(height: 5),
-            // 電話
-            if (e.phone.isNotEmpty) ...[
-              Row(children: [
-                const Icon(Icons.phone_outlined, color: _kTextSub, size: 13),
-                const SizedBox(width: 4),
-                Text(e.phone, style: const TextStyle(color: _kTextSub, fontSize: 13)),
-              ]),
-              const SizedBox(height: 5),
-            ],
-            // 位置（直接顯示 address 欄位）
-            Row(children: [
-              const Icon(Icons.location_on_outlined, color: _kTextSub, size: 13),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  e.address?.isNotEmpty == true ? e.address! : '位置未提供',
-                  style: const TextStyle(color: _kTextSub, fontSize: 13),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 6),
-              GestureDetector(
-                onTap: () => _openMap(e.lat, e.lng),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: _kBlue.withValues(alpha: .06),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: _kBlue.withValues(alpha: .18)),
-                  ),
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.map_outlined, color: _kBlue, size: 11),
-                    SizedBox(width: 3),
-                    Text('地圖', style: TextStyle(color: _kBlue, fontSize: 12, fontWeight: FontWeight.w600)),
-                  ]),
-                ),
-              ),
-            ]),
+            const SizedBox(height: 4),
+            Text(
+              [if (e.phone.isNotEmpty) e.phone, address].join('　'),
+              style: const TextStyle(color: _kTextSub, fontSize: 14),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ]),
         ),
-
-        // 右側按鈕
-        const SizedBox(width: 10),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _detailBtn(() => _showEmergencyDetail(e)),
-            if (!isResolved) ...[
-              const SizedBox(height: 6),
-              GestureDetector(
-                onTap: () => _confirmHandle(e, vm),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 13, vertical: 9),
-                  decoration: BoxDecoration(
-                    color:        _kGreen.withValues(alpha: .10),
-                    borderRadius: BorderRadius.circular(8),
-                    border:       Border.all(color: _kGreen.withValues(alpha: .35)),
-                  ),
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.check_rounded, color: _kGreen, size: 14),
-                    SizedBox(width: 5),
-                    Text('標記完成',
-                        style: TextStyle(
-                            color: _kGreen,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700)),
-                  ]),
-                ),
-              ),
-            ],
-          ],
-        ),
+        const SizedBox(width: 12),
+        // 操作：地圖 / 詳情 / 開始處理 / 標記完成
+        if (hasLocation) ...[
+          _outlineBtn('地圖', _kBlue, () => _openMap(e.lat, e.lng)),
+          const SizedBox(width: 8),
+        ],
+        _outlineBtn('詳情', _kBlue, () => _showEmergencyDetail(e)),
+        if (!isResolved && !isProcessing) ...[
+          const SizedBox(width: 8),
+          _outlineBtn('開始處理', _kBlue, () => _confirmProcessing(e, vm)),
+        ],
+        if (!isResolved) ...[
+          const SizedBox(width: 8),
+          _filledBtn('標記完成', _kGreen, () => _confirmHandle(e, vm)),
+        ],
       ]),
     );
   }
+
+  static String _ago(DateTime t) {
+    final d = DateTime.now().difference(t);
+    if (d.inMinutes < 1) return '剛剛';
+    if (d.inMinutes < 60) return '${d.inMinutes} 分鐘前';
+    if (d.inHours < 24) return '${d.inHours} 小時前';
+    return '${d.inDays} 天前';
+  }
+
+  /// 白底外框按鈕（同用戶管理的「詳情」）
+  static Widget _outlineBtn(String text, Color color, VoidCallback onTap) => InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            color: _kCardBg,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: .4)),
+          ),
+          child: Text(text, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700)),
+        ),
+      );
+
+  /// 實心按鈕（主要動作）
+  static Widget _filledBtn(String text, Color color, VoidCallback onTap) => InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+          child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+        ),
+      );
 
   // ── 詳情 Dialog ─────────────────────────────────────────────
   void _showEmergencyDetail(EmergencyRequest e) {
@@ -640,27 +591,6 @@ class _EmergencyPageState extends State<EmergencyPage> {
             ),
           ]),
         ),
-      ),
-    );
-  }
-
-  static Widget _detailBtn(VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color:        _kBlue.withValues(alpha: .06),
-          borderRadius: BorderRadius.circular(7),
-          border:       Border.all(color: _kBlue.withValues(alpha: .2)),
-        ),
-        child: const Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.visibility_outlined, color: _kBlue, size: 13),
-          SizedBox(width: 4),
-          Text('詳情',
-              style: TextStyle(
-                  color: _kBlue, fontSize: 13, fontWeight: FontWeight.w600)),
-        ]),
       ),
     );
   }

@@ -10,7 +10,9 @@ import 'package:flutter_disaster_app/core/api_config.dart';
 import 'package:flutter_disaster_app/admin_APP/widgets/page_header.dart';
 
 class SupplyPage extends StatefulWidget {
-  const SupplyPage({super.key});
+  /// 一進來顯示哪個分頁：0 庫存管理 / 1 據點管理 / 2 出貨紀錄
+  final int initialTab;
+  const SupplyPage({super.key, this.initialTab = 0});
 
   @override
   State<SupplyPage> createState() => _SupplyPageState();
@@ -73,7 +75,7 @@ class _SupplyPageState extends State<SupplyPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTab.clamp(0, 2));
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) return;
       if (_tabController.index == 1) { loadAllocations(); loadSupplyRequests(); }
@@ -1016,7 +1018,9 @@ class _SupplyPageState extends State<SupplyPage>
                       final stock = (s['stockQty'] as num?)?.toInt() ?? 0;
                       final reservedRaw = (s['reservedQty'] as num?)?.toInt() ?? 0;
                       final reserved = reservedRaw < 0 ? 0 : reservedRaw;
-                      final available = stock - reserved < 0 ? 0 : stock - reserved;
+                      // 可用量以後端 availableQty 為準；沒給才自己算（實際庫存 − 預留量）
+                      final availableRaw = (s['availableQty'] as num?)?.toInt() ?? (stock - reserved);
+                      final available = availableRaw < 0 ? 0 : availableRaw;
                       final need = demand[itemId] ?? 0;
                       final shortage = need - available;
 
