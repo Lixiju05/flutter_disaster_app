@@ -74,6 +74,7 @@ class DatabaseService {
 
     rawDb.execute('''CREATE TABLE IF NOT EXISTS station_inventory (stationId TEXT NOT NULL,itemId INTEGER NOT NULL,stockQty INTEGER NOT NULL DEFAULT 0,reservedQty INTEGER NOT NULL DEFAULT 0,updatedAt TEXT NOT NULL,PRIMARY KEY (stationId, itemId),FOREIGN KEY (stationId)REFERENCES stations(stationId),FOREIGN KEY (itemId)REFERENCES inventory(id))''');
 
+    createStationTransferSchema(rawDb);
     _addSupplyRequestColumns(rawDb);
 
 
@@ -89,6 +90,41 @@ class DatabaseService {
   }
 
 
+
+  static void createStationTransferSchema(Database db) {
+    db.execute('''
+      CREATE TABLE IF NOT EXISTS station_transfers (
+        transferId TEXT PRIMARY KEY,
+        fromStationId TEXT NOT NULL REFERENCES stations(stationId),
+        toStationId TEXT NOT NULL REFERENCES stations(stationId),
+        itemId INTEGER NOT NULL REFERENCES inventory(id),
+        qty INTEGER NOT NULL CHECK (qty > 0),
+        status TEXT NOT NULL CHECK (status IN ('reserved', 'shipped', 'received')),
+        createdBy TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        shippedAt TEXT,
+        receivedAt TEXT,
+        CHECK (fromStationId <> toStationId)
+      )
+    ''');
+    db.execute('CREATE INDEX IF NOT EXISTS station_transfers_destination_status '
+        'ON station_transfers(toStationId, status)');
+    db.execute('CREATE INDEX IF NOT EXISTS station_transfers_source_status '
+        'ON station_transfers(fromStationId, status)');
+  }
+
+  /// No await inside this transaction, so inventory and status stay atomic.
+  T stationTransferTransaction<T>(T Function(Database db) action) {
+    _db.execute('BEGIN IMMEDIATE');
+    try {
+      final result = action(_db);
+      _db.execute('COMMIT');
+      return result;
+    } catch (_) {
+      _db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
 
   static void _addSupplyRequestColumns(Database db) {
 

@@ -15,6 +15,7 @@ import 'package:admin_server/core/models/supply_request.dart';
 import 'package:admin_server/core/models/emergency_request.dart';
 
 import 'package:admin_server/services/supply/supply_request_service.dart';
+import 'package:admin_server/services/supply/station_transfer_service.dart';
 
 
 
@@ -197,6 +198,13 @@ Future<void> handleRequest(HttpRequest request) async {
     /// API 分流
 
     switch (type) {
+      case 'createStationTransfer':
+      case 'shipStationTransfer':
+      case 'receiveStationTransfer':
+      case 'getStationTransfers':
+      case 'getStationInventory':
+        await handleStationTransfer(jsonData, request);
+        break;
 
       case 'healthReport':
 
@@ -521,6 +529,74 @@ Future<void> handleRequest(HttpRequest request) async {
 }
 
 
+
+/// createdBy is audit input only; existing login does not authenticate requests.
+Future<void> handleStationTransfer(
+  Map<String, dynamic> data,
+  HttpRequest request,
+) async {
+  String requiredText(String key) {
+    final value = data[key];
+    if (value is! String || value.trim().isEmpty) {
+      throw StationTransferException('$key 必須是非空字串');
+    }
+    return value.trim();
+  }
+
+  int requiredInt(String key) {
+    final value = data[key];
+    if (value is! int || value <= 0) {
+      throw StationTransferException('$key 必須是大於 0 的整數');
+    }
+    return value;
+  }
+
+  try {
+    final service = StationTransferService(DatabaseService.instance);
+    Object result;
+    String message;
+    switch (data['type']) {
+      case 'createStationTransfer':
+        result = service.create(
+          fromStationId: data.containsKey('fromStationId')
+              ? requiredText('fromStationId') : 'OFFICE001',
+          toStationId: requiredText('toStationId'),
+          itemId: requiredInt('itemId'),
+          qty: requiredInt('qty'),
+          createdBy: requiredText('createdBy'),
+        );
+        message = '調度已建立，來源庫存已預留';
+        break;
+      case 'shipStationTransfer':
+        result = service.ship(requiredText('transferId'));
+        message = '已確認出貨，目的據點尚未入庫';
+        break;
+      case 'receiveStationTransfer':
+        result = service.receive(requiredText('transferId'));
+        message = '已確認收貨，目的據點庫存已增加';
+        break;
+      case 'getStationInventory':
+        result = service.getStationInventory(requiredText('stationId'));
+        message = '據點庫存查詢成功';
+        break;
+      case 'getStationTransfers':
+        result = await service.getTransfers(
+          stationId: data['stationId'] == null ? null : requiredText('stationId'),
+          status: data['status'] == null ? null : requiredText('status'),
+        );
+        message = '查詢成功';
+        break;
+      default:
+        throw StationTransferException('Unknown type');
+    }
+    await sendJson(request, 200, {'success': true, 'message': message, 'data': result});
+  } on StationTransferException catch (e) {
+    await sendJson(request, e.statusCode, {'success': false, 'message': e.message});
+  } catch (e) {
+    print('STATION TRANSFER ERROR: $e');
+    await sendJson(request, 500, {'success': false, 'message': '調度處理失敗，請檢查伺服器記錄'});
+  }
+}
 
 Future<void> handleHealthReport(
 
