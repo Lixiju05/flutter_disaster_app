@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math' as Math;
 import 'package:flutter/material.dart';
 import 'package:flutter_disaster_app/admin_APP/widgets/page_header.dart';
@@ -272,7 +272,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void _go(int i) => setState(() { selectedIndex = i; _supplyTab = 0; });
 
-  /// 物資管理要打開哪個分頁（0 庫存管理 / 1 據點管理 / 2 出貨紀錄）
+  /// 物資管理要打開哪個分頁（0 庫存管理 / 1 據點管理 / 2 調度紀錄）
   int _supplyTab = 0;
   void _goSupply(int tab) => setState(() { selectedIndex = 4; _supplyTab = tab; });
 
