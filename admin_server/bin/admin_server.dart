@@ -1678,6 +1678,7 @@ Future<void> handleClaimSupplyRequest(
 
 Future<void> handleNotification(Map<String, dynamic> data, HttpRequest request) async {
   try {
+    request.response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
     final session = adminSessions.authenticate(request.headers.value(HttpHeaders.authorizationHeader));
     if (session == null) {
       throw const NotificationException(401, 'ADMIN_SESSION_REQUIRED', '需要有效的管理員 Bearer Token，請重新登入');

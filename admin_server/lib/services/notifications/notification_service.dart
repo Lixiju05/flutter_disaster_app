@@ -58,6 +58,7 @@ class NotificationService {
       uid == uid.trim() &&
       !['.', '..'].contains(uid) &&
       !uid.contains('/') &&
+      !uid.contains('\\') &&
       !RegExp(r'[\x00-\x1f\x7f]').hasMatch(uid);
 
   Map<String, Object?>? _profile(NotificationDocument doc) {
@@ -231,7 +232,7 @@ class NotificationService {
           throw NotificationException(
             422,
             'RECIPIENT_UNAVAILABLE',
-            '收件者 ${uids[i]} 不存在或使用者文件缺少非空 email 字串，整筆未發布',
+            '收件者不存在或使用者文件不完整，整筆未發布',
           );
         }
       }

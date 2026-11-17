@@ -199,6 +199,9 @@ void main() {
       {
         'recipientUids': ['../bad'],
       },
+      {
+        'recipientUids': [r'bad\uid'],
+      },
       {'recipientUids': List.generate(101, (i) => 'uid$i')},
       {'expiresAt': '2026-11-11T08:00:00'},
       {'expiresAt': '2026-11-09T08:00:00Z'},
