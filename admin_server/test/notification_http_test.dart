@@ -65,6 +65,9 @@ void main() {
     if (token != null) request.headers.set('Authorization', 'Bearer $token');
     request.write(jsonEncode(body));
     final response = await request.close();
+    if (body['type'] != 'login') {
+      expect(response.headers.value('Cache-Control'), 'no-store');
+    }
     expect(
       response.headers.value('Access-Control-Allow-Headers'),
       contains('Authorization'),
@@ -168,13 +171,12 @@ void main() {
     expect(result.$1, 503);
     expect(result.$2['success'], false);
     expect(store.commits, 0);
-    expect(
-      (await post({
-        ...send(),
-        'recipientUids': ['uidA', 'missing'],
-      }, token)).$1,
-      422,
-    );
+    final unavailable = await post({
+      ...send(),
+      'recipientUids': ['uidA', 'missing-sensitive-test-uid'],
+    }, token);
+    expect(unavailable.$1, 422);
+    expect(jsonEncode(unavailable.$2), isNot(contains('missing-sensitive-test-uid')));
     expect(
       (await post({
         ...send(),
