@@ -1,8 +1,18 @@
+import 'package:admin_server/services/reverse_geocoding_service.dart';
+import 'package:admin_server/services/firebase/firebase_config.dart';
+import 'package:admin_server/services/firebase/firebase_connection.dart';
+import 'package:admin_server/services/firebase/firebase_users_bootstrap.dart';
+import 'package:admin_server/services/firebase/firebase_users_service.dart';
+import 'package:admin_server/services/isolated_request_pool.dart';
+import 'package:admin_server/core/models/report_location.dart';
 import 'dart:io';
 
 import 'dart:convert';
 
-import 'dart:math';
+import 'package:admin_server/services/admin_session_store.dart';
+import 'package:admin_server/services/notifications/notification_bootstrap.dart';
+import 'package:admin_server/services/notifications/notification_service.dart';
+import 'package:admin_server/services/notifications/notification_store.dart';
 
 
 
@@ -17,11 +27,33 @@ import 'package:admin_server/core/models/emergency_request.dart';
 import 'package:admin_server/services/supply/supply_request_service.dart';
 import 'package:admin_server/services/supply/station_transfer_service.dart';
 
+final adminSessions = AdminSessionStore();
+NotificationService? notificationService;
+ReverseGeocodingService? reverseGeocodingService;
+FirebaseUsersService? firebaseUsersService;
+IsolatedRequestPool firebaseUsersRequests = IsolatedRequestPool();
+
 
 
 
 
 Future<void> main() async {
+  try {
+    reverseGeocodingService = createReverseGeocodingService();
+  } catch (_) {
+    stderr.writeln('Reverse geocoding disabled: invalid DEMO configuration.');
+  }
+
+
+  try {
+    notificationService = await createNotificationServiceFromEnvironment();
+  } on NotificationException catch (error) {
+    // Configuration codes only; never log credentials, identities or raw errors.
+    stderr.writeln('Notifications disabled: ${error.code}');
+  } catch (_) {
+    // No raw credential / OAuth / Google error details in application logs.
+    stderr.writeln('Notifications disabled: server authorization/configuration is unavailable.');
+  }
 
   await DatabaseService.init();
 
@@ -41,12 +73,34 @@ Future<void> main() async {
 
 
 
-  await for (HttpRequest request in server) {
-
-    await handleRequest(request);
-
+  try {
+  try {
+    firebaseUsersService = await createFirebaseUsersServiceFromEnvironment();
+  } on FirebaseConfigurationException catch (error) {
+    stderr.writeln('Firebase user queries disabled: ${error.code}');
+  } on FirebaseConnectionException catch (error) {
+    stderr.writeln('Firebase user queries disabled: ${error.code}');
+  } catch (_) {
+    stderr.writeln('Firebase user queries disabled: initialization failed.');
+  }
+    await serveRequests(server);
+  } finally {
+    firebaseUsersService?.close();
+    await server.close(force: true);
   }
 
+}
+
+/// Production dispatch is also exercised by isolated HTTP tests. Only the two
+/// Firebase user routes detach after JSON parsing; SQLite writers stay ordered.
+Future<void> serveRequests(HttpServer server, {Set<String>? allowedTypes}) async {
+  try {
+    await for (final request in server) {
+      await handleRequest(request, allowedTypes: allowedTypes);
+    }
+  } finally {
+    await firebaseUsersRequests.close();
+  }
 }
 
 
@@ -69,7 +123,7 @@ void setCorsHeaders(HttpRequest request) {
 
     'Access-Control-Allow-Headers',
 
-    'Origin, Content-Type, Accept, ngrok-skip-browser-warning',
+    'Origin, Content-Type, Accept, Authorization, ngrok-skip-browser-warning',
 
   );
 
@@ -114,20 +168,17 @@ Future<void> sendJson(
 ///共用：產生 Token
 
 String generateToken() {
-
-  final rand = Random();
-
-  return List.generate(32, (_) => rand.nextInt(16).toRadixString(16)).join();
-
+  return AdminSessionStore.generateToken();
 }
 
 
 
 /// 主請求入口
 
-Future<void> handleRequest(HttpRequest request) async {
+Future<void> handleRequest(HttpRequest request, {Set<String>? allowedTypes}) async {
 
-  print("INCOMING REQUEST: ${request.method} ${request.uri}");
+  // URLs can contain PII or cursors. Do not log paths or query strings.
+  print("INCOMING REQUEST: ${request.method}");
 
 
 
@@ -167,7 +218,7 @@ Future<void> handleRequest(HttpRequest request) async {
 
     final body = await utf8.decoder.bind(request).join();
 
-    print("BODY RAW: $body");
+    // Do not log request bodies: login contains credentials.
 
 
 
@@ -190,14 +241,47 @@ Future<void> handleRequest(HttpRequest request) async {
     final jsonData = jsonDecode(body);
 
     final type = jsonData['type'];
+    if (allowedTypes != null && !allowedTypes.contains(type)) {
+      await sendJson(request, 404, {'success': false,
+        'code': 'ROUTE_NOT_AVAILABLE', 'message': 'Route is unavailable in this test server'});
+      return;
+    }
 
-    print("TYPE: $type");
+    if (!DatabaseService.instance.allowLegacyInventoryWrites &&
+        const ['allocate', 'dispatch', 'cancelAllocation'].contains(type)) {
+      await sendJson(request, 409, {
+        'success': false,
+        'message': '單中心模式已停用舊 allocate/dispatch 寫入，請使用物資需求與義工取貨流程',
+      });
+      return;
+    }
+
+    print('REQUEST ROUTE SELECTED');
 
 
 
     /// API 分流
 
     switch (type) {
+      case 'getFirebaseUsers':
+      case 'getFirebaseUserById':
+        await firebaseUsersRequests.dispatch(
+          () => handleFirebaseUsers(jsonData, request),
+          onUnavailable: (closing) => sendJson(request, closing ? 503 : 429, {
+            'success': false, 'source': 'firestore',
+            'code': closing ? 'FIREBASE_USERS_SHUTTING_DOWN' : 'FIREBASE_USERS_BUSY',
+            'message': 'Firebase user queries are temporarily unavailable',
+          }),
+          onFailure: () async {
+            try {
+              await sendJson(request, 503, {'success': false, 'source': 'firestore',
+                'code': 'FIREBASE_USERS_UNAVAILABLE', 'message': 'User query unavailable'});
+            } catch (_) {
+              try { await request.response.close(); } catch (_) { /* Disconnected. */ }
+            }
+          },
+        );
+        break;
       case 'createStationTransfer':
       case 'shipStationTransfer':
       case 'receiveStationTransfer':
@@ -218,6 +302,33 @@ Future<void> handleRequest(HttpRequest request) async {
 
         await handleLogin(jsonData, request);
 
+        break;
+
+      case 'reverseGeocode':
+        await handleReverseGeocode(jsonData, request);
+        break;
+
+      case 'getNotificationRecipients':
+      case 'sendNotification':
+      case 'getSentNotifications':
+        await handleNotification(jsonData, request);
+        break;
+
+      case 'assignSupplyRequestVolunteer':
+        await handleAssignSupplyRequestVolunteer(jsonData, request);
+        break;
+
+      case 'adminDispatchSupplyRequest':
+      case 'adminCompleteSupplyRequest':
+        await handleAdminSupplyDelivery(jsonData, request);
+        break;
+
+      case 'batchReserveSupplyRequests':
+      case 'batchDispatchSupplyRequests':
+      case 'batchCompleteSupplyRequests':
+      case 'getSupplyRequestReviews':
+      case 'reviewSupplyRequest':
+        await handleSupplyBatchAndReview(jsonData, request);
         break;
 
       case 'getAllReports':
@@ -342,6 +453,10 @@ Future<void> handleRequest(HttpRequest request) async {
 
         await handleGetSupplyRequestDetails(request);
 
+        break;
+
+      case 'getStations':
+        await handleGetStations(request);
         break;
 
 
@@ -512,7 +627,8 @@ Future<void> handleRequest(HttpRequest request) async {
 
   } catch (e) {
 
-    print("SERVER ERROR: $e");
+    // Invalid JSON may contain credentials/PII; never print its source.
+    print('SERVER ERROR: invalid request');
 
 
 
@@ -612,29 +728,10 @@ Future<void> handleHealthReport(
 
 
 
-    final report = HealthReport(
-
-      uuid: jsonData['uuid'],
-
-      reporterId: jsonData['reporterId'],
-
-      name: jsonData['name'],
-
-      phone: jsonData['phone'],
-
-      bloodType: jsonData['bloodType'],
-
-      status: jsonData['status'],
-
-      description: jsonData['description'],
-
-      lat: (jsonData['lat'] as num?)?.toDouble(),
-
-      lng: (jsonData['lng'] as num?)?.toDouble(),
-
-      reportTime: DateTime.tryParse(jsonData['reportTime'] ?? '') ?? DateTime.now(),
-
-    );
+    final report = HealthReport.fromJson({
+      ...jsonData,
+      'receivedAt': DateTime.now().toIso8601String(),
+    });
 
 
 
@@ -720,7 +817,7 @@ Future<void> handleLogin(Map<String, dynamic> jsonData, HttpRequest request) asy
 
       "success": true,
 
-      "token": generateToken(),
+      "token": adminSessions.create(adminRow['id'] as int),
 
       "username": adminRow['username'],
 
@@ -911,19 +1008,37 @@ Future<void> handleSearchUsers(
 //查inventory
 
 Future<void> handleGetInventory(HttpRequest request) async {
+  try {
+    final items = await DatabaseService.instance.getAllInventory();
+    await sendJson(request, 200, {"success": true, "data": items});
+  } catch (e) {
+    await sendInventoryError(request, e);
+  }
+}
 
-  final items =await DatabaseService.instance.getAllInventory();
+String inventoryText(Map<String, dynamic> data, String key) {
+  final value = data[key];
+  if (value is! String || value.trim().isEmpty) {
+    throw InventoryException('$key 必須是非空字串');
+  }
+  return value.trim();
+}
 
+int inventoryInt(Map<String, dynamic> data, String key, {bool allowZero = false}) {
+  final value = data[key];
+  if (value is! int || (allowZero ? value < 0 : value <= 0)) {
+    throw InventoryException('$key 必須是${allowZero ? '非負' : '大於 0 的'}整數');
+  }
+  return value;
+}
 
-
-  sendJson(request, 200, {
-
-    "success": true,
-
-    "data": items,
-
-  });
-
+Future<void> sendInventoryError(HttpRequest request, Object error) async {
+  if (error is InventoryException) {
+    await sendJson(request, error.statusCode, {'success': false, 'message': error.message});
+  } else {
+    print('INVENTORY ERROR: $error');
+    await sendJson(request, 500, {'success': false, 'message': '庫存處理失敗，請檢查伺服器記錄'});
+  }
 }
 
 //新增物資
@@ -935,31 +1050,18 @@ Future<void> handleAddInventory(
   HttpRequest request,
 
 ) async {
-
-  DatabaseService.instance.addInventory(
-
-    name: jsonData['name'],
-
-    category: jsonData['category'],
-
-    unit: jsonData['unit'],
-
-    stockQty: jsonData['stockQty'],
-
-    neededQty: jsonData['neededQty'] ?? 0,
-
-  );
-
-
-
-  sendJson(request, 200, {
-
-    "success": true,
-
-    "message": "Inventory added",
-
-  });
-
+  try {
+    await DatabaseService.instance.addInventory(
+      name: inventoryText(jsonData, 'name'),
+      category: inventoryText(jsonData, 'category'),
+      unit: inventoryText(jsonData, 'unit'),
+      stockQty: inventoryInt(jsonData, 'stockQty'),
+      neededQty: inventoryInt({'neededQty': jsonData['neededQty'] ?? 0}, 'neededQty', allowZero: true),
+    );
+    await sendJson(request, 200, {"success": true, "message": "Inventory added"});
+  } catch (e) {
+    await sendInventoryError(request, e);
+  }
 }
 
 //補貨
@@ -971,25 +1073,15 @@ Future<void> handleUpdateStock(
   HttpRequest request,
 
 ) async {
-
-  DatabaseService.instance.addStock(
-
-    jsonData['itemId'],
-
-    jsonData['qty'],
-
-  );
-
-
-
-  sendJson(request, 200, {
-
-    "success": true,
-
-    "message": "Stock updated",
-
-  });
-
+  try {
+    await DatabaseService.instance.addStock(
+      inventoryInt(jsonData, 'itemId'),
+      inventoryInt(jsonData, 'qty'),
+    );
+    await sendJson(request, 200, {"success": true, "message": "Stock updated"});
+  } catch (e) {
+    await sendInventoryError(request, e);
+  }
 }
 
 //更新需求量
@@ -1160,17 +1252,19 @@ Future<void> handleAddSupplyRequest(
 
       SupplyRequest(
 
-        requestId: jsonData['requestId'],
+        requestId: inventoryText(jsonData, 'requestId'),
 
-        userId: jsonData['userId'],
+        userId: inventoryText(jsonData, 'userId'),
 
-        itemId: jsonData['itemId'],
+        itemId: inventoryInt(jsonData, 'itemId'),
 
-        qty: jsonData['qty'],
+        qty: inventoryInt(jsonData, 'qty'),
 
-        lat: (jsonData['lat'] as num?)?.toDouble(),
+        lat: ReportLocation.latitude(jsonData['lat']),
 
-        lng: (jsonData['lng'] as num?)?.toDouble(),
+        lng: ReportLocation.longitude(jsonData['lng']),
+        address: jsonData['address']?.toString(),
+        reportedAt: ReportLocation.time(jsonData['reportedAt']),
 
         receiverAdminId: jsonData['receiverAdminId'],
 
@@ -1196,21 +1290,25 @@ Future<void> handleAddSupplyRequest(
 
     });
 
+  } on InventoryException catch (e) {
+    await sendInventoryError(request, e);
   } catch (e) {
-
-    sendJson(request, 500, {
-
-      "success": false,
-
-      "message": e.toString(),
-
-    });
-
+    await sendJson(request, 500, {"success": false, "message": e.toString()});
   }
-
 }
 
-
+Future<void> handleGetStations(HttpRequest request) async {
+  try {
+    final data = await DatabaseService.instance.getStations();
+    await sendJson(request, 200, {'success': true, 'data': data});
+  } catch (e) {
+    print('GET STATIONS ERROR: $e');
+    await sendJson(request, 500, {
+      'success': false,
+      'message': '據點查詢失敗，請檢查伺服器記錄',
+    });
+  }
+}
 
 Future<void> handleGetSupplyRequestDetails(HttpRequest request) async {
 
@@ -1482,7 +1580,9 @@ Future<void> handleClaimSupplyRequest(
 
         volunteerId == null ||
 
-        volunteerId.isEmpty) {
+        volunteerId.isEmpty ||
+        stationId == null ||
+        stationId.isEmpty) {
 
       sendJson(
 
@@ -1574,6 +1674,190 @@ Future<void> handleClaimSupplyRequest(
 
   }
 
+}
+
+Future<void> handleNotification(Map<String, dynamic> data, HttpRequest request) async {
+  try {
+    final session = adminSessions.authenticate(request.headers.value(HttpHeaders.authorizationHeader));
+    if (session == null) {
+      throw const NotificationException(401, 'ADMIN_SESSION_REQUIRED', '需要有效的管理員 Bearer Token，請重新登入');
+    }
+    if ((await DatabaseService.instance.select('SELECT id FROM admins WHERE id=?', [session.adminId])).isEmpty) {
+      throw const NotificationException(403, 'ADMIN_DISABLED', '管理員帳號已不存在');
+    }
+    final service = notificationService;
+    if (service == null) {
+      throw const NotificationException(503, 'NOTIFICATIONS_DISABLED', '通知服務尚未設定伺服器授權或尚未啟用');
+    }
+    service.policy.authorize(session.adminId);
+    final result = switch (data['type']) {
+      'getNotificationRecipients' => await service.recipients(session.adminId, data),
+      'sendNotification' => await service.send(session.adminId, data),
+      _ => await service.sent(session.adminId, data),
+    };
+    await sendJson(request, 200, {
+      'success': true,
+      'message': data['type'] == 'sendNotification' ? '通知已發布（不代表已送達或已讀）' : '查詢成功',
+      'data': notificationJson(result),
+    });
+  } on NotificationException catch (e) {
+    await sendJson(request, e.statusCode, {'success': false, 'code': e.code, 'message': e.message});
+  } catch (_) {
+    await sendJson(request, 503, {
+      'success': false, 'code': 'NOTIFICATION_UNCONFIRMED',
+      'message': '通知操作未確認，請使用相同 clientRequestId 重試或查詢紀錄',
+    });
+  }
+}
+
+Future<void> handleSupplyBatchAndReview(
+  Map<String, dynamic> data, HttpRequest request,
+) async {
+  final session = adminSessions.authenticate(request.headers.value(HttpHeaders.authorizationHeader));
+  if (session == null) {
+    await sendJson(request, 401, {'success': false, 'message': '需要有效的管理員 Bearer Token，請重新登入'});
+    return;
+  }
+  if ((await DatabaseService.instance.select('SELECT id FROM admins WHERE id=?', [session.adminId])).isEmpty) {
+    await sendJson(request, 403, {'success': false, 'message': '管理員帳號已不存在'});
+    return;
+  }
+  try {
+    final service = SupplyRequestService(DatabaseService.instance);
+    final type = data['type'];
+    if (data.containsKey('stationId') && data['stationId'] != 'OFFICE001') {
+      throw InventoryException('僅支援 OFFICE001', 400);
+    }
+    if (type == 'getSupplyRequestReviews' || type == 'reviewSupplyRequest') {
+      final id = data['requestId'];
+      if ((type == 'reviewSupplyRequest' || data.containsKey('requestId')) &&
+          (id is! String || id.trim().isEmpty)) {
+        throw InventoryException('requestId 必須為非空字串', 400);
+      }
+      if (type == 'getSupplyRequestReviews') {
+        final rows = await service.getSupplyRequestReviews(adminId: session.adminId, requestId: id as String?);
+        await sendJson(request, 200, {'success': true, 'data': rows});
+      } else {
+        if (data['decision'] is! String || data['note'] is! String) {
+          throw InventoryException('decision、note 必須為字串', 400);
+        }
+        final result = await service.reviewSupplyRequest(adminId: session.adminId, requestId: id as String,
+          decision: data['decision'] as String, note: data['note'] as String);
+        await sendJson(request, 200, {'success': true, 'message': '審核處理完成', 'data': result});
+      }
+      return;
+    }
+    final ids = data['requestIds'];
+    if (ids is! List || ids.any((id) => id is! String)) {
+      throw InventoryException('requestIds 必須為字串陣列', 400);
+    }
+    final action = type == 'batchReserveSupplyRequests' ? 'reserve'
+        : type == 'batchDispatchSupplyRequests' ? 'dispatch' : 'complete';
+    final result = await service.batchSupplyRequests(adminId: session.adminId,
+      action: action, requestIds: List<String>.from(ids));
+    await sendJson(request, 200, {
+      'success': result['failed'] == 0, 'message': '批次處理完成，請逐筆確認 results', 'data': result,
+    });
+  } catch (e) {
+    await sendJson(request, e is InventoryException ? e.statusCode : 409, {
+      'success': false, 'message': e.toString(),
+      if (e is SupplyReviewRequired) 'anomalyReasons': e.reasons,
+    });
+  }
+}
+
+Future<void> handleAdminSupplyDelivery(
+  Map<String, dynamic> data, HttpRequest request,
+) async {
+  final session = adminSessions.authenticate(
+    request.headers.value(HttpHeaders.authorizationHeader),
+  );
+  if (session == null) {
+    await sendJson(request, 401, {
+      'success': false, 'message': '需要有效的管理員 Bearer Token，請重新登入',
+    });
+    return;
+  }
+  final admins = await DatabaseService.instance.select(
+    'SELECT id FROM admins WHERE id = ?', [session.adminId],
+  );
+  if (admins.isEmpty) {
+    await sendJson(request, 403, {'success': false, 'message': '管理員帳號已不存在'});
+    return;
+  }
+  final requestId = data['requestId'];
+  if (requestId is! String || requestId.trim().isEmpty ||
+      (data.containsKey('stationId') && data['stationId'] != 'OFFICE001')) {
+    await sendJson(request, 400, {
+      'success': false, 'message': 'requestId 必須為非空字串；stationId 僅支援 OFFICE001',
+    });
+    return;
+  }
+  try {
+    final service = SupplyRequestService(DatabaseService.instance);
+    final dispatch = data['type'] == 'adminDispatchSupplyRequest';
+    final result = dispatch
+        ? await service.adminDispatchSupplyRequest(requestId: requestId, adminId: session.adminId)
+        : await service.adminCompleteSupplyRequest(requestId: requestId, adminId: session.adminId);
+    await sendJson(request, 200, {
+      'success': true, 'message': dispatch ? '出庫成功' : '配送完成', 'data': result,
+    });
+  } catch (e) {
+    await sendJson(request, e is InventoryException ? e.statusCode : 409, {
+      'success': false, 'message': e.toString(),
+    });
+  }
+}
+
+Future<void> handleAssignSupplyRequestVolunteer(
+  Map<String, dynamic> data,
+  HttpRequest request,
+) async {
+  final session = adminSessions.authenticate(
+    request.headers.value(HttpHeaders.authorizationHeader),
+  );
+  if (session == null) {
+    await sendJson(request, 401, {
+      'success': false,
+      'message': '需要有效的管理員 Bearer Token，請重新登入',
+    });
+    return;
+  }
+  final admins = await DatabaseService.instance.select(
+    'SELECT id FROM admins WHERE id = ?', [session.adminId],
+  );
+  if (admins.isEmpty) {
+    await sendJson(request, 403, {
+      'success': false, 'message': '管理員帳號已不存在',
+    });
+    return;
+  }
+  final requestId = data['requestId'];
+  final volunteerId = data['volunteerId'];
+  if (requestId is! String || requestId.trim().isEmpty ||
+      volunteerId is! String || volunteerId.trim().isEmpty ||
+      (data.containsKey('stationId') && data['stationId'] != 'OFFICE001')) {
+    await sendJson(request, 400, {
+      'success': false,
+      'message': 'requestId、volunteerId 必須為非空字串；stationId 僅支援 OFFICE001',
+    });
+    return;
+  }
+  try {
+    final result = await SupplyRequestService(DatabaseService.instance)
+        .assignSupplyRequestVolunteer(
+          requestId: requestId,
+          volunteerId: volunteerId,
+          adminId: session.adminId,
+        );
+    await sendJson(request, 200, {
+      'success': true, 'message': '義工指派成功', 'data': result,
+    });
+  } catch (e) {
+    await sendJson(request, 409, {
+      'success': false, 'message': e.toString(),
+    });
+  }
 }
 
 Future<void> handleGetPendingSupplyRequests(
@@ -2180,5 +2464,79 @@ Future<void> handleGetVolunteerHistory(
         'message': e.toString(),
       },
     );
+  }
+}
+
+Future<void> handleReverseGeocode(Map<String, dynamic> data, HttpRequest request) async {
+  try {
+    final session = adminSessions.authenticate(request.headers.value(HttpHeaders.authorizationHeader));
+    if (session == null) {
+      throw const ReverseGeocodingException(401, 'ADMIN_SESSION_REQUIRED', '請重新登入管理員帳號');
+    }
+    if ((await DatabaseService.instance.select('SELECT id FROM admins WHERE id=?', [session.adminId])).isEmpty) {
+      throw const ReverseGeocodingException(403, 'ADMIN_DISABLED', '管理員已無有效權限');
+    }
+    final service = reverseGeocodingService;
+    if (service == null) {
+      throw const ReverseGeocodingException(503, 'GEOCODING_DEMO_DISABLED', '尚未啟用測試座標限定的 DEMO 地址服務');
+    }
+    final result = await service.reverse(data['latitude'], data['longitude']);
+    await sendJson(request, 200, {'success': true, 'data': result});
+  } on ReverseGeocodingException catch (e) {
+    if (e.retryAfterSeconds != null) request.response.headers.set('Retry-After', '${e.retryAfterSeconds}');
+    await sendJson(request, e.statusCode, {
+      'success': false, 'status': 'unavailable', 'code': e.code, 'message': e.message,
+      if (e.retryAfterSeconds != null) 'retryAfterSeconds': e.retryAfterSeconds,
+    });
+  } catch (_) {
+    await sendJson(request, 503, {'success': false, 'status': 'unavailable',
+      'code': 'GEOCODING_UNAVAILABLE', 'message': '地址無法取得'});
+  }
+}
+
+Future<int> authenticateFirebaseUsersAdmin(HttpRequest request) async {
+  final session = adminSessions.authenticate(
+    request.headers.value(HttpHeaders.authorizationHeader),
+  );
+  if (session == null) {
+    throw const FirebaseUsersException(401, 'ADMIN_SESSION_REQUIRED',
+      'A valid administrator session is required');
+  }
+  final rows = await DatabaseService.instance.select(
+    'SELECT id FROM admins WHERE id=?', [session.adminId],
+  );
+  if (rows.isEmpty) {
+    throw const FirebaseUsersException(403, 'ADMIN_DISABLED',
+      'Administrator account is no longer available');
+  }
+  return session.adminId;
+}
+
+Future<void> handleFirebaseUsers(Map<String,dynamic> data, HttpRequest request) async {
+  try {
+    request.response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+    final adminId = await authenticateFirebaseUsersAdmin(request);
+    final service = firebaseUsersService;
+    if (service == null) {
+      throw const FirebaseUsersException(503, 'FIREBASE_USERS_DISABLED',
+        'Firebase user queries are disabled or not configured');
+    }
+    final result = data['type'] == 'getFirebaseUsers'
+      ? await service.list(adminId, data) : await service.get(adminId, data);
+    // Session expiry or account deletion during a slow read must not release PII.
+    await authenticateFirebaseUsersAdmin(request);
+    service.policy.authorize(adminId);
+    await sendJson(request, 200, {'success':true,'source':'firestore','data':result});
+  } on FirebaseUsersException catch (error) {
+    await sendJson(request,error.statusCode,{'success':false,'source':'firestore',
+      'code':error.code,'message':error.message});
+  } on FirebaseConnectionException catch (error) {
+    await sendJson(request,error.code == 'NETWORK_TIMEOUT' ? 504 : 503,{
+      'success':false,'source':'firestore','code':'FIRESTORE_${error.code}',
+      'message':'Firestore user query could not be completed',
+    });
+  } catch (_) {
+    await sendJson(request,503,{'success':false,'source':'firestore',
+      'code':'FIREBASE_USERS_UNAVAILABLE','message':'User query unavailable'});
   }
 }

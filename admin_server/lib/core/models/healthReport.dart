@@ -1,15 +1,17 @@
+import 'report_location.dart';
+
 class HealthReport {
   final String uuid;
-  final String reporterId;   // 回報者 ID
-  final String name;         // 回報者姓名
-  final String phone;        // 聯絡電話
-  final String? bloodType;   // 血型（可選）
-  final String status;       // 健康狀態
+  final String reporterId; // 回報者 ID
+  final String name; // 回報者姓名
+  final String phone; // 聯絡電話
+  final String? bloodType; // 血型（可選）
+  final String status; // 健康狀態
   final String? description; // 補充說明（可選）
-  final double? lat;         // 緯度（可選）
-  final double? lng;         // 經度（可選）
+  final double? lat; // 緯度（可選）
+  final double? lng; // 經度（可選）
   final String? address;
-  final DateTime reportTime; // 回報時間
+  final DateTime? reportTime; // 回報時間
   final String? receiverAdminId;
   final int hopCount;
   final DateTime? receivedAt;
@@ -41,25 +43,17 @@ class HealthReport {
       bloodType: json['bloodType'],
       status: json['status'] ?? '',
       description: json['description'],
-      lat: (json['lat'] as num?)?.toDouble(),
-      lng: (json['lng'] as num?)?.toDouble(),
+      lat: ReportLocation.latitude(json['lat']),
+      lng: ReportLocation.longitude(json['lng']),
       address: json['address']?.toString(),
-      reportTime: DateTime.tryParse(json['reportTime'] ?? '') ??
-          DateTime.now(),
-       receiverAdminId:
-          json['receiverAdminId']
-              ?.toString(),
+      reportTime: ReportLocation.time(json['reportTime']),
+      receiverAdminId: json['receiverAdminId']?.toString(),
 
-      hopCount:
-          _toInt(json['hopCount']),
+      hopCount: _toInt(json['hopCount']),
 
-      receivedAt:
-          json['receivedAt'] == null
-              ? null
-              : DateTime.tryParse(
-                  json['receivedAt']
-                      .toString(),
-                ),
+      receivedAt: json['receivedAt'] == null
+          ? null
+          : DateTime.tryParse(json['receivedAt'].toString()),
     );
   }
 
@@ -75,12 +69,10 @@ class HealthReport {
       'description': description,
       'lat': lat,
       'lng': lng,
-      'reportTime': reportTime.toIso8601String(),
-      'receiverAdminId':
-          receiverAdminId,
+      'reportTime': reportTime?.toIso8601String(),
+      'receiverAdminId': receiverAdminId,
       'hopCount': hopCount,
-      'receivedAt':
-          receivedAt?.toIso8601String(),
+      'receivedAt': receivedAt?.toIso8601String(),
       'address': address,
     };
   }
@@ -95,20 +87,15 @@ class HealthReport {
       bloodType: map['bloodType']?.toString(),
       status: map['status']?.toString() ?? '',
       description: map['description']?.toString(),
-      lat: (map['lat'] as num?)?.toDouble(),
-      lng: (map['lng'] as num?)?.toDouble(),
+      lat: ReportLocation.latitude(map['lat']),
+      lng: ReportLocation.longitude(map['lng']),
       address: map['address']?.toString(),
-      reportTime: DateTime.tryParse(
-            map['reportTime']?.toString() ?? '',
-          ) ??
-          DateTime.now(),
+      reportTime: ReportLocation.time(map['reportTime']),
       receiverAdminId: map['receiverAdminId']?.toString(),
       hopCount: _toInt(map['hopCount']),
       receivedAt: map['receivedAt'] == null
           ? null
-          : DateTime.tryParse(
-              map['receivedAt'].toString(),
-            ),
+          : DateTime.tryParse(map['receivedAt'].toString()),
     );
   }
   static int _toInt(dynamic value) {

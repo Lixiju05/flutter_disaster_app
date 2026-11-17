@@ -1,741 +1,477 @@
+import 'dart:convert';
 import 'package:admin_server/database/database_service.dart';
-
-import 'dart:math';
-
-
-
-class SupplyRequestService {
-
-
-
-  double _calculateDistance(
-
-    double lat1,
-
-    double lng1,
-
-    double lat2,
-
-    double lng2,
-
-  ) {
-
-    const earthRadiusKm = 6371.0;
-
-
-
-    final dLat = (lat2 - lat1) * pi / 180;
-
-    final dLng = (lng2 - lng1) * pi / 180;
-
-
-
-    final a =
-
-        sin(dLat / 2) * sin(dLat / 2) +
-
-        cos(lat1 * pi / 180) *
-
-            cos(lat2 * pi / 180) *
-
-            sin(dLng / 2) *
-
-            sin(dLng / 2);
-
-
-
-    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
-
-
-
-    return earthRadiusKm * c;
-
-  }
-
-  final DatabaseService db;
-
-
-
-  SupplyRequestService(this.db);
-
-
-
-  Future<Map<String, dynamic>> findBestStation({
-
-    required int itemId,
-
-    required int qty,
-
-    required double userLat,
-
-    required double userLng,
-
-  }) async {
-
-    if (qty <= 0) {
-
-      throw Exception('需求數量無效');
-
-    }
-
-
-
-    // 找出所有 shelter，以及該物資在各 shelter 的庫存
-
-    final result = await db.select(
-
-      '''
-
-      SELECT
-
-        s.stationId,
-
-        s.name,
-
-        s.lat,
-
-        s.lng,
-
-        si.stockQty,
-
-        si.reservedQty
-
-      FROM stations s
-
-      JOIN station_inventory si
-
-        ON s.stationId = si.stationId
-
-      WHERE s.type = 'shelter'
-
-        AND si.itemId = ?
-
-      ''',
-
-      [itemId],
-
-    );
-
-
-
-    if (result.isEmpty) {
-
-      throw Exception('目前沒有收容中心提供這項物資');
-
-    }
-
-
-
-    Map<String, dynamic>? bestStation;
-
-    double? shortestDistance;
-
-
-
-    for (final row in result) {
-
-      final stockQty = row['stockQty'] as int;
-
-      final reservedQty = row['reservedQty'] as int;
-
-
-
-      final availableQty = stockQty - reservedQty;
-
-
-
-      // 庫存不夠就直接跳過
-
-      if (availableQty < qty) {
-
-        continue;
-
-      }
-
-
-
-      final stationLat = (row['lat'] as num).toDouble();
-
-      final stationLng = (row['lng'] as num).toDouble();
-
-
-
-      final distance = _calculateDistance(
-
-        userLat,
-
-        userLng,
-
-        stationLat,
-
-        stationLng,
-
-      );
-
-
-
-      // 第一間符合，或這間比目前找到的更近
-
-      if (shortestDistance == null ||
-
-          distance < shortestDistance) {
-
-        shortestDistance = distance;
-
-
-
-        bestStation = {
-
-          'stationId': row['stationId'],
-
-          'stationName': row['name'],
-
-          'stockQty': stockQty,
-
-          'reservedQty': reservedQty,
-
-          'availableQty': availableQty,
-
-          'distanceKm': distance,
-
-        };
-
-      }
-
-    }
-
-
-
-    if (bestStation == null) {
-
-      throw Exception('目前沒有庫存足夠的收容中心');
-
-    }
-
-
-
-    return bestStation;
-
-  }
-
-
-
-  Future<Map<String, dynamic>> autoAssignSupplyRequest({
-
-    required String requestId,
-
-  }) async {
-
-    // 1. 取得需求
-
-    final requestResult = await db.select(
-
-      '''
-
-      SELECT *
-
-      FROM supply_requests
-
-      WHERE requestId = ?
-
-      ''',
-
-      [requestId],
-
-    );
-
-
-
-    if (requestResult.isEmpty) {
-
-      throw Exception('找不到這筆物資需求');
-
-    }
-
-
-
-    final request = requestResult.first;
-
-
-
-    final status = request['status']?.toString();
-
-
-
-    if (status != 'pending') {
-
-      throw Exception('只有 pending 的需求可以自動分配');
-
-    }
-
-
-
-    final itemId = request['itemId'] as int;
-
-    final qty = request['qty'] as int;
-
-
-
-    final latValue = request['lat'];
-
-    final lngValue = request['lng'];
-
-
-
-    if (latValue == null || lngValue == null) {
-
-      throw Exception('需求缺少 GPS 座標，無法自動分配');
-
-    }
-
-
-
-    final userLat = (latValue as num).toDouble();
-
-    final userLng = (lngValue as num).toDouble();
-
-
-
-    // 2. 找最近且庫存足夠的收容中心
-
-    final bestStation = await findBestStation(
-
-      itemId: itemId,
-
-      qty: qty,
-
-      userLat: userLat,
-
-      userLng: userLng,
-
-    );
-
-
-
-    final stationId = bestStation['stationId'].toString();
-
-
-
-    // 3. 寫入分配結果
-
-    await db.execute(
-
-      '''
-
-      UPDATE supply_requests
-
-      SET stationId = ?
-
-      WHERE requestId = ?
-
-      ''',
-
-      [
-
-        stationId,
-
-        requestId,
-
-      ],
-
-    );
-
-
-
-    // 4. 使用我們剛才已經改好的 reserve
-
-    // 它現在會依 stationId 去操作 station_inventory
-
-    await reserveSupplyRequest(
-
-      requestId: requestId,
-
-    );
-
-
-
-    // 5. 回傳結果
-
-    return {
-
-      'requestId': requestId,
-
-      'stationId': stationId,
-
-      'stationName': bestStation['stationName'],
-
-      'distanceKm': bestStation['distanceKm'],
-
-      'availableQtyBeforeReserve':
-
-          bestStation['availableQty'],
-
-      'status': 'reserved',
-
-    };
-
-  }
-
-
-
-  // =========================================================
-
-  // 1. 預留物資
-
-  // pending → reserved
-
-  // reservedQty += qty
-
-  // =========================================================
-
-  Future<void> reserveSupplyRequest({
-
-    required String requestId,
-
-  }) async {
-
-    await db.transaction(() async {
-
-      // 1. 找需求
-
-      final requestResult = await db.select(
-
-        '''
-
-        SELECT *
-
-        FROM supply_requests
-
-        WHERE requestId = ?
-
-        ''',
-
-        [requestId],
-
-      );
-
-
-
-      if (requestResult.isEmpty) {
-
-        throw Exception('找不到這筆物資需求');
-
-      }
-
-
-
-      final request = requestResult.first;
-
-      final status = request['status']?.toString();
-
-
-
-      // 2. 只有 pending 可以預留
-
-      if (status != 'pending') {
-
-        throw Exception('這筆需求目前無法預留');
-
-      }
-
-
-
-      final itemId = request['itemId'] as int;
-
-      final qty = request['qty'] as int;
-
-      final stationId = request['stationId']?.toString();
-
-
-
-      if (qty <= 0) {
-
-        throw Exception('需求數量無效');
-
-      }
-
-
-
-      // 3. 必須已經分配收容中心
-
-      if (stationId == null || stationId.isEmpty) {
-
-        throw Exception('這筆需求尚未分配收容中心');
-
-      }
-
-
-
-      // 4. 查「指定收容中心」的庫存
-
-      final itemResult = await db.select(
-
-        '''
-
-        SELECT *
-
-        FROM station_inventory
-
-        WHERE stationId = ?
-
-          AND itemId = ?
-
-        ''',
-
-        [
-
-          stationId,
-
-          itemId,
-
-        ],
-
-      );
-
-
-
-      if (itemResult.isEmpty) {
-
-        throw Exception('此收容中心沒有這項物資的庫存資料');
-
-      }
-
-
-
-      final item = itemResult.first;
-
-
-
-      final stockQty = item['stockQty'] as int;
-
-      final reservedQty = item['reservedQty'] as int;
-
-
-
-      // 5. 可用庫存 = 實際庫存 - 已預留
-
-      final availableQty = stockQty - reservedQty;
-
-
-
-      if (availableQty < qty) {
-
-        throw Exception(
-
-          '收容中心可用庫存不足，目前可用：$availableQty，需要：$qty',
-
-        );
-
-      }
-
-
-
-      final now = DateTime.now().toIso8601String();
-
-
-
-      // 6. 增加「這個收容中心」的預留數量
-
-      await db.execute(
-
-        '''
-
-        UPDATE station_inventory
-
-        SET reservedQty = reservedQty + ?,
-
-            updatedAt = ?
-
-        WHERE stationId = ?
-
-          AND itemId = ?
-
-        ''',
-
-        [
-
-          qty,
-
-          now,
-
-          stationId,
-
-          itemId,
-
-        ],
-
-      );
-
-
-
-      // 7. 需求變成 reserved
-
-      await db.execute(
-
-        '''
-
-        UPDATE supply_requests
-
-        SET status = 'reserved'
-
-        WHERE requestId = ?
-
-        ''',
-
-        [requestId],
-
-      );
-
-    });
-
-  }
-
-  // =========================================================
-
-  // 2. 義工認領
-
-  // reserved → claimed
-
-  // 這裡不扣 stockQty，因為物資只是被認領，還沒有真正出庫
-
-  // =========================================================
-
- Future<void> claimSupplyRequest({
-
-  required String requestId,
-
-  required String volunteerId,
-
-  required String stationId,
-
-}) async {
-
-  await db.transaction(() async {
-
-    // 1. 找需求
-
-    final requestResult = await db.select(
-
-      '''
-
-      SELECT *
-
-      FROM supply_requests
-
-      WHERE requestId = ?
-
-      ''',
-
-      [requestId],
-
-    );
-
-
-
-    if (requestResult.isEmpty) {
-
-      throw Exception('找不到這筆物資需求');
-
-    }
-
-
-
-    final request = requestResult.first;
-
-
-
-    final status = request['status']?.toString();
-
-    final requestStationId = request['stationId']?.toString();
-
-
-
-    // 2. 只有已經預留物資的需求可以認領
-
-    if (status != 'reserved') {
-
-      throw Exception('這筆需求目前無法認領');
-
-    }
-
-
-
-    // 3. 需求必須已經分配收容中心
-
-    if (requestStationId == null || requestStationId.isEmpty) {
-
-      throw Exception('這筆需求尚未分配收容中心');
-
-    }
-
-
-
-    // 4. 義工只能認領自己所在收容中心的任務
-
-    if (requestStationId != stationId) {
-
-      throw Exception('無法認領其他收容中心的任務');
-
-    }
-
-
-
-    final now = DateTime.now().toIso8601String();
-
-
-
-    // 5. 認領任務
-
-    await db.execute(
-
-      '''
-
-      UPDATE supply_requests
-
-      SET status = 'claimed',
-
-          volunteerId = ?,
-
-          claimedAt = ?
-
-      WHERE requestId = ?
-
-      ''',
-
-      [
-
-        volunteerId,
-
-        now,
-
-        requestId,
-
-      ],
-
-    );
-
-  });
-
+import 'package:sqlite3/sqlite3.dart';
+
+class SupplyReviewRequired extends InventoryException {
+  final List<Map<String, Object?>> reasons;
+  SupplyReviewRequired(this.reasons)
+      : super('需求須人工審核：${reasons.map((r) => r['message']).join('；')}', 409);
 }
 
+class SupplyRequestService {
+  static const communityStationId = 'OFFICE001';
+  final DatabaseService db;
+  final int maxRequestQty;
+  SupplyRequestService(this.db, {
+    this.maxRequestQty = const int.fromEnvironment('MAX_SUPPLY_REQUEST_QTY', defaultValue: 100),
+  }) {
+    if (maxRequestQty <= 0) throw ArgumentError('MAX_SUPPLY_REQUEST_QTY 必須大於 0');
+  }
 
+  List<Map<String, Object?>> _anomalies(Database sql, Map<String, Object?> r) {
+    final reasons = <Map<String, Object?>>[];
+    void add(String code, String message) => reasons.add({'code': code, 'message': message});
+    final user = r['userId'];
+    final item = r['itemId'];
+    final qty = r['qty'];
+    final validUser = user is String && user.trim().isNotEmpty;
+    final validItem = item is int && sql.select('SELECT id FROM inventory WHERE id=?', [item]).isNotEmpty;
+    final validQty = qty is int && qty > 0;
+    if (!validUser || !validItem || !validQty ||
+        r['requestId'] is! String || (r['requestId'] as String).trim().isEmpty) {
+      add('INCOMPLETE_DATA', '必填資料不完整或無效：requestId、userId、itemId、正整數 qty');
+    }
+    if (validUser && validItem) {
+      final duplicates = sql.select('''
+        SELECT requestId FROM supply_requests
+        WHERE userId=? AND itemId=? AND requestId<>?
+          AND status IN ('pending','reserved','claimed','dispatched')
+        ORDER BY requestId
+      ''', [user, item, r['requestId']]);
+      if (duplicates.isNotEmpty) {
+        reasons.add({
+          'code': 'DUPLICATE_OPEN_REQUEST', 'message': '同一使用者對同一物資有其他未結案需求',
+          'relatedRequestIds': duplicates.map((d) => d['requestId']).toList(),
+        });
+      }
+    }
+    if (validQty && qty > maxRequestQty) {
+      reasons.add({'code': 'QTY_LIMIT_EXCEEDED', 'message': '需求數量超過單筆上限', 'limit': maxRequestQty});
+    }
+    if (validItem && validQty) {
+      final rows = sql.select('SELECT stockQty,reservedQty FROM station_inventory WHERE stationId=? AND itemId=?', [communityStationId, item]);
+      final stock = rows.isEmpty ? null : rows.first['stockQty'];
+      final reserved = rows.isEmpty ? null : rows.first['reservedQty'];
+      if (stock is! int || reserved is! int || reserved < 0 || stock < reserved) {
+        add('INVENTORY_INVALID', 'OFFICE001 庫存紀錄不存在或資料異常');
+      } else if (stock - reserved < qty) {
+        reasons.add({'code': 'INSUFFICIENT_STOCK', 'message': 'OFFICE001 可用庫存不足', 'availableQty': stock - reserved, 'requestedQty': qty});
+      }
+    }
+    return reasons;
+  }
 
-  // =========================================================
+  List<Map<String, Object?>> _storedReasons(Map<String, Object?> r) {
+    final value = r['reviewReasons'];
+    if (value is! String || value.isEmpty) return [];
+    return (jsonDecode(value) as List).map((v) => Map<String, Object?>.from(v as Map)).toList();
+  }
 
-  // 3. 取得等待義工認領的任務
+  Map<String, Object?> _flagReview(Database sql, Map<String, Object?> r, List<Map<String, Object?>> reasons) {
+    final saved = reasons.isEmpty ? _storedReasons(r) : reasons;
+    sql.execute("UPDATE supply_requests SET reviewStatus='needs_review',reviewReasons=? WHERE requestId=? AND status='pending'", [jsonEncode(saved), r['requestId']]);
+    return {'blockedByReview': true, 'requestId': r['requestId'], 'reasons': saved};
+  }
 
-  // 注意：現在要抓 reserved，不是 pending
+  Map<String, dynamic> _reservationResult(Map<String, dynamic> result) {
+    if (result['blockedByReview'] == true) {
+      throw SupplyReviewRequired(List<Map<String, Object?>>.from(result['reasons'] as List));
+    }
+    return result;
+  }
 
-  // =========================================================
+  Map<String, Object?> _request(Database sql, String requestId) {
+    if (requestId.trim().isEmpty) {
+      throw Exception('requestId 不可為空');
+    }
+    final rows = sql.select(
+      'SELECT * FROM supply_requests WHERE requestId = ?',
+      [requestId],
+    );
+    if (rows.isEmpty) {
+      throw Exception('找不到這筆物資需求');
+    }
+    return Map<String, Object?>.from(rows.first);
+  }
+
+  int _quantity(Object? value) {
+    if (value is! int || value <= 0) {
+      throw Exception('需求數量必須是正整數');
+    }
+    return value;
+  }
+
+  Map<String, dynamic> _officeStock(Database sql, int itemId, int qty) {
+    _quantity(qty);
+    final rows = sql.select(
+      '''
+      SELECT si.stockQty, si.reservedQty, st.name AS stationName
+      FROM station_inventory si
+      JOIN stations st ON st.stationId = si.stationId
+      JOIN inventory i ON i.id = si.itemId
+      WHERE si.stationId = ? AND si.itemId = ?
+    ''',
+      [communityStationId, itemId],
+    );
+    if (rows.isEmpty) {
+      throw Exception('OFFICE001 沒有這項物資的庫存資料');
+    }
+    final stock = rows.first['stockQty'];
+    final reserved = rows.first['reservedQty'];
+    if (stock is! int || reserved is! int || reserved < 0 || stock < reserved) {
+      throw Exception('OFFICE001 庫存資料異常');
+    }
+    final available = stock - reserved;
+    if (available < qty) {
+      throw Exception('OFFICE001 可用庫存不足，目前可用：$available，需要：$qty');
+    }
+    return {
+      'stationId': communityStationId,
+      'stationName': rows.first['stationName'],
+      'stockQty': stock,
+      'reservedQty': reserved,
+      'availableQty': available,
+      'distanceKm': null,
+    };
+  }
+
+  // Retain the callable method and result keys; location no longer selects a station.
+  Future<Map<String, dynamic>> findBestStation({
+    required int itemId,
+    required int qty,
+    double? userLat,
+    double? userLng,
+  }) async =>
+      db.stationTransferTransaction((sql) => _officeStock(sql, itemId, qty));
+
+  Map<String, dynamic> _reserve(Database sql, String requestId, {bool manuallyApproved = false}) {
+    final request = _request(sql, requestId);
+    if (request['status'] != 'pending') {
+      throw Exception('只有 pending 的需求可以預留，不能重複預留');
+    }
+    final priorStation = request['stationId']?.toString();
+    if (priorStation != null &&
+        priorStation.isNotEmpty &&
+        priorStation != communityStationId) {
+      throw Exception('舊據點需求不可直接轉移預留，請先人工核對');
+    }
+    final reasons = _anomalies(sql, request);
+    if (!manuallyApproved && (reasons.isNotEmpty || request['reviewStatus'] == 'needs_review')) {
+      return Map<String, dynamic>.from(_flagReview(sql, request, reasons));
+    }
+    final qty = _quantity(request['qty']);
+    final itemId = request['itemId'] as int;
+    final office = _officeStock(sql, itemId, qty);
+    sql.execute(
+      '''
+      UPDATE station_inventory SET reservedQty = reservedQty + ?, updatedAt = ?
+      WHERE stationId = ? AND itemId = ? AND reservedQty >= 0
+        AND stockQty - reservedQty >= ?
+    ''',
+      [
+        qty,
+        DateTime.now().toUtc().toIso8601String(),
+        communityStationId,
+        itemId,
+        qty,
+      ],
+    );
+    if (sql.updatedRows != 1) {
+      throw Exception('OFFICE001 可用庫存不足，無法預留');
+    }
+    sql.execute(
+      '''
+      UPDATE supply_requests SET stationId = ?, status = 'reserved', reservedAt = ?
+      WHERE requestId = ? AND status = 'pending'
+    ''',
+      [communityStationId, DateTime.now().toUtc().toIso8601String(), requestId],
+    );
+    if (sql.updatedRows != 1) {
+      throw Exception('需求狀態已變更，未執行預留');
+    }
+    return {
+      'requestId': requestId,
+      'stationId': communityStationId,
+      'stationName': office['stationName'],
+      'distanceKm': null,
+      'availableQtyBeforeReserve': office['availableQty'],
+      'status': 'reserved',
+    };
+  }
+
+  Future<Map<String, dynamic>> autoAssignSupplyRequest({
+    required String requestId,
+  }) async => _reservationResult(db.stationTransferTransaction((sql) => _reserve(sql, requestId)));
+
+  Future<void> reserveSupplyRequest({required String requestId}) async {
+    await autoAssignSupplyRequest(requestId: requestId);
+  }
+
+  void _requireAdmin(Database sql, int adminId) {
+    if (sql.select('SELECT id FROM admins WHERE id=?', [adminId]).isEmpty) {
+      throw InventoryException('管理員帳號已不存在', 403);
+    }
+  }
+
+  Future<List<Map<String, Object?>>> getSupplyRequestReviews({
+    required int adminId, String? requestId,
+  }) async => db.stationTransferTransaction((sql) {
+    _requireAdmin(sql, adminId);
+    final rows = sql.select('''
+      SELECT * FROM supply_requests WHERE status='pending' AND stationId=?
+      ${requestId == null ? '' : 'AND requestId=?'} ORDER BY createdAt,requestId
+    ''', [communityStationId, ?requestId]);
+    return rows.map((row) {
+      final r = Map<String, Object?>.from(row);
+      final reasons = _anomalies(sql, r);
+      final required = reasons.isNotEmpty || r['reviewStatus'] == 'needs_review';
+      if (required) _flagReview(sql, r, reasons);
+      return <String, Object?>{
+        'requestId': r['requestId'], 'userId': r['userId'], 'itemId': r['itemId'],
+        'qty': r['qty'], 'stationId': r['stationId'], 'status': r['status'],
+        'reviewStatus': required ? 'needs_review' : 'not_required',
+        'requiresReview': required, 'anomalyReasons': reasons,
+        'flaggedReasons': reasons.isEmpty ? _storedReasons(r) : reasons,
+        'maxRequestQty': maxRequestQty,
+        'reviewedBy': r['reviewedBy'], 'reviewedAt': r['reviewedAt'], 'reviewNote': r['reviewNote'],
+      };
+    }).toList();
+  });
+
+  Future<Map<String, dynamic>> reviewSupplyRequest({
+    required int adminId, required String requestId,
+    required String decision, required String note,
+  }) async {
+    if (!['approve', 'defer'].contains(decision) || note.trim().isEmpty) {
+      throw InventoryException('decision 必須為 approve/defer，note 不可空白', 400);
+    }
+    final result = db.stationTransferTransaction<Map<String, dynamic>>((sql) {
+      _requireAdmin(sql, adminId);
+      final r = _request(sql, requestId);
+      if (r['status'] != 'pending' || r['stationId'] != communityStationId ||
+          r['volunteerId'] != null || r['claimedAt'] != null ||
+          r['assignmentType'] != null || r['assignedBy'] != null) {
+        throw InventoryException('僅能審核 OFFICE001 尚未預留的 pending 任務', 409);
+      }
+      final reasons = _anomalies(sql, r);
+      final snapshot = reasons.isEmpty ? _storedReasons(r) : reasons;
+      if (decision == 'approve' && reasons.any((v) =>
+          ['INCOMPLETE_DATA', 'INVENTORY_INVALID', 'INSUFFICIENT_STOCK'].contains(v['code']))) {
+        return Map<String, dynamic>.from(_flagReview(sql, r, reasons));
+      }
+      Map<String, dynamic>? reservation;
+      if (decision == 'approve') {
+        reservation = _reserve(sql, requestId, manuallyApproved: true);
+      }
+      final now = DateTime.now().toUtc().toIso8601String();
+      sql.execute('''
+        UPDATE supply_requests SET reviewStatus=?,reviewReasons=?,reviewedBy=?,reviewedAt=?,reviewNote=?
+        WHERE requestId=? AND status=?
+      ''', [decision == 'approve' ? 'approved' : 'needs_review', jsonEncode(snapshot), adminId, now, note,
+        requestId, decision == 'approve' ? 'reserved' : 'pending']);
+      if (sql.updatedRows != 1) throw InventoryException('需求狀態已變更，審核未寫入', 409);
+      return {
+        if (reservation != null) ...reservation,
+        'requestId': requestId, 'status': decision == 'approve' ? 'reserved' : 'pending',
+        'reviewStatus': decision == 'approve' ? 'approved' : 'needs_review',
+        'reviewedBy': adminId, 'reviewedAt': now, 'reviewNote': note,
+        'reviewReasons': snapshot,
+      };
+    });
+    return _reservationResult(result);
+  }
+
+  Future<Map<String, Object?>> batchSupplyRequests({
+    required int adminId, required String action, required List<String> requestIds,
+  }) async {
+    if (!['reserve', 'dispatch', 'complete'].contains(action) ||
+        requestIds.isEmpty || requestIds.length > 100 || requestIds.any((id) => id.trim().isEmpty)) {
+      throw InventoryException('批次必須為 1～100 個非空 requestId', 400);
+    }
+    final results = <Map<String, Object?>>[];
+    final seen = <String>{};
+    for (final id in requestIds) {
+      if (!seen.add(id)) {
+        results.add({'requestId': id, 'success': false, 'code': 'DUPLICATE_REQUEST_ID', 'message': '同批 requestId 重複，未再次操作'});
+        continue;
+      }
+      try {
+        Map<String, Object?> data;
+        if (action == 'reserve') {
+          data = _reservationResult(db.stationTransferTransaction((sql) {
+            _requireAdmin(sql, adminId);
+            return _reserve(sql, id);
+          }));
+        } else if (action == 'dispatch') {
+          data = await adminDispatchSupplyRequest(requestId: id, adminId: adminId);
+        } else {
+          data = await adminCompleteSupplyRequest(requestId: id, adminId: adminId);
+        }
+        results.add({'requestId': id, 'success': true, 'message': '處理成功', 'data': data});
+      } catch (e) {
+        results.add({
+          'requestId': id, 'success': false,
+          'code': e is SupplyReviewRequired ? 'REVIEW_REQUIRED' : 'OPERATION_REJECTED',
+          'message': e.toString(), if (e is SupplyReviewRequired) 'anomalyReasons': e.reasons,
+        });
+      }
+    }
+    final succeeded = results.where((r) => r['success'] == true).length;
+    return {'transactionMode': 'per_request', 'total': results.length,
+      'succeeded': succeeded, 'failed': results.length - succeeded, 'results': results};
+  }
+
+  Map<String, Object?> _offlineRequest(
+    Database sql, String requestId, int adminId, String expectedStatus,
+  ) {
+    if (sql.select('SELECT id FROM admins WHERE id = ?', [adminId]).isEmpty) {
+      throw InventoryException('管理員帳號已不存在', 403);
+    }
+    final request = _request(sql, requestId);
+    if (request['stationId'] != communityStationId ||
+        request['status'] != expectedStatus ||
+        request['volunteerId'] != null || request['claimedAt'] != null ||
+        request['assignmentType'] != null || request['assignedBy'] != null) {
+      throw InventoryException('任務狀態不符或屬歷史義工流程，請先人工核對', 409);
+    }
+    if (expectedStatus == 'reserved' &&
+        (request['dispatchedAt'] != null || request['dispatchedBy'] != null ||
+         request['completedAt'] != null || request['completedBy'] != null)) {
+      throw InventoryException('任務已有出庫或完成紀錄，不可再次出庫', 409);
+    }
+    if (expectedStatus == 'dispatched' &&
+        (request['dispatchedAt'] == null || request['dispatchedBy'] == null ||
+         request['completedAt'] != null || request['completedBy'] != null)) {
+      throw InventoryException('非新管理員流程出庫紀錄或已結案，請先人工核對', 409);
+    }
+    return request;
+  }
+
+  Future<Map<String, Object?>> adminDispatchSupplyRequest({
+    required String requestId, required int adminId,
+  }) async => db.stationTransferTransaction((sql) {
+    final request = _offlineRequest(sql, requestId, adminId, 'reserved');
+    final qty = _quantity(request['qty']);
+    final now = DateTime.now().toUtc().toIso8601String();
+    sql.execute('''
+      UPDATE station_inventory
+      SET stockQty = stockQty - ?, reservedQty = reservedQty - ?, updatedAt = ?
+      WHERE stationId = ? AND itemId = ? AND stockQty >= ? AND reservedQty >= ?
+        AND stockQty >= reservedQty
+        AND typeof(stockQty) = 'integer' AND typeof(reservedQty) = 'integer'
+        AND EXISTS (SELECT 1 FROM inventory WHERE id = ?)
+    ''', [qty, qty, now, communityStationId, request['itemId'], qty, qty, request['itemId']]);
+    if (sql.updatedRows != 1) {
+      throw InventoryException('OFFICE001 庫存／預留不足、異常或物資不存在', 409);
+    }
+    sql.execute('''
+      UPDATE supply_requests
+      SET status = 'dispatched', dispatchedAt = ?, dispatchedBy = ?
+      WHERE requestId = ? AND status = 'reserved' AND volunteerId IS NULL
+        AND dispatchedAt IS NULL AND dispatchedBy IS NULL
+    ''', [now, adminId, requestId]);
+    if (sql.updatedRows != 1) {
+      throw InventoryException('任務狀態已變更，未執行出庫', 409);
+    }
+    return {
+      'requestId': requestId, 'stationId': communityStationId,
+      'itemId': request['itemId'], 'qty': qty, 'status': 'dispatched',
+      'dispatchedAt': now, 'dispatchedBy': adminId,
+    };
+  });
+
+  Future<Map<String, Object?>> adminCompleteSupplyRequest({
+    required String requestId, required int adminId,
+  }) async => db.stationTransferTransaction((sql) {
+    _offlineRequest(sql, requestId, adminId, 'dispatched');
+    final now = DateTime.now().toUtc().toIso8601String();
+    sql.execute('''
+      UPDATE supply_requests SET status = 'completed', completedAt = ?, completedBy = ?
+      WHERE requestId = ? AND status = 'dispatched'
+        AND dispatchedBy IS NOT NULL AND completedAt IS NULL
+    ''', [now, adminId, requestId]);
+    if (sql.updatedRows != 1) {
+      throw InventoryException('任務狀態已變更，未執行結案', 409);
+    }
+    return {
+      'requestId': requestId, 'stationId': communityStationId,
+      'status': 'completed', 'completedAt': now, 'completedBy': adminId,
+    };
+  });
+
+  Future<void> claimSupplyRequest({
+    required String requestId,
+    required String volunteerId,
+    required String stationId,
+  }) async {
+    _claim(requestId: requestId, volunteerId: volunteerId, stationId: stationId);
+  }
+
+  /// Called only by the authenticated admin HTTP handler.
+  Future<Map<String, Object?>> assignSupplyRequestVolunteer({
+    required String requestId,
+    required String volunteerId,
+    required int adminId,
+  }) async => _claim(
+    requestId: requestId,
+    volunteerId: volunteerId,
+    stationId: communityStationId,
+    adminId: adminId,
+  );
+
+  Map<String, Object?> _claim({
+    required String requestId,
+    required String volunteerId,
+    required String stationId,
+    int? adminId,
+  }) {
+    if (volunteerId.trim().isEmpty || stationId.trim().isEmpty) {
+      throw Exception('volunteerId、stationId 不可為空');
+    }
+    return db.stationTransferTransaction((sql) {
+      if (adminId != null &&
+          sql.select('SELECT id FROM admins WHERE id = ?', [adminId]).isEmpty) {
+        throw Exception('管理員不存在');
+      }
+      final request = _request(sql, requestId);
+      if (request['status'] != 'reserved') {
+        throw Exception('這筆需求目前無法認領');
+      }
+      if (request['stationId'] == null || request['stationId'] != stationId) {
+        throw Exception('需求據點與義工據點不符');
+      }
+      if (request['volunteerId'] != null) {
+        throw Exception('任務已有認領者，不可覆蓋');
+      }
+      final assignmentType = adminId == null ? 'self_claimed' : 'admin_assigned';
+      final claimedAt = DateTime.now().toUtc().toIso8601String();
+      sql.execute(
+        '''
+        UPDATE supply_requests SET status = 'claimed', volunteerId = ?, claimedAt = ?,
+          assignmentType = ?, assignedBy = ?
+        WHERE requestId = ? AND status = 'reserved' AND volunteerId IS NULL
+      ''',
+        [volunteerId, claimedAt, assignmentType, adminId, requestId],
+      );
+      if (sql.updatedRows != 1) {
+        throw Exception('需求狀態已變更，無法認領');
+      }
+      return {
+        'requestId': requestId,
+        'volunteerId': volunteerId,
+        'stationId': stationId,
+        'status': 'claimed',
+        'claimedAt': claimedAt,
+        'assignmentType': assignmentType,
+        'assignedBy': adminId,
+      };
+    });
+  }
 
   Future<List<Map<String, Object?>>> getPendingSupplyRequests({
-
     required String stationId,
-
   }) async {
-
     final result = await db.select(
-
       '''
 
       SELECT
@@ -784,20 +520,10 @@ class SupplyRequestService {
 
       ''',
 
-      [
-
-        'reserved',
-
-        stationId,
-
-      ],
-
+      ['reserved', stationId],
     );
 
-
-
     return result.toList();
-
   }
 
   // =========================================================
@@ -816,13 +542,14 @@ class SupplyRequestService {
         sr.requestId, sr.userId, sr.itemId,
         i.name AS itemName, i.unit, sr.qty, sr.lat, sr.lng, sr.address,
         sr.status, sr.createdAt, sr.claimedAt, sr.stationId,
+        sr.volunteerId, sr.assignmentType, sr.assignedBy, sr.completedAt,
         st.name AS stationName
       FROM supply_requests sr
       LEFT JOIN inventory i ON sr.itemId = i.id
       LEFT JOIN stations st ON sr.stationId = st.stationId
       WHERE sr.volunteerId = ?
         AND sr.stationId = ?
-        AND sr.status = 'claimed'
+        AND sr.status IN ('claimed', 'dispatched', 'completed')
       ORDER BY sr.claimedAt DESC
       ''',
       [volunteerId, stationId],
@@ -850,6 +577,9 @@ class SupplyRequestService {
         sr.createdAt,
         sr.claimedAt,
         sr.completedAt,
+        sr.volunteerId,
+        sr.assignmentType,
+        sr.assignedBy,
         sr.stationId,
         st.name AS stationName
       FROM supply_requests sr
@@ -880,142 +610,116 @@ class SupplyRequestService {
 
   // =========================================================
 
+  Map<String, Object?> _ownedRequest(
+    Database sql,
+    String requestId,
+    String volunteerId,
+    String stationId,
+    String expectedStatus,
+  ) {
+    if (volunteerId.trim().isEmpty || stationId.trim().isEmpty) {
+      throw Exception('volunteerId、stationId 不可為空');
+    }
+    final request = _request(sql, requestId);
+    if (request['status'] != expectedStatus) {
+      throw Exception('需求狀態不符，不能重複操作或跳過階段');
+    }
+    if (request['volunteerId'] != volunteerId) {
+      throw Exception('無法處理其他義工的配送任務');
+    }
+    if (request['stationId'] != stationId) {
+      throw Exception('無法處理其他據點的任務');
+    }
+    return request;
+  }
+
   Future<void> cancelClaim({
     required String requestId,
     required String volunteerId,
     required String stationId,
   }) async {
-    await db.transaction(() async {
-      final rows = await db.select(
-        'SELECT * FROM supply_requests WHERE requestId = ?',
-        [requestId],
-      );
-      if (rows.isEmpty) throw Exception('找不到這筆物資需求');
-      final request = rows.first;
-      if (request['status']?.toString() != 'claimed') {
-        throw Exception('這筆需求目前不是已認領狀態');
-      }
-      if (request['volunteerId']?.toString() != volunteerId) {
-        throw Exception('你無法取消其他義工的配送任務');
-      }
-      if (request['stationId']?.toString() != stationId) {
-        throw Exception('無法處理其他收容中心的任務');
-      }
-      await db.execute(
+    db.stationTransferTransaction((sql) {
+      _ownedRequest(sql, requestId, volunteerId, stationId, 'claimed');
+      sql.execute(
         '''
-        UPDATE supply_requests
-        SET status = 'reserved', volunteerId = NULL, claimedAt = NULL
+        UPDATE supply_requests SET status = 'reserved', volunteerId = NULL, claimedAt = NULL,
+          assignmentType = NULL, assignedBy = NULL
         WHERE requestId = ?
-        ''',
+      ''',
         [requestId],
       );
     });
   }
-
-  // =========================================================
-
-// 6. 義工確認取貨
-
-// claimed → dispatched
-
-// 這時物資真正離開收容中心
-
-// stockQty -= qty
-
-// reservedQty -= qty
-
-// =========================================================
 
   Future<Map<String, dynamic>> dispatchSupplyRequest({
     required String requestId,
     required String volunteerId,
     required String stationId,
-  }) async {
-    Map<String, dynamic>? result;
-    await db.transaction(() async {
-      final rows = await db.select(
-        'SELECT * FROM supply_requests WHERE requestId = ?',
-        [requestId],
-      );
-      if (rows.isEmpty) throw Exception('找不到這筆物資需求');
-      final request = rows.first;
-      if (request['status']?.toString() != 'claimed') {
-        throw Exception('這筆需求目前無法取貨');
-      }
-      if (request['volunteerId']?.toString() != volunteerId) {
-        throw Exception('你無法處理其他義工的配送任務');
-      }
-      if (request['stationId']?.toString() != stationId) {
-        throw Exception('無法處理其他收容中心的任務');
-      }
-      final itemId = request['itemId'] as int;
-      final qty = request['qty'] as int;
-      final inv = await db.select(
-        '''
-        SELECT si.*, i.name, i.unit
-        FROM station_inventory si
-        JOIN inventory i ON si.itemId = i.id
-        WHERE si.stationId = ? AND si.itemId = ?
-        ''',
-        [stationId, itemId],
-      );
-      if (inv.isEmpty) throw Exception('此收容中心沒有這項物資');
-      final item = inv.first;
-      final stockQty = item['stockQty'] as int;
-      final reservedQty = item['reservedQty'] as int;
-      if (stockQty < qty) throw Exception('收容中心實際庫存不足');
-      if (reservedQty < qty) throw Exception('收容中心預留庫存不足');
-      final now = DateTime.now().toIso8601String();
-      await db.execute(
-        '''
-        UPDATE station_inventory
-        SET stockQty = stockQty - ?, reservedQty = reservedQty - ?, updatedAt = ?
-        WHERE stationId = ? AND itemId = ?
-        ''',
-        [qty, qty, now, stationId, itemId],
-      );
-      await db.execute(
-        "UPDATE supply_requests SET status = 'dispatched' WHERE requestId = ?",
-        [requestId],
-      );
-      result = {
-        'requestId': requestId, 'stationId': stationId,
-        'itemId': itemId, 'itemName': item['name'], 'unit': item['unit'],
-        'qty': qty, 'status': 'dispatched',
-      };
-    });
-    return result!;
-  }
+  }) async => db.stationTransferTransaction((sql) {
+    // Old assigned tasks keep their original station; newly inserted tasks are OFFICE001.
+    final request = _ownedRequest(
+      sql,
+      requestId,
+      volunteerId,
+      stationId,
+      'claimed',
+    );
+    final qty = _quantity(request['qty']);
+    final itemId = request['itemId'] as int;
+    final items = sql.select('SELECT name, unit FROM inventory WHERE id = ?', [
+      itemId,
+    ]);
+    if (items.isEmpty) {
+      throw Exception('找不到物資主檔');
+    }
+    final now = DateTime.now().toUtc().toIso8601String();
+    sql.execute(
+      '''
+      UPDATE station_inventory
+      SET stockQty = stockQty - ?, reservedQty = reservedQty - ?, updatedAt = ?
+      WHERE stationId = ? AND itemId = ? AND stockQty >= ? AND reservedQty >= ?
+        AND stockQty >= reservedQty
+        AND typeof(stockQty) = 'integer' AND typeof(reservedQty) = 'integer'
+    ''',
+      [qty, qty, now, stationId, itemId, qty, qty],
+    );
+    if (sql.updatedRows != 1) {
+      throw Exception('據點實際庫存或預留量不足／異常，無法取貨');
+    }
+    sql.execute(
+      "UPDATE supply_requests SET status = 'dispatched' WHERE requestId = ? AND status = 'claimed'",
+      [requestId],
+    );
+    if (sql.updatedRows != 1) {
+      throw Exception('需求狀態已變更，未執行取貨');
+    }
+    return {
+      'requestId': requestId,
+      'stationId': stationId,
+      'itemId': itemId,
+      'itemName': items.first['name'],
+      'unit': items.first['unit'],
+      'qty': qty,
+      'status': 'dispatched',
+    };
+  });
 
   Future<Map<String, dynamic>> completeSupplyRequest({
     required String requestId,
     required String volunteerId,
     required String stationId,
-  }) async {
-    Map<String, dynamic>? result;
-    await db.transaction(() async {
-      final rows = await db.select(
-        'SELECT * FROM supply_requests WHERE requestId = ?',
-        [requestId],
-      );
-      if (rows.isEmpty) throw Exception('找不到這筆物資需求');
-      final request = rows.first;
-      if (request['status']?.toString() != 'dispatched') {
-        throw Exception('只有配送中的需求可以完成');
-      }
-      if (request['volunteerId']?.toString() != volunteerId) {
-        throw Exception('你無法完成其他義工的配送任務');
-      }
-      if (request['stationId']?.toString() != stationId) {
-        throw Exception('無法處理其他收容中心的任務');
-      }
-      await db.execute(
-        "UPDATE supply_requests SET status = 'completed' WHERE requestId = ?",
-        [requestId],
-      );
-      result = {'requestId': requestId, 'status': 'completed'};
-    });
-    return result!;
-  }
-
+  }) async => db.stationTransferTransaction((sql) {
+    _ownedRequest(sql, requestId, volunteerId, stationId, 'dispatched');
+    sql.execute(
+      '''
+      UPDATE supply_requests SET status = 'completed', completedAt = ?
+      WHERE requestId = ? AND status = 'dispatched'
+    ''',
+      [DateTime.now().toUtc().toIso8601String(), requestId],
+    );
+    if (sql.updatedRows != 1) {
+      throw Exception('需求狀態已變更，無法完成');
+    }
+    return {'requestId': requestId, 'status': 'completed'};
+  });
 }

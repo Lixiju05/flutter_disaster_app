@@ -1,0 +1,26 @@
+// REVIEW / MERGE ONLY. Not deployed, not referenced by firebase.json.
+// This example omits existing users/{uid} profile create/read/update rules.
+// Do not replace the user App's complete Rules with this file.
+// Remove/narrow overlapping permissive wildcard rules: allow rules combine by OR.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function registeredVerifiedUser() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    match /broadcasts/{messageId} {
+      allow read: if registeredVerifiedUser();
+      allow create, update, delete: if false;
+    }
+    match /users/{uid}/notifications/{messageId} {
+      allow read: if registeredVerifiedUser() && request.auth.uid == uid;
+      allow create, update, delete: if false;
+    }
+    match /notification_sends/{messageId} {
+      allow read, write: if false;
+    }
+  }
+}

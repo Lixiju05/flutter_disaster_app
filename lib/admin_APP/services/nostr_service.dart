@@ -1,4 +1,4 @@
-import 'dart:async';
+/*import 'dart:async';
 import 'package:dart_nostr/dart_nostr.dart';
 
 class NostrService {
@@ -40,4 +40,4 @@ class NostrService {
     _subscription?.cancel();
     _subscription = null;
   }
-}
+}*/
