@@ -12,6 +12,7 @@ class AllocationService {
     required String zoneId,
     required int qty,
   }) async {
+    db.ensureLegacyInventoryWritesAllowed();
     // 建議 A：使用 Transaction 確保原子性（Atomicity）
     // 確保庫存更新與紀錄新增「要嘛全成功，要嘛全回滾」
     await db.transaction(() async {
@@ -71,6 +72,7 @@ class AllocationService {
 
   /// 取消分配
   Future<void> cancelAllocation(int allocationId) async {
+    db.ensureLegacyInventoryWritesAllowed();
     await db.transaction(() async {
       // 1. 查找該筆紀錄
       final result = await db.select(

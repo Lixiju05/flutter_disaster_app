@@ -1,3 +1,4 @@
+import 'package:flutter_disaster_app/admin_APP/services/reverse_geocoding_client.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -58,6 +59,7 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
 
       if (data['success'] == true) {
+        AdminApiSession.token = data['token']?.toString();
         _showSnack('登入成功', isError: false);
 
         // 帳號由各地區／社區統一發放，登入後直接進 dashboard

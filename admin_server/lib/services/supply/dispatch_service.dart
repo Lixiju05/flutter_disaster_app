@@ -10,6 +10,7 @@ class DispatchService {
   Future<void> dispatch({
     required int allocationId,
   }) async {
+    db.ensureLegacyInventoryWritesAllowed();
 
     // 找 allocation
     final allocResult =await DatabaseService.instance.select(

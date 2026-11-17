@@ -1,3 +1,4 @@
+import 'package:admin_server/core/models/report_location.dart';
 import 'dart:io';
 
 import 'package:sqlite3/sqlite3.dart';
@@ -14,13 +15,33 @@ import 'package:admin_server/core/models/emergency_request.dart';
 
 
 
+class InventoryException implements Exception {
+  final String message;
+  final int statusCode;
+  InventoryException(this.message, [this.statusCode = 400]);
+  @override
+  String toString() => message;
+}
+
 class DatabaseService {
 
   final Database _db; // 核心實例變數
 
 
 
-  DatabaseService(this._db);
+  final bool allowLegacyInventoryWrites;
+
+  DatabaseService(this._db, {
+    this.allowLegacyInventoryWrites = const bool.fromEnvironment(
+      'ALLOW_LEGACY_INVENTORY_WRITES', defaultValue: false,
+    ),
+  });
+
+  void ensureLegacyInventoryWritesAllowed() {
+    if (!allowLegacyInventoryWrites) {
+      throw InventoryException('單中心模式已停用舊 allocate/dispatch 寫入，請使用物資需求與義工取貨流程', 409);
+    }
+  }
 
 
 
@@ -75,7 +96,7 @@ class DatabaseService {
     rawDb.execute('''CREATE TABLE IF NOT EXISTS station_inventory (stationId TEXT NOT NULL,itemId INTEGER NOT NULL,stockQty INTEGER NOT NULL DEFAULT 0,reservedQty INTEGER NOT NULL DEFAULT 0,updatedAt TEXT NOT NULL,PRIMARY KEY (stationId, itemId),FOREIGN KEY (stationId)REFERENCES stations(stationId),FOREIGN KEY (itemId)REFERENCES inventory(id))''');
 
     createStationTransferSchema(rawDb);
-    _addSupplyRequestColumns(rawDb);
+    ensureSupplyRequestSchema(rawDb);
 
 
 
@@ -126,7 +147,7 @@ class DatabaseService {
     }
   }
 
-  static void _addSupplyRequestColumns(Database db) {
+  static void ensureSupplyRequestSchema(Database db) {
 
     final columns = db.select(
 
@@ -195,6 +216,33 @@ class DatabaseService {
       );
 
       print('Added completedAt to supply_requests');
+    }
+    if (!columnNames.contains('reportedAt')) {
+      db.execute('ALTER TABLE supply_requests ADD COLUMN reportedAt TEXT');
+    }
+    // Additive migration only: legacy rows remain NULL, with no inferred mode.
+    if (!columnNames.contains('assignmentType')) {
+      db.execute('ALTER TABLE supply_requests ADD COLUMN assignmentType TEXT '
+          "CHECK (assignmentType IS NULL OR assignmentType IN ('self_claimed', 'admin_assigned'))");
+    }
+    if (!columnNames.contains('assignedBy')) {
+      db.execute('ALTER TABLE supply_requests ADD COLUMN assignedBy INTEGER');
+    }
+    // Offline delivery is additive; never infer timestamps or actors for history.
+    for (final entry in {
+      'reservedAt': 'TEXT',
+      'dispatchedAt': 'TEXT',
+      'dispatchedBy': 'INTEGER',
+      'completedBy': 'INTEGER',
+      'reviewStatus': "TEXT CHECK (reviewStatus IS NULL OR reviewStatus IN ('needs_review', 'approved'))",
+      'reviewReasons': 'TEXT',
+      'reviewedBy': 'INTEGER',
+      'reviewedAt': 'TEXT',
+      'reviewNote': 'TEXT',
+    }.entries) {
+      if (!columnNames.contains(entry.key)) {
+        db.execute('ALTER TABLE supply_requests ADD COLUMN ${entry.key} ${entry.value}');
+      }
     }
   }
 
@@ -351,71 +399,16 @@ class DatabaseService {
   // =====================
 
   Future<void> insertHealthReport(HealthReport report) async {
-
     await execute('''
-
-      INSERT OR IGNORE INTO health_reports (
-
-        uuid,
-
-        reporterId,
-
-        name,
-
-        phone,
-
-        bloodType,
-
-        status,
-
-        description,
-
-        lat,
-
-        lng,
-
-        reportTime,
-
-        receiverAdminId,
-
-        hopCount,
-
-        receivedAt
-
-      )
-
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-
-    ''', [
-
-      report.uuid,
-
-      report.reporterId,
-
-      report.name,
-
-      report.phone,
-
-      report.bloodType,
-
-      report.status,
-
-      report.description,
-
-      report.lat,
-
-      report.lng,
-
-      report.reportTime.toIso8601String(),
-
-      report.receiverAdminId,
-
-      report.hopCount,
-
-      report.receivedAt?.toIso8601String(),
-
-    ]);
-
+      INSERT OR IGNORE INTO health_reports
+      (uuid, reporterId, name, phone, bloodType, status, description,
+       lat, lng, address, reportTime, receiverAdminId, hopCount, receivedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', [report.uuid, report.reporterId, report.name, report.phone,
+      report.bloodType, report.status, report.description,
+      ReportLocation.latitude(report.lat), ReportLocation.longitude(report.lng),
+      report.address, report.reportTime?.toIso8601String(),
+      report.receiverAdminId, report.hopCount, report.receivedAt?.toIso8601String()]);
   }
 
 
@@ -487,8 +480,17 @@ class DatabaseService {
 
 
   Future<List<Map<String, Object?>>> getAllInventory() async {
-
-    final result = await select('SELECT * FROM inventory');
+    final result = await select('''
+      SELECT i.id, i.name, i.category, i.unit,
+             COALESCE(si.stockQty, 0) AS stockQty,
+             COALESCE(si.reservedQty, 0) AS reservedQty,
+             COALESCE(si.stockQty, 0) - COALESCE(si.reservedQty, 0) AS availableQty,
+             i.neededQty, COALESCE(si.updatedAt, i.updatedAt) AS updatedAt
+      FROM inventory i
+      LEFT JOIN station_inventory si
+        ON si.itemId = i.id AND si.stationId = 'OFFICE001'
+      ORDER BY i.id
+    ''');
 
     return result.toList();
 
@@ -507,133 +509,47 @@ class DatabaseService {
     int neededQty = 0,
 
   }) async {
-
-
-
-    // 1️⃣ 先檢查有沒有同品項
-
-    final result = await select(
-
-      '''
-
-      SELECT * FROM inventory
-
-      WHERE name = ?
-
-      ''',
-
-      [name],
-
-    );
-
-
-
-    // 2️⃣ 有 -> 更新數量
-
-    if (result.isNotEmpty) {
-
-
-
-      final row = result.first;
-
-
-
-      final currentStock =
-
-          row['stockQty'] as int;
-
-
-
-      final currentNeeded =
-
-          row['neededQty'] as int;
-
-
-
-      await execute(
-
-        '''
-
-        UPDATE inventory
-
-        SET stockQty = ?,
-
-            neededQty = ?,
-
-            updatedAt = ?
-
-        WHERE name = ?
-
-        ''',
-
-        [
-
-          currentStock + stockQty,
-
-          currentNeeded + neededQty,
-
-          DateTime.now().toIso8601String(),
-
-          name,
-
-        ],
-
-      );
-
-
-
-    } else {
-
-
-
-      // 3️⃣ 沒有 -> 新增
-
-      await execute(
-
-        '''
-
-        INSERT INTO inventory (
-
-          name,
-
-          category,
-
-          unit,
-
-          stockQty,
-
-          reservedQty,
-
-          neededQty,
-
-          updatedAt
-
-        )
-
-        VALUES (?, ?, ?, ?, 0, ?, ?)
-
-        ''',
-
-        [
-
-          name,
-
-          category,
-
-          unit,
-
-          stockQty,
-
-          neededQty,
-
-          DateTime.now().toIso8601String(),
-
-        ],
-
-      );
-
+    final itemName = name.trim();
+    final itemCategory = category.trim();
+    final itemUnit = unit.trim();
+    if (itemName.isEmpty || itemCategory.isEmpty || itemUnit.isEmpty) {
+      throw InventoryException('物資名稱、分類、單位不可為空');
     }
-
+    _validateInboundQty(stockQty);
+    if (neededQty < 0) throw InventoryException('neededQty 必須是非負整數');
+    // Reuse the existing synchronous BEGIN IMMEDIATE helper: no await inside.
+    stationTransferTransaction((sql) {
+      _requireOfficeInventory(sql);
+      final matches = sql.select('''
+        SELECT id FROM inventory WHERE name = ? AND category = ? AND unit = ?
+      ''', [itemName, itemCategory, itemUnit]);
+      if (matches.length > 1) {
+        throw InventoryException('存在重複物資主檔，請先核對 itemId', 409);
+      }
+      final now = DateTime.now().toUtc().toIso8601String();
+      final int itemId;
+      if (matches.isEmpty) {
+        // Legacy stock columns are not an active inventory source.
+        sql.execute('''
+          INSERT INTO inventory
+            (name, category, unit, stockQty, reservedQty, neededQty, updatedAt)
+          VALUES (?, ?, ?, 0, 0, ?, ?)
+        ''', [itemName, itemCategory, itemUnit, neededQty, now]);
+        itemId = sql.lastInsertRowId;
+      } else {
+        itemId = matches.first['id'] as int;
+        // Preserve the existing additive neededQty behavior; do not touch legacy stock.
+        sql.execute('''
+          UPDATE inventory SET neededQty = COALESCE(neededQty, 0) + ?, updatedAt = ?
+          WHERE id = ? AND COALESCE(neededQty, 0) >= 0
+            AND COALESCE(neededQty, 0) <= 9223372036854775807 - ?
+        ''', [neededQty, now, itemId, neededQty]);
+        if (sql.updatedRows != 1) {
+          throw InventoryException('物資需求量資料異常或超出範圍', 409);
+        }
+      }
+      _receiveOfficeStock(sql, itemId, stockQty, now);
+    });
   }
 
 
@@ -641,27 +557,43 @@ class DatabaseService {
   //補貨
 
   Future<void> addStock(int id, int qty) async {
+    if (id <= 0) throw InventoryException('itemId 必須是正整數');
+    _validateInboundQty(qty);
+    stationTransferTransaction((sql) {
+      _requireOfficeInventory(sql);
+      if (sql.select('SELECT id FROM inventory WHERE id = ?', [id]).isEmpty) {
+        throw InventoryException('找不到物資主檔', 404);
+      }
+      _receiveOfficeStock(sql, id, qty, DateTime.now().toUtc().toIso8601String());
+    });
+  }
 
-    await execute('''
+  void _validateInboundQty(int qty) {
+    if (qty <= 0) throw InventoryException('本次入庫數量必須是大於 0 的整數');
+  }
 
-      UPDATE inventory
+  void _requireOfficeInventory(Database sql) {
+    if (sql.select("SELECT stationId FROM stations WHERE stationId = 'OFFICE001'").isEmpty) {
+      throw InventoryException('OFFICE001 管理中心不存在，請先確認設定', 409);
+    }
+  }
 
-      SET stockQty = stockQty + ?,
-
-          updatedAt = ?
-
-      WHERE id = ?
-
-    ''', [
-
-      qty,
-
-      DateTime.now().toIso8601String(),
-
-      id
-
-    ]);
-
+  void _receiveOfficeStock(Database sql, int itemId, int qty, String now) {
+    sql.execute('''
+      INSERT INTO station_inventory (stationId, itemId, stockQty, reservedQty, updatedAt)
+      VALUES ('OFFICE001', ?, ?, 0, ?)
+      ON CONFLICT(stationId, itemId) DO UPDATE SET
+        stockQty = station_inventory.stockQty + excluded.stockQty,
+        updatedAt = excluded.updatedAt
+      WHERE typeof(station_inventory.stockQty) = 'integer'
+        AND typeof(station_inventory.reservedQty) = 'integer'
+        AND station_inventory.reservedQty >= 0
+        AND station_inventory.stockQty >= station_inventory.reservedQty
+        AND station_inventory.stockQty <= 9223372036854775807 - excluded.stockQty
+    ''', [itemId, qty, now]);
+    if (sql.updatedRows != 1) {
+      throw InventoryException('OFFICE001 庫存資料異常或超出範圍，未執行入庫', 409);
+    }
   }
 
 
@@ -703,9 +635,7 @@ class DatabaseService {
     required int qty,
 
   }) async {
-
-
-
+    ensureLegacyInventoryWritesAllowed();
     await transaction(() async {
 
 
@@ -835,9 +765,7 @@ class DatabaseService {
     required int allocationId,
 
   }) async {
-
-
-
+    ensureLegacyInventoryWritesAllowed();
     await transaction(() async {
 
 
@@ -965,63 +893,19 @@ class DatabaseService {
 
 
   Future<void> insertSupplyRequest(SupplyRequest req) async {
-
+    if (req.requestId.trim().isEmpty || req.userId.trim().isEmpty || req.itemId <= 0 || req.qty <= 0) {
+      throw InventoryException('Invalid requestId, userId, itemId or qty');
+    }
     await execute('''
-
-      INSERT OR IGNORE INTO supply_requests (
-
-        requestId,
-
-        userId,
-
-        itemId,
-
-        qty,
-
-        lat,
-
-        lng,
-
-        receiverAdminId,
-
-        hopCount,
-
-        status,
-
-        createdAt,
-
-        receivedAt
-
-      )
-
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-
-    ''', [
-
-      req.requestId,
-
-      req.userId,
-
-      req.itemId,
-
-      req.qty,
-
-      req.lat,
-
-      req.lng,
-
-      req.receiverAdminId,
-
-      req.hopCount,
-
-      req.status,
-
-      req.createdAt.toIso8601String(),
-
-      req.receivedAt?.toIso8601String(),
-
-    ]);
-
+      INSERT OR IGNORE INTO supply_requests
+      (requestId, userId, itemId, qty, lat, lng, address, reportedAt,
+       receiverAdminId, hopCount, status, createdAt, receivedAt, stationId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OFFICE001')
+    ''', [req.requestId, req.userId, req.itemId, req.qty,
+      ReportLocation.latitude(req.lat), ReportLocation.longitude(req.lng),
+      req.address, req.reportedAt?.toIso8601String(), req.receiverAdminId,
+      req.hopCount, req.status, req.createdAt.toIso8601String(),
+      req.receivedAt?.toIso8601String()]);
   }
 
 
@@ -1069,8 +953,17 @@ class DatabaseService {
         sr.status,
 
         sr.createdAt,
+        sr.reportedAt,
+        sr.address,
 
-        sr.receivedAt
+        sr.receivedAt,
+        sr.volunteerId,
+        sr.claimedAt,
+        sr.assignmentType,
+        sr.assignedBy,
+        sr.completedAt,
+        sr.reservedAt, sr.dispatchedAt, sr.dispatchedBy, sr.completedBy,
+        sr.reviewStatus, sr.reviewReasons, sr.reviewedBy, sr.reviewedAt, sr.reviewNote
 
       FROM supply_requests sr
 
@@ -1159,63 +1052,15 @@ class DatabaseService {
   }
 
   Future<void> insertEmergencyRequest(EmergencyRequest req) async {
-
     await execute('''
-
-      INSERT OR IGNORE INTO emergency_requests (
-
-        emergencyId,
-
-        userId,
-
-        userName,
-
-        phone,
-
-        latitude,
-
-        longitude,
-
-        status,
-
-        receiverAdminId,
-
-        hopCount,
-
-        sentAt,
-
-        receivedAt
-
-      )
-
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-
-      ''', [
-
-        req.emergencyId,
-
-        req.userId,
-
-        req.userName,
-
-        req.phone,
-
-        req.lat,
-
-        req.lng,
-
-        req.status,
-
-        req.receiverAdminId,
-
-        req.hopCount,
-
-        req.sentAt.toIso8601String(),
-
-        req.receivedAt?.toIso8601String(),
-
-      ]);
-
+      INSERT OR IGNORE INTO emergency_requests
+      (emergencyId, userId, userName, phone, latitude, longitude, address,
+       status, receiverAdminId, hopCount, sentAt, receivedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', [req.emergencyId, req.userId, req.userName, req.phone,
+      ReportLocation.latitude(req.lat), ReportLocation.longitude(req.lng),
+      req.address, req.status, req.receiverAdminId, req.hopCount,
+      req.sentAt?.toIso8601String(), req.receivedAt?.toIso8601String()]);
   }
 
 
@@ -1274,6 +1119,21 @@ class DatabaseService {
 
 ) async {
 
+  // Only an actual event with valid coordinates can replace the selected position.
+  // receivedAt/createdAt describe server processing, not when GPS was observed.
+  void selectLocation(Map<String, dynamic> victim, Object? lat, Object? lng,
+      DateTime? eventTime, Object? address) {
+    final latitude = ReportLocation.latitude(lat);
+    final longitude = ReportLocation.longitude(lng);
+    if (latitude == null || longitude == null || eventTime == null) return;
+    final previous = ReportLocation.time(victim['lastUpdatedAt']);
+    if (previous != null && !eventTime.isAfter(previous)) return;
+    victim['lat'] = latitude;
+    victim['lng'] = longitude;
+    victim['address'] = address;
+    victim['lastUpdatedAt'] = eventTime.toIso8601String();
+  }
+
   final victims = <String, Map<String, dynamic>>{};
 
 
@@ -1304,11 +1164,12 @@ class DatabaseService {
 
       "supplyRequests": [],
 
-      "lat": report.lat,
+      "lat": null,
 
-      "lng": report.lng,
+      "lng": null,
 
-      "lastUpdatedAt": report.reportTime.toIso8601String(),
+      "lastUpdatedAt": null,
+      "address": null,
 
     };
 
@@ -1318,13 +1179,8 @@ class DatabaseService {
 
     victims[report.reporterId]!["healthDescription"] = report.description;
 
-    victims[report.reporterId]!["lat"] = report.lat;
-
-    victims[report.reporterId]!["lng"] = report.lng;
-
-    victims[report.reporterId]!["lastUpdatedAt"] =
-
-        report.reportTime.toIso8601String();
+    selectLocation(victims[report.reporterId]!, report.lat, report.lng,
+        report.reportTime, report.address);
 
   }
 
@@ -1390,17 +1246,16 @@ class DatabaseService {
 
 
 
-      "lat": sos['latitude'],
+      "lat": null,
 
 
 
-      "lng": sos['longitude'],
+      "lng": null,
 
 
 
-      "lastUpdatedAt":
-
-          sos['sentAt']?.toString(),
+      "lastUpdatedAt": null,
+      "address": null,
 
     };
 
@@ -1416,21 +1271,8 @@ class DatabaseService {
 
 
 
-    victims[userId]!["lat"] =
-
-        sos['latitude'];
-
-
-
-    victims[userId]!["lng"] =
-
-        sos['longitude'];
-
-
-
-    victims[userId]!["lastUpdatedAt"] =
-
-        sos['sentAt']?.toString();
+    selectLocation(victims[userId]!, sos['latitude'], sos['longitude'],
+        ReportLocation.time(sos['sentAt']), sos['address']);
 
   }
 
@@ -1468,13 +1310,12 @@ class DatabaseService {
 
         "supplyRequests": [],
 
-        "lat": req['lat'],
+        "lat": null,
 
-        "lng": req['lng'],
+        "lng": null,
 
-        "lastUpdatedAt": req['receivedAt']?.toString() ??
-
-            req['createdAt']?.toString(),
+        "lastUpdatedAt": null,
+      "address": null,
 
       };
 
@@ -1498,13 +1339,8 @@ class DatabaseService {
 
 
 
-      victims[userId]!["lat"] = req['lat'];
-
-      victims[userId]!["lng"] = req['lng'];
-
-      victims[userId]!["lastUpdatedAt"] =
-
-          req['receivedAt']?.toString() ?? req['createdAt']?.toString();
+      selectLocation(victims[userId]!, req['lat'], req['lng'],
+          ReportLocation.time(req['reportedAt']), req['address']);
 
     }
 
@@ -2617,11 +2453,13 @@ Future<void> seedAllocations() async {
 
           createdAt,
 
-          receivedAt
+          receivedAt,
+
+          stationId
 
         )
 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'OFFICE001')
 
       ''', [
 
@@ -2657,6 +2495,11 @@ Future<void> seedAllocations() async {
 
   }
 
+    Future<List<Map<String, Object?>>> getStations() async {
+      final result = await select('SELECT * FROM stations ORDER BY stationId');
+      return result.toList();
+    }
+
     Future<List<Map<String, Object?>>> getSupplyRequestDetails() async {
 
       final result = await select('''
@@ -2686,6 +2529,7 @@ Future<void> seedAllocations() async {
           sr.status,
 
           sr.createdAt,
+        sr.reportedAt,
 
           sr.receivedAt,
 
@@ -2693,13 +2537,29 @@ Future<void> seedAllocations() async {
 
           sr.volunteerId,
 
-          sr.claimedAt
+          sr.claimedAt,
+
+          sr.assignmentType,
+
+          sr.assignedBy,
+
+          sr.completedAt,
+
+          sr.reservedAt, sr.dispatchedAt, sr.dispatchedBy, sr.completedBy,
+
+          sr.reviewStatus, sr.reviewReasons, sr.reviewedBy, sr.reviewedAt, sr.reviewNote,
+
+          sr.stationId,
+
+          st.name AS stationName
 
         FROM supply_requests sr
 
         JOIN inventory i
 
         ON sr.itemId = i.id
+
+        LEFT JOIN stations st ON sr.stationId = st.stationId
 
         ORDER BY sr.createdAt DESC
 
@@ -2837,7 +2697,7 @@ Future<void> seedAllocations() async {
 
       'SOS005',
 
-      'U012',
+      'U014',
 
       '周延依',
 
@@ -3263,31 +3123,7 @@ Future<void> seedAllocations() async {
 
   HealthReport _rowToHealthReport(Row row) {
 
-    return HealthReport(
-
-      uuid: row['uuid']?.toString() ?? '',
-
-      reporterId: row['reporterId']?.toString() ?? '',
-
-      name: row['name']?.toString() ?? '',
-
-      phone: row['phone']?.toString() ?? '',
-
-      bloodType: row['bloodType']?.toString(),
-
-      status: row['status']?.toString() ?? '',
-
-      description: row['description']?.toString() ?? '',
-
-      lat: (row['lat'] as num?)?.toDouble(),
-
-      lng: (row['lng'] as num?)?.toDouble(),
-
-      address: row['address']?.toString() ?? '',
-
-      reportTime: DateTime.tryParse(row['reportTime']?.toString() ?? '') ?? DateTime.now(),
-
-    );
+    return HealthReport.fromMap(row);
 
   }
 

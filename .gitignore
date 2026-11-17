@@ -43,3 +43,21 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local SQLite databases and backups
+/admin_server/data/*.db
+/admin_server/data/*.db-*
+/admin_server/data/*.sqbpro
+
+# Keep reviewed example database
+!/admin_server/data/admin.db.example
+
+# Local HTTPS certificates and private keys
+/admin_server/certs/*.key
+/admin_server/certs/*.pem
+/admin_server/key.pem
+/admin_server/cert.pem
+
+# Local credentials
+/admin_server/.env
+/admin_server/.env.*

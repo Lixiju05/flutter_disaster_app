@@ -1,3 +1,5 @@
+import 'report_location.dart';
+
 class SupplyRequest {
   final String requestId;
   final String userId;
@@ -12,6 +14,7 @@ class SupplyRequest {
   final String status;
   final DateTime createdAt;
   final DateTime? receivedAt;
+  final DateTime? reportedAt;
   final DateTime? claimedAt;
 
   SupplyRequest({
@@ -27,6 +30,7 @@ class SupplyRequest {
     this.status = 'pending',
     required this.createdAt,
     this.receivedAt,
+    this.reportedAt,
     this.volunteerId,
     this.claimedAt,
   });
@@ -46,9 +50,9 @@ class SupplyRequest {
       'status': status,
       'createdAt': createdAt.toIso8601String(),
       'receivedAt': receivedAt?.toIso8601String(),
+      'reportedAt': reportedAt?.toIso8601String(),
       'claimedAt': claimedAt?.toIso8601String(),
     };
-
   }
 
   factory SupplyRequest.fromJson(Map<String, dynamic> json) {
@@ -57,9 +61,10 @@ class SupplyRequest {
       userId: (json['userId'] ?? '').toString(),
       itemId: _toInt(json['itemId']),
       qty: _toInt(json['qty']),
-      lat: (json['lat'] as num?)?.toDouble(),
-      lng: (json['lng'] as num?)?.toDouble(),
+      lat: ReportLocation.latitude(json['lat']),
+      lng: ReportLocation.longitude(json['lng']),
       address: json['address']?.toString(),
+      reportedAt: ReportLocation.time(json['reportedAt']),
       receiverAdminId: json['receiverAdminId']?.toString(),
       volunteerId: json['volunteerId']?.toString(),
       hopCount: _toInt(json['hopCount']),

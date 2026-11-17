@@ -1,3 +1,4 @@
+import 'package:flutter_disaster_app/admin_APP/widgets/sos_address_details.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
@@ -33,42 +34,6 @@ const Color _kTextSub  = Color(0xFF475569);
 const String _baseUrl = ApiConfig.baseUrl;
 
 // ── 地址快取 ────────────────────────────────────────────────────
-final Map<String, String> _addressCache = {};
-
-Future<String> _fetchAddress(double lat, double lng) async {
-  final key = '${lat.toStringAsFixed(5)},${lng.toStringAsFixed(5)}';
-  if (_addressCache.containsKey(key)) return _addressCache[key]!;
-  try {
-    final uri = Uri.parse(
-      'https://nominatim.openstreetmap.org/reverse'
-      '?format=json&lat=$lat&lon=$lng&accept-language=zh-TW',
-    );
-    final res = await http.get(uri,
-        headers: {'User-Agent': 'FlutterDisasterApp/1.0'}).timeout(
-      const Duration(seconds: 6),
-    );
-    if (res.statusCode == 200) {
-      final data    = jsonDecode(res.body);
-      final address = data['address'] as Map<String, dynamic>?;
-      final district = address?['suburb'] ??
-          address?['town'] ??
-          address?['village'] ??
-          address?['city_district'] ??
-          '';
-      final road    = address?['road'] ?? '';
-      final result  =
-          [district, road].where((s) => s.isNotEmpty).join('');
-      final display = result.isNotEmpty
-          ? result
-          : (data['display_name'] as String? ?? '')
-              .split(',')
-              .first;
-      _addressCache[key] = display;
-      return display;
-    }
-  } catch (_) {}
-  return '${lat.toStringAsFixed(3)}, ${lng.toStringAsFixed(3)}';
-}
 
 // ════════════════════════════════════════════════════════════════
 //  CitizenPage
@@ -1637,14 +1602,9 @@ class _SosTabState extends State<_SosTab> {
                     _dialogInfoRow('接收時間', _fullTime(e.receivedAt!)),
                   const SizedBox(height: 4),
                   _dialogSectionHeader('位置資訊'),
-                  _dialogInfoRow('地址',
-                      e.address?.isNotEmpty == true
-                          ? e.address!
-                          : '未提供'),
-                  if (e.lat != 0 && e.lng != 0)
-                    _dialogInfoRow('座標',
-                        '${e.lat.toStringAsFixed(5)}, '
-                        '${e.lng.toStringAsFixed(5)}'),
+                  SosAddressDetails(
+                    latitude: e.lat, longitude: e.lng, providedAddress: e.address,
+                  ),
                   if (e.lat != 0 && e.lng != 0) ...[
                     const SizedBox(height: 8),
                     SizedBox(
@@ -2045,89 +2005,3 @@ Widget _detailButton(Color color, VoidCallback onTap) {
 // ════════════════════════════════════════════════════════════════
 //  地址顯示元件
 // ════════════════════════════════════════════════════════════════
-class _AddressWidget extends StatefulWidget {
-  final double lat, lng;
-  final VoidCallback onMapTap;
-  const _AddressWidget(
-      {required this.lat,
-      required this.lng,
-      required this.onMapTap});
-  @override
-  State<_AddressWidget> createState() => _AddressWidgetState();
-}
-
-class _AddressWidgetState extends State<_AddressWidget> {
-  String _address = '查詢中…';
-  bool   _loaded  = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  void didUpdateWidget(_AddressWidget old) {
-    super.didUpdateWidget(old);
-    if (old.lat != widget.lat || old.lng != widget.lng) _load();
-  }
-
-  Future<void> _load() async {
-    final result =
-        await _fetchAddress(widget.lat, widget.lng);
-    if (mounted) {
-      setState(() {
-        _address = result;
-        _loaded  = true;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(children: [
-      Icon(Icons.location_on_outlined,
-          color: _loaded
-              ? _kTextSub
-              : _kBlue.withValues(alpha: .4),
-          size: 13),
-      const SizedBox(width: 4),
-      Expanded(
-        child: Text(_address,
-            style: TextStyle(
-                color: _loaded
-                    ? _kTextSub
-                    : _kBlue.withValues(alpha: .5),
-                fontSize: 13),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis),
-      ),
-      const SizedBox(width: 6),
-      GestureDetector(
-        onTap: widget.onMapTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: _kBlue.withValues(alpha: .06),
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(
-                color: _kBlue.withValues(alpha: .18)),
-          ),
-          child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-            Icon(Icons.map_outlined,
-                color: _kBlue, size: 11),
-            SizedBox(width: 3),
-            Text('地圖',
-                style: TextStyle(
-                    color: _kBlue,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600)),
-          ]),
-        ),
-      ),
-    ]);
-  }
-}

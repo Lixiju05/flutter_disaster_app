@@ -100,6 +100,7 @@ class EmergencyRequest {
       'phone': phone,
       'latitude': lat,
       'longitude': lng,
+      'address': address,
       'status': status,
       'receiverAdminId':
           receiverAdminId,
@@ -124,6 +125,7 @@ class EmergencyRequest {
       phone: phone,
       lat: lat,
       lng: lng,
+      address: address,
 
       status: status ?? this.status,
 
