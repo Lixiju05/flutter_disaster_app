@@ -204,15 +204,16 @@ class _NotificationPageState extends State<NotificationPage>
     }).toList();
   }
 
-  /// 任何撰寫內容變動，就代表接下來要送的是「新的一次發送」
+  /// 任何撰寫內容變動都要重新整理畫面（發送按鈕是否可按），
+  /// 如果這次變動發生在「送出失敗、準備重試」之後，就代表接下來要送的是「新的一次發送」
   void _onComposeChanged() {
-    if (_pendingClientRequestId != null) {
-      setState(() {
+    setState(() {
+      if (_pendingClientRequestId != null) {
         _pendingClientRequestId = null;
         _sendError = null;
         _sendOkMessage = null;
-      });
-    }
+      }
+    });
   }
 
   void _setAudience(String value) {
