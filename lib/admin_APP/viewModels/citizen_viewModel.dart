@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_disaster_app/core/models/citizen.dart';
 import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
+import 'package:flutter_disaster_app/core/offline_demo_data.dart';
 
 class CitizenViewmodel extends ChangeNotifier {
   final AdminRepository _repository = AdminRepository();
@@ -10,10 +11,12 @@ class CitizenViewmodel extends ChangeNotifier {
 
   bool _isLoading = false;
   String? _errorMessage;
+  bool _isOfflineDemo = false;
 
   List<Citizen> get citizens => _citizens;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  bool get isOfflineDemo => _isOfflineDemo;
 
   CitizenViewmodel() {
     loadCitizens();
@@ -29,10 +32,12 @@ class CitizenViewmodel extends ChangeNotifier {
 
       _allCitizens = List.from(data);
       _citizens = List.from(data);
+      _isOfflineDemo = false;
     } catch (e) {
-      _errorMessage = '民眾資料載入失敗：$e';
-      _allCitizens = [];
-      _citizens = [];
+      // 連不上後端時，先用示範資料讓畫面可以照常顯示、方便改 UI
+      _allCitizens = demoCitizens();
+      _citizens = List.from(_allCitizens);
+      _isOfflineDemo = true;
     } finally {
       _isLoading = false;
       notifyListeners();

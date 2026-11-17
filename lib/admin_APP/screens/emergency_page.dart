@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_disaster_app/admin_APP/widgets/page_header.dart';
+import 'package:flutter_disaster_app/admin_APP/widgets/offline_demo_badge.dart';
+import 'package:flutter_disaster_app/admin_APP/widgets/user_avatar.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_disaster_app/core/models/emergency_request.dart';
@@ -115,12 +117,12 @@ class _EmergencyPageState extends State<EmergencyPage> {
 
   Future<void> _confirmHandle(EmergencyRequest e, EmergencyViewModel vm) => _confirmStatus(
         e, vm,
-        title: '標記完成',
+        title: '完成',
         message: '確定將「${_nameOf(e)}」的求救事件標記為已完成？此操作無法還原。',
-        confirmText: '標記完成',
+        confirmText: '完成',
         color: _kGreen,
         action: () => vm.markHandled(e),
-        successText: '已標記完成',
+        successText: '已完成',
       );
 
   @override
@@ -184,7 +186,10 @@ class _EmergencyPageState extends State<EmergencyPage> {
     return PageHeader(
       title: '緊急事件',
       subtitle: 'EMERGENCY MANAGEMENT',
-      badges: [if (pending > 0) _tag('待處理 $pending 件', _kOrange)],
+      badges: [
+        if (pending > 0) _tag('待處理 $pending 件', _kOrange),
+        if (vm.isOfflineDemo) const OfflineDemoBadge(),
+      ],
       actions: [
         PageHeaderButton(
             icon: Icons.refresh_rounded, tooltip: '重新整理', onPressed: vm.loadEmergencies),
@@ -325,7 +330,7 @@ class _EmergencyPageState extends State<EmergencyPage> {
               : ListView.separated(
                   itemCount: filtered.length,
                   separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
-                  itemBuilder: (_, i) => _buildCard(filtered[i], vm),
+                  itemBuilder: (_, i) => _buildCard(filtered[i], vm, index: i),
                 ),
         ),
       ]),
@@ -335,26 +340,19 @@ class _EmergencyPageState extends State<EmergencyPage> {
   // ══════════════════════════════════════════════════════════
   //  事件列（白底、狀態標籤、右側操作按鈕）
   // ══════════════════════════════════════════════════════════
-  Widget _buildCard(EmergencyRequest e, EmergencyViewModel vm) {
+  Widget _buildCard(EmergencyRequest e, EmergencyViewModel vm, {required int index}) {
     final isResolved   = e.status == 'resolved';
     final isProcessing = e.status == 'processing';
     final color = isResolved ? _kGreen : (isProcessing ? _kBlue : _kOrange);
     final statusLabel = isResolved ? '已完成' : (isProcessing ? '處理中' : '待處理');
     final displayName = e.userName.isNotEmpty ? e.userName : '用戶 ${e.userId}';
-    final hasLocation = !(e.lat == 0 && e.lng == 0);
     final address = e.address?.isNotEmpty == true ? e.address! : '位置未提供';
 
-    return Padding(
+    return Container(
+      color: index.isEven ? _kCardBg : const Color(0xFFF8FAFC),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        Container(
-          width: 36, height: 36,
-          decoration: BoxDecoration(color: const Color(0xFFEFF4FF), borderRadius: BorderRadius.circular(10)),
-          child: Center(child: Text(
-            displayName.isNotEmpty ? displayName[0] : '?',
-            style: const TextStyle(color: Color(0xFF1E3A5F), fontSize: 16, fontWeight: FontWeight.w700),
-          )),
-        ),
+        UserAvatar(name: displayName, index: index),
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -381,19 +379,15 @@ class _EmergencyPageState extends State<EmergencyPage> {
           ]),
         ),
         const SizedBox(width: 12),
-        // 操作：地圖 / 詳情 / 開始處理 / 標記完成
-        if (hasLocation) ...[
-          _outlineBtn('地圖', _kBlue, () => _openMap(e.lat, e.lng)),
-          const SizedBox(width: 8),
-        ],
+        // 操作：詳情（地圖已內含在詳情裡）／ 待處理→開始處理 ／ 處理中→完成
         _outlineBtn('詳情', _kBlue, () => _showEmergencyDetail(e)),
         if (!isResolved && !isProcessing) ...[
           const SizedBox(width: 8),
           _outlineBtn('開始處理', _kBlue, () => _confirmProcessing(e, vm)),
         ],
-        if (!isResolved) ...[
+        if (isProcessing) ...[
           const SizedBox(width: 8),
-          _filledBtn('標記完成', _kGreen, () => _confirmHandle(e, vm)),
+          _filledBtn('完成', _kGreen, () => _confirmHandle(e, vm)),
         ],
       ]),
     );

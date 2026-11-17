@@ -8,10 +8,12 @@ class EmergencyViewModel extends ChangeNotifier {
   List<EmergencyRequest> _emergencies = [];
   bool _isLoading = false;
   String? _errorMessage;
+  bool _isOfflineDemo = false;
 
   List<EmergencyRequest> get emergencies => _emergencies;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  bool get isOfflineDemo => _isOfflineDemo;
 
   EmergencyViewModel() {
     loadEmergencies();
@@ -24,7 +26,9 @@ class EmergencyViewModel extends ChangeNotifier {
 
     try {
       _emergencies = await _repository.getEmergencies();
+      _isOfflineDemo = false;
     } catch (e) {
+      // SOS 是救命資料，連不上後端時不可以用假資料掩蓋，一律照實顯示失敗
       _errorMessage = '緊急事件資料載入失敗';
       debugPrint('Load emergencies error: $e');
       _emergencies = [];

@@ -398,19 +398,23 @@ class _HealthReportPageState extends State<HealthReportPage> {
   // ── 回報列（白底、狀態標籤、右側操作按鈕）──────────────────
   Widget _buildReportRow(HealthReport r) {
     final color = _statusColor(r.status);
-    final hasLocation = r.lat != null && r.lng != null;
     final desc = r.description?.trim() ?? '';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
         Container(
-          width: 36, height: 36,
+          width: 40, height: 40,
           decoration: BoxDecoration(
-              color: color.withValues(alpha: .10), borderRadius: BorderRadius.circular(10)),
-          child: Icon(_statusIcon(r.status), color: color, size: 20),
+            color: color,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(color: color.withValues(alpha: .32), blurRadius: 10, offset: const Offset(0, 3)),
+            ],
+          ),
+          child: Icon(_statusIcon(r.status), color: Colors.white, size: 21),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 13),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
@@ -443,13 +447,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
           ]),
         ),
         const SizedBox(width: 12),
-        // 操作：地圖 / 詳情
-        if (hasLocation) ...[
-          _outlineBtn('地圖', _kBlue, () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => FullMapPage(lat: r.lat!, lng: r.lng!)))),
-          const SizedBox(width: 8),
-        ],
+        // 操作：詳情（地圖已內含在詳情裡）
         _outlineBtn('詳情', _kBlue, () => _showDetail(r)),
       ]),
     );
@@ -491,12 +489,16 @@ class _HealthReportPageState extends State<HealthReportPage> {
               padding: const EdgeInsets.fromLTRB(18, 16, 12, 14),
               child: Row(children: [
                 Container(
-                  width: 42, height: 42,
+                  width: 46, height: 46,
                   decoration: BoxDecoration(
-                      color: color.withValues(alpha: .10),
-                      borderRadius: BorderRadius.circular(11)),
+                    color: color,
+                    borderRadius: BorderRadius.circular(13),
+                    boxShadow: [
+                      BoxShadow(color: color.withValues(alpha: .32), blurRadius: 10, offset: const Offset(0, 3)),
+                    ],
+                  ),
                   child: Icon(_statusIcon(r.status),
-                      color: color, size: 22),
+                      color: Colors.white, size: 23),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

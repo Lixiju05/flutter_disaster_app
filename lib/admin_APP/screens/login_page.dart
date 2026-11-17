@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dashboard_page.dart';
-import 'volunteer_page.dart';
 import 'package:flutter_disaster_app/core/api_config.dart';
 
 class LoginPage extends StatefulWidget {
@@ -65,6 +64,7 @@ class _LoginPageState extends State<LoginPage> {
         // 帳號由各地區／社區統一發放，登入後直接進 dashboard
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('adminId', (data['username'] ?? username).toString());
+        await prefs.setString('adminToken', (data['token'] ?? '').toString());
         // 後端帳號若有設定負責地區（zoneId），就以帳號的地區為準
         final zone = data['zoneId']?.toString() ?? '';
         if (zone.isNotEmpty) await prefs.setString('adminArea', zone);
@@ -79,7 +79,18 @@ class _LoginPageState extends State<LoginPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      _showSnack('連線失敗，請確認後端是否開啟', isError: true);
+      // 連不上後端時，先用示範模式放行，讓你可以離線改 UI
+      _showSnack('連不到後端，已用離線示範模式登入', isError: false);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('adminId', username);
+      await prefs.setString('adminToken', 'offline-demo-token');
+
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const DashboardPage()),
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -133,10 +144,10 @@ class _LoginPageState extends State<LoginPage> {
           child: const Icon(Icons.shield_outlined, color: Colors.white, size: 30),
         ),
         const SizedBox(height: 14),
-        const Text('災難管理系統',
+        const Text('互CARE',
             style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
         const SizedBox(height: 4),
-        const Text('EMERGENCY COMMAND',
+        const Text('社區緊急災難管理系統',
             style: TextStyle(color: kSidebarTextSub, fontSize: 13, letterSpacing: 1.6)),
       ]);
 
@@ -201,32 +212,6 @@ class _LoginPageState extends State<LoginPage> {
                       child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                   : const Text('登入',
                       style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Row(children: [
-            Expanded(child: Divider(color: kBorder)),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 10),
-              child: Text('義工', style: TextStyle(color: kTextSub, fontSize: 13)),
-            ),
-            Expanded(child: Divider(color: kBorder)),
-          ]),
-          const SizedBox(height: 16),
-          // 義工 Demo 入口（正式版改成掃收容中心 QR Code 進入）
-          SizedBox(
-            width: double.infinity, height: 44,
-            child: OutlinedButton.icon(
-              onPressed: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const VolunteerPage())),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: kTextMain,
-                side: const BorderSide(color: kBorder),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              icon: const Icon(Icons.volunteer_activism_outlined, size: 18, color: kGreen),
-              label: const Text('義工 Demo（A收容中心）',
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
             ),
           ),
         ],
