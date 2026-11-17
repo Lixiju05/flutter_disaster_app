@@ -15,8 +15,8 @@ const Color _kCardBg2  = Color(0xFFF8FAFC);
 const Color _kBorder   = Color(0xFFE5E7EB);
 const Color _kBlue     = Color(0xFF2563EB);
 const Color _kGreen    = Color(0xFF16A34A);
-const Color _kCritical = Color(0xFFEC6C2D);   // 重傷（橘色）
-const Color _kOrange   = Color(0xFFD3CA43);   // 輕傷（落日黃）
+const Color _kCritical = Color(0xFFDC2626);   // 重傷（紅色）
+const Color _kOrange   = Color(0xFFD97706);   // 輕傷（橘色）
 const Color _kRed      = Color(0xFFDC2626);   // 錯誤 / 緊急警示
 const Color _kTextMain = Color(0xFF0F172A);
 const Color _kTextSub  = Color(0xFF475569);
@@ -78,9 +78,17 @@ class _HealthReportPageState extends State<HealthReportPage> {
 
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['success'] == true) {
-        final loaded = (data['data'] as List)
-            .map((e) => HealthReport.fromJson(e))
-            .toList();
+        // 回報本身沒帶電話 / 血型時，用後端用戶資料（getAllUsers）補上
+        final users = await _loadUsers();
+        final loaded = (data['data'] as List).map((e) {
+          final m = Map<String, dynamic>.from(e);
+          final u = users[m['reporterId']?.toString()];
+          if (u != null) {
+            if ((m['phone']?.toString() ?? '').trim().isEmpty) m['phone'] = u['phone'];
+            if ((m['bloodType']?.toString() ?? '').trim().isEmpty) m['bloodType'] = u['bloodType'];
+          }
+          return HealthReport.fromJson(m);
+        }).toList();
         if (!mounted) return;
         setState(() {
           _allReports   = loaded;
@@ -98,6 +106,29 @@ class _HealthReportPageState extends State<HealthReportPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() { _errorMessage = '連線錯誤：$e'; _isLoading = false; });
+    }
+  }
+
+  /// 用戶資料（id → 用戶），失敗就回傳空的，不影響回報顯示
+  Future<Map<String, Map<String, dynamic>>> _loadUsers() async {
+    try {
+      final res = await http.post(
+        Uri.parse(_baseUrl),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: jsonEncode({'type': 'getAllUsers'}),
+      ).timeout(const Duration(seconds: 10));
+      final data = jsonDecode(res.body);
+      if (res.statusCode != 200 || data['success'] != true) return {};
+      return {
+        for (final u in data['data'] as List)
+          (u['id'] ?? u['userId']).toString(): Map<String, dynamic>.from(u),
+      };
+    } catch (_) {
+      return {};
     }
   }
 
@@ -132,52 +163,41 @@ class _HealthReportPageState extends State<HealthReportPage> {
     return Container(
       color: _kBg,
       child: SafeArea(
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: _kBlue))
-            : _errorMessage.isNotEmpty
-                ? _buildError()
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // ── 固定頂部（不隨清單滾動）──────────────
-                      if (widget.showSearch) _buildPageHeader(urgentCount),
-                      Padding(
-                        padding: EdgeInsets.fromLTRB(24, widget.showSearch ? 12 : 14, 24, 0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildStatsRow(
-                              total: _allReports.length,
-                              safe: safeCount,
-                              injured: injuredCount,
-                              critical: criticalCount,
-                              onRefresh: widget.showSearch ? null : _loadReports,
-                            ),
-                            if (widget.showSearch) ...[
-                              const SizedBox(height: 10),
-                              _buildSearchBar(),
-                              const SizedBox(height: 6),
-                              _buildResultCount(),
-                            ],
-                            const SizedBox(height: 10),
-                          ],
-                        ),
-                      ),
-                      // ── 可滾動清單 ──────────────────────────
-                      Expanded(
-                        child: _allReports.isEmpty
-                            ? _buildEmpty('目前沒有健康回報資料')
-                            : _reports.isEmpty
-                                ? _buildEmpty('沒有符合條件的資料')
-                                : ListView(
-                                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
-                                    children: _filter == 'all'
-                                        ? _buildGroupedCards()
-                                        : _reports.map(_buildReportCard).toList(),
-                                  ),
-                      ),
-                    ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── 固定頂部（不隨清單滾動）──────────────
+            if (widget.showSearch) _buildPageHeader(urgentCount),
+            Padding(
+              padding: EdgeInsets.fromLTRB(24, widget.showSearch ? 16 : 14, 24, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 統計格同時是篩選（點一下就只看該狀態）
+                  _buildStatsRow(
+                    total: _allReports.length,
+                    safe: safeCount,
+                    injured: injuredCount,
+                    critical: criticalCount,
+                    onRefresh: widget.showSearch ? null : _loadReports,
                   ),
+                  if (widget.showSearch) ...[
+                    const SizedBox(height: 12),
+                    _buildSearchBar(),
+                  ],
+                  const SizedBox(height: 12),
+                ],
+              ),
+            ),
+            // ── 可滾動清單 ──────────────────────────
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+                child: _buildList(),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -185,48 +205,37 @@ class _HealthReportPageState extends State<HealthReportPage> {
   // ── 搜尋列 ───────────────────────────────────────────
   Widget _buildSearchBar() {
     return Container(
-      height: 40,
+      height: 46,
       decoration: BoxDecoration(
         color: _kCardBg,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: _kBorder),
       ),
-      child: Row(children: [
-        const SizedBox(width: 12),
-        const Icon(Icons.search_rounded, color: _kTextSub, size: 16),
-        const SizedBox(width: 8),
-        Expanded(
-          child: TextField(
-            controller: _searchCtrl,
-            style: const TextStyle(fontSize: 14, color: _kTextMain),
-            decoration: const InputDecoration(
-              hintText: '搜尋姓名 / ID…',
-              hintStyle: TextStyle(color: _kTextSub, fontSize: 14),
-              border: InputBorder.none,
-              isDense: true,
-              contentPadding: EdgeInsets.zero,
-            ),
-            onChanged: (v) {
-              setState(() => _searchQuery = v);
-              _applyFilters();
-            },
-          ),
+      child: TextField(
+        controller: _searchCtrl,
+        style: const TextStyle(color: _kTextMain, fontSize: 16),
+        decoration: InputDecoration(
+          hintText: '搜尋姓名或 ID…',
+          hintStyle: const TextStyle(color: _kTextSub, fontSize: 15),
+          prefixIcon: const Icon(Icons.search_rounded, color: _kTextSub, size: 20),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.close_rounded, color: _kTextSub, size: 18),
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    setState(() => _searchQuery = '');
+                    _applyFilters();
+                  },
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 13),
         ),
-        if (_searchQuery.isNotEmpty)
-          GestureDetector(
-            onTap: () {
-              _searchCtrl.clear();
-              setState(() => _searchQuery = '');
-              _applyFilters();
-            },
-            child: const Padding(
-              padding: EdgeInsets.all(8),
-              child: Icon(Icons.close_rounded, color: _kTextSub, size: 15),
-            ),
-          )
-        else
-          const SizedBox(width: 8),
-      ]),
+        onChanged: (v) {
+          setState(() => _searchQuery = v);
+          _applyFilters();
+        },
+      ),
     );
   }
 
@@ -236,17 +245,17 @@ class _HealthReportPageState extends State<HealthReportPage> {
       title: '健康回報',
       subtitle: 'HEALTH REPORT MANAGEMENT',
       badges: [
-      if (urgentCount > 0)
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-          decoration: BoxDecoration(
-            color: _kRed.withValues(alpha: .08),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: _kRed.withValues(alpha: .18)),
+        if (urgentCount > 0)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+              color: _kRed.withValues(alpha: .08),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: _kRed.withValues(alpha: .18)),
+            ),
+            child: Text('傷患 $urgentCount 件',
+                style: const TextStyle(color: _kRed, fontSize: 12, fontWeight: FontWeight.w700)),
           ),
-          child: Text('傷患 $urgentCount 件',
-              style: const TextStyle(color: _kRed, fontSize: 12, fontWeight: FontWeight.w700)),
-        ),
       ],
       actions: [
         PageHeaderButton(
@@ -255,44 +264,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
     );
   }
 
-  // ── 搜尋結果筆數提示 ─────────────────────────────────
-  Widget _buildResultCount() {
-    final q = _searchQuery.trim();
-    final isFiltered = _filter != 'all' || q.isNotEmpty;
-    if (!isFiltered) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(left: 2),
-      child: Text(
-        q.isNotEmpty
-            ? '搜尋「$q」：共 ${_reports.length} 筆'
-            : '篩選結果：共 ${_reports.length} 筆',
-        style: const TextStyle(color: _kTextSub, fontSize: 13),
-      ),
-    );
-  }
-
-  // ── 頂部重新整理按鈕（災民管理使用）──────────────────────
-  Widget _buildTopBar() {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () => _loadReports(),
-        child: Container(
-          width: 38, height: 38,
-          decoration: BoxDecoration(
-            color: _kCardBg,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: _kBorder),
-          ),
-          child: const Icon(Icons.refresh_rounded,
-              color: _kBlue, size: 18),
-        ),
-      ),
-    );
-  }
-
-  // ── 統計卡片（連排可點擊）──────────────────────────────
+  // ── 統計格（同緊急事件：點一下篩選）──────────────────────
   Widget _buildStatsRow({
     required int total,
     required int safe,
@@ -303,17 +275,12 @@ class _HealthReportPageState extends State<HealthReportPage> {
     return Container(
       decoration: BoxDecoration(
         color: _kCardBg,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: _kBorder),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: .028),
-              blurRadius: 6,
-              offset: const Offset(0, 2)),
-        ],
       ),
+      clipBehavior: Clip.antiAlias,
       child: Row(children: [
-        _tapCell('全部回報', '$total', Icons.apps_rounded, _kBlue, 'all'),
+        _tapCell('全部', '$total', Icons.list_alt_rounded, _kBlue, 'all'),
         _vDivider(),
         _tapCell('重傷', '$critical', Icons.warning_amber_rounded, _kCritical, 'critical'),
         _vDivider(),
@@ -323,11 +290,11 @@ class _HealthReportPageState extends State<HealthReportPage> {
         if (onRefresh != null) ...[
           _vDivider(),
           SizedBox(
-            width: 44,
+            width: 48,
             child: IconButton(
               onPressed: onRefresh,
-              icon: const Icon(Icons.refresh_rounded, color: _kBlue, size: 17),
-              padding: EdgeInsets.zero,
+              tooltip: '重新整理',
+              icon: const Icon(Icons.refresh_rounded, color: _kBlue, size: 20),
             ),
           ),
         ],
@@ -335,6 +302,7 @@ class _HealthReportPageState extends State<HealthReportPage> {
     );
   }
 
+  /// 統計格：選中時淡底色 + 底部色條
   Widget _tapCell(String label, String value, IconData icon, Color color, String filter) {
     final sel = _filter == filter;
     return Expanded(
@@ -348,206 +316,159 @@ class _HealthReportPageState extends State<HealthReportPage> {
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
             color: sel ? color.withValues(alpha: .06) : Colors.transparent,
+            border: Border(bottom: BorderSide(color: sel ? color : Colors.transparent, width: 3)),
           ),
           child: Row(children: [
-            Container(
-              width: 32, height: 32,
-              decoration: BoxDecoration(
-                  color: color.withValues(alpha: .10),
-                  borderRadius: BorderRadius.circular(8)),
-              child: Icon(icon, color: color, size: 16),
-            ),
+            Icon(icon, color: color, size: 20),
             const SizedBox(width: 10),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(value,
-                    style: TextStyle(
-                        color: sel ? color : _kTextMain,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        height: 1.1)),
-                Text(label,
-                    style: const TextStyle(color: _kTextSub, fontSize: 13)),
-              ],
-            )),
-            if (sel) Icon(Icons.check_circle_rounded, color: color, size: 14),
+            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(value,
+                  style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.w800, height: 1.15)),
+              Text(label,
+                  style: TextStyle(
+                      color: sel ? _kTextMain : _kTextSub,
+                      fontSize: 14,
+                      fontWeight: sel ? FontWeight.w700 : FontWeight.w500)),
+            ]),
           ]),
         ),
       ),
     );
   }
 
-  Widget _vDivider() => Container(width: 1, height: 28, color: _kBorder);
+  Widget _vDivider() => Container(width: 1, height: 32, color: _kBorder);
 
-  // ── 分組顯示（全部模式）────────────────────────────────
-  List<Widget> _buildGroupedCards() {
-    final critical = _reports.where((r) => _normalizeStatus(r.status) == 'critical').toList();
-    final injured  = _reports.where((r) => _normalizeStatus(r.status) == 'injured').toList();
-    final safe     = _reports.where((r) => _normalizeStatus(r.status) == 'safe').toList();
+  // ── 清單（白底表格，重傷 → 輕傷 → 安全，同狀態新到舊）──────────
+  Widget _buildList() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator(color: _kBlue, strokeWidth: 2.5));
+    }
+    if (_errorMessage.isNotEmpty) return _buildError();
+    if (_allReports.isEmpty) return _buildEmpty('目前沒有健康回報資料');
 
-    return [
-      if (critical.isNotEmpty) ...[
-        _sectionHeader('重傷', _kCritical, critical.length),
-        ...critical.map(_buildReportCard),
-      ],
-      if (injured.isNotEmpty) ...[
-        _sectionHeader('輕傷', _kOrange, injured.length),
-        ...injured.map(_buildReportCard),
-      ],
-      if (safe.isNotEmpty) ...[
-        _sectionHeader('安全', _kGreen, safe.length),
-        ...safe.map(_buildReportCard),
-      ],
-    ];
-  }
-
-  Widget _sectionHeader(String label, Color color, int count) {
-    return Container(
-      margin: const EdgeInsets.only(top: 4, bottom: 10),
-      child: Row(children: [
-        Container(
-          width: 4, height: 18,
-          decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(99)),
-        ),
-        const SizedBox(width: 8),
-        Text(label,
-            style: TextStyle(
-                color: color,
-                fontSize: 15,
-                fontWeight: FontWeight.w700)),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-              color: color.withValues(alpha: .10),
-              borderRadius: BorderRadius.circular(999)),
-          child: Text('$count 筆',
-              style: TextStyle(
-                  color: color,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600)),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-            child: Divider(
-                color: color.withValues(alpha: .2), thickness: 1)),
-      ]),
-    );
-  }
-
-  // ── 回報卡片 ─────────────────────────────────────────
-  Widget _buildReportCard(HealthReport r) {
-    final color = _statusColor(r.status);
+    const rank = {'critical': 0, 'injured': 1, 'safe': 2};
+    final list = List<HealthReport>.from(_reports)
+      ..sort((a, b) {
+        final ra = rank[_normalizeStatus(a.status)] ?? 3;
+        final rb = rank[_normalizeStatus(b.status)] ?? 3;
+        if (ra != rb) return ra.compareTo(rb);
+        return b.reportTime.compareTo(a.reportTime);
+      });
+    final filterLabel = _filter == 'all' ? '' : '・${_translateStatus(_filter)}';
+    final q = _searchQuery.trim();
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _kCardBg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _kBorder),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: .035),
-              blurRadius: 12,
-              offset: const Offset(0, 4)),
-        ],
       ),
-      child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-        // 左側色條
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: [
         Container(
-          width: 4, height: 100,
-          decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(99)),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+          decoration: const BoxDecoration(
+            color: _kCardBg2,
+            border: Border(bottom: BorderSide(color: _kBorder)),
+          ),
+          child: Row(children: [
+            Text('健康回報$filterLabel',
+                style: const TextStyle(color: _kTextMain, fontSize: 16, fontWeight: FontWeight.w800)),
+            const Spacer(),
+            Text('共 ${list.length} 筆',
+                style: const TextStyle(color: _kTextMain, fontSize: 14, fontWeight: FontWeight.w600)),
+          ]),
         ),
-        const SizedBox(width: 14),
-        // 頭像
-        Container(
-          width: 48, height: 48,
-          decoration: BoxDecoration(
-              color: color.withValues(alpha: .10),
-              borderRadius: BorderRadius.circular(13),
-              border:
-                  Border.all(color: color.withValues(alpha: .2))),
-          child: Icon(_statusIcon(r.status),
-              color: color, size: 24),
-        ),
-        const SizedBox(width: 14),
-        // 內容
         Expanded(
-          child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          child: list.isEmpty
+              ? Center(
+                  child: Text(
+                      q.isNotEmpty ? '找不到符合「$q」的回報' : '沒有「${_translateStatus(_filter)}」的回報',
+                      style: const TextStyle(color: _kTextSub, fontSize: 15)))
+              : ListView.separated(
+                  itemCount: list.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                  itemBuilder: (_, i) => _buildReportRow(list[i]),
+                ),
+        ),
+      ]),
+    );
+  }
+
+  // ── 回報列（白底、狀態標籤、右側操作按鈕）──────────────────
+  Widget _buildReportRow(HealthReport r) {
+    final color = _statusColor(r.status);
+    final hasLocation = r.lat != null && r.lng != null;
+    final desc = r.description?.trim() ?? '';
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(
+              color: color.withValues(alpha: .10), borderRadius: BorderRadius.circular(10)),
+          child: Icon(_statusIcon(r.status), color: color, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Expanded(
-                child: Text(r.name,
-                    style: const TextStyle(
-                        color: _kTextMain,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800)),
+              Flexible(
+                child: Text(r.name.isNotEmpty ? r.name : '用戶 ${r.reporterId}',
+                    style: const TextStyle(color: _kTextMain, fontSize: 16, fontWeight: FontWeight.w700),
+                    overflow: TextOverflow.ellipsis, maxLines: 1),
               ),
+              const SizedBox(width: 8),
+              Text(r.reporterId, style: const TextStyle(color: _kTextSub, fontSize: 14)),
+              const SizedBox(width: 8),
               _statusBadge(r.status),
+              const SizedBox(width: 8),
+              Text(_fmt(r.reportTime), style: const TextStyle(color: _kTextSub, fontSize: 13)),
             ]),
-            const SizedBox(height: 3),
-            Text('回報者 ID：${r.reporterId}',
-                style: const TextStyle(
-                    color: _kTextSub, fontSize: 13)),
-            const SizedBox(height: 10),
-            Wrap(spacing: 8, runSpacing: 6, children: [
-              _tag(Icons.phone_outlined,
-                  r.phone, _kBlue),
-              _tag(Icons.access_time,
-                  _fmt(r.reportTime), _kTextSub),
-              _tag(Icons.location_on_outlined,
-                  _locationName(r), _kGreen),
-            ]),
-            if (r.description != null &&
-                r.description!.trim().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 9),
-                decoration: BoxDecoration(
-                  color: _kCardBg2,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: _kBorder),
-                ),
-                child: Text(
-                  r.description!.length > 60
-                      ? '${r.description!.substring(0, 60)}...'
-                      : r.description!,
-                  style: const TextStyle(
-                      color: _kTextSub, fontSize: 13),
-                ),
-              ),
+            const SizedBox(height: 4),
+            Text(
+              [if (r.phone.trim().isNotEmpty) r.phone, _locationName(r)].join('　'),
+              style: const TextStyle(color: _kTextSub, fontSize: 14),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (desc.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text('說明：$desc',
+                  style: const TextStyle(color: _kTextMain, fontSize: 14),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis),
             ],
           ]),
         ),
         const SizedBox(width: 12),
-        // 操作按鈕
-        Column(children: [
-          if (r.lat != null && r.lng != null)
-            _actionBtn('地圖', Icons.map_outlined, _kBlue,
-                () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => FullMapPage(
-                            lat: r.lat!, lng: r.lng!)))),
-          const SizedBox(height: 8),
-          _actionBtn('詳情', Icons.visibility_outlined, color,
-              () => _showDetail(r)),
-        ]),
+        // 操作：地圖 / 詳情
+        if (hasLocation) ...[
+          _outlineBtn('地圖', _kBlue, () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => FullMapPage(lat: r.lat!, lng: r.lng!)))),
+          const SizedBox(width: 8),
+        ],
+        _outlineBtn('詳情', _kBlue, () => _showDetail(r)),
       ]),
     );
   }
+
+  /// 白底外框按鈕（同緊急事件、用戶管理）
+  static Widget _outlineBtn(String text, Color color, VoidCallback onTap) => InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(
+            color: _kCardBg,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: color.withValues(alpha: .4)),
+          ),
+          child: Text(text, style: TextStyle(color: color, fontSize: 14, fontWeight: FontWeight.w700)),
+        ),
+      );
 
   // ── 詳情 Dialog ──────────────────────────────────────
   void _showDetail(HealthReport r) {
@@ -785,33 +706,6 @@ class _HealthReportPageState extends State<HealthReportPage> {
   }
 
   // ── 共用小元件 ─────────────────────────────────────────
-  Widget _actionBtn(String label, IconData icon,
-      Color color, VoidCallback onTap) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: .06),
-          borderRadius: BorderRadius.circular(8),
-          border:
-              Border.all(color: color.withValues(alpha: .2)),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, color: color, size: 14),
-          const SizedBox(width: 5),
-          Text(label,
-              style: TextStyle(
-                  color: color,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600)),
-        ]),
-      ),
-    );
-  }
-
   Widget _statusBadge(String status) {
     final color = _statusColor(status);
     final text  = _translateStatus(_normalizeStatus(status));
@@ -833,28 +727,6 @@ class _HealthReportPageState extends State<HealthReportPage> {
                 color: color,
                 fontSize: 13,
                 fontWeight: FontWeight.w700)),
-      ]),
-    );
-  }
-
-  static Widget _tag(
-      IconData icon, String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-          horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-          color: color.withValues(alpha: .06),
-          borderRadius: BorderRadius.circular(7),
-          border:
-              Border.all(color: color.withValues(alpha: .18))),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 12, color: color),
-        const SizedBox(width: 4),
-        Text(text.isEmpty ? '未填寫' : text,
-            style: const TextStyle(
-                color: _kTextSub,
-                fontSize: 13,
-                fontWeight: FontWeight.w500)),
       ]),
     );
   }

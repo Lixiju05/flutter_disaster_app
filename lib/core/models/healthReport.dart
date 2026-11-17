@@ -9,6 +9,8 @@ class HealthReport {
   final double? lng; // 經度（可選）
   final DateTime reportTime; // 回報時間
 
+  final String? address;
+
   HealthReport({
     required this.reporterId,
     required this.name,
@@ -18,6 +20,7 @@ class HealthReport {
     this.description,
     this.lat,
     this.lng,
+    this.address,
     required this.reportTime,
   });
 
@@ -30,6 +33,7 @@ class HealthReport {
         'description': description,
         'lat': lat,
         'lng': lng,
+        'address': address,
         'reportTime': reportTime.toIso8601String(),
       };
 
@@ -42,6 +46,7 @@ class HealthReport {
         description: json['description'] as String?,
         lat: (json['lat'] as num?)?.toDouble(),
         lng: (json['lng'] as num?)?.toDouble(),
+        address: json['address'] as String?,
         reportTime: DateTime.parse(json['reportTime'] as String),
       );
 }

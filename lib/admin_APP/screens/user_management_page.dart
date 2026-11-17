@@ -219,6 +219,19 @@ class _UserManagementPageState extends State<UserManagementPage> {
     return PageHeader(
       title: '用戶管理',
       subtitle: 'USER MANAGEMENT',
+      badges: [
+        if (!_isLoading && _errorMessage.isEmpty)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: _kBlue.withValues(alpha: .08),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: _kBlue.withValues(alpha: .18)),
+            ),
+            child: Text('共 $_areaTotal 位',
+                style: const TextStyle(color: _kBlue, fontSize: 13, fontWeight: FontWeight.w700)),
+          ),
+      ],
       actions: [
           // 本區 / 全部 toggle
           InkWell(
@@ -279,115 +292,38 @@ class _UserManagementPageState extends State<UserManagementPage> {
     }
     if (_errorMessage.isNotEmpty) return _buildError();
 
-    // 統計卡與搜尋列固定，只有用戶資料在表格內上下滑動（同緊急事件頁）
+    // 搜尋列固定，只有用戶資料在表格內上下滑動（同其他頁）
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildStatsRow(),
-          const SizedBox(height: 16),
           _buildSearchBar(),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           Expanded(child: _buildTable()),
         ],
       ),
     );
   }
 
-  // ── Stats Row ────────────────────────────────────────────────
-  Widget _buildStatsRow() {
-    return _statCard(
-      label: '用戶總數',
-      value: '$_areaTotal',
-      icon: Icons.groups_rounded,
-      color: _kBlue,
-      gradient: const LinearGradient(
-        colors: [Color(0xFF2563EB), Color(0xFF3B82F6)],
-        begin: Alignment.topLeft, end: Alignment.bottomRight,
-      ),
-    );
-  }
-
-  Widget _statCard({
-    required String label,
-    required String value,
-    required IconData icon,
-    required Color color,
-    required LinearGradient gradient,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: gradient,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: .25),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(children: [
-        Container(
-          width: 44, height: 44,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .20),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: Colors.white, size: 22),
-        ),
-        const SizedBox(width: 14),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              height: 1,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: .85),
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ]),
-      ]),
-    );
-  }
-
   // ── Search Bar ───────────────────────────────────────────────
   Widget _buildSearchBar() {
     return Container(
-      height: 48,
+      height: 46,
       decoration: BoxDecoration(
         color: _kCardBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: _kBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: TextField(
         controller: _searchController,
         onChanged: _onSearchChanged,
-        style: const TextStyle(color: _kTextMain, fontSize: 15),
+        style: const TextStyle(color: _kTextMain, fontSize: 16),
         decoration: InputDecoration(
           hintText: '搜尋姓名 / ID / 電話號碼…',
-          hintStyle: const TextStyle(color: _kTextSub, fontSize: 14),
+          hintStyle: const TextStyle(color: _kTextSub, fontSize: 15),
           prefixIcon: const Icon(Icons.search_rounded,
-              color: _kTextSub, size: 18),
+              color: _kTextSub, size: 20),
           suffixIcon: _searchKeyword.isNotEmpty
               ? IconButton(
                   icon: const Icon(Icons.close_rounded,
@@ -412,15 +348,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
     return Container(
       decoration: BoxDecoration(
         color: _kCardBg,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _kBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: .05),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -448,15 +377,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
   Widget _buildTableHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(15),
-          topRight: Radius.circular(15),
-        ),
-        border: Border(
-            bottom: BorderSide(color: _kBorder.withValues(alpha: .8))),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: const BoxDecoration(
+        color: Color(0xFFF8FAFC),
+        border: Border(bottom: BorderSide(color: _kBorder)),
       ),
       child: Row(children: [
         const Expanded(
@@ -468,6 +392,9 @@ class _UserManagementPageState extends State<UserManagementPage> {
         const Expanded(
             flex: 4,
             child: Text('聯絡電話', style: _headerStyle)),
+        const SizedBox(
+            width: _actionWidth,
+            child: Text('操作', style: _headerStyle)),
       ]),
     );
   }
@@ -481,13 +408,11 @@ class _UserManagementPageState extends State<UserManagementPage> {
         globalIndex == _currentPage * _pageSize + _pagedUsers.length - 1;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
         border: isLast
             ? null
-            : Border(
-                bottom: BorderSide(
-                    color: _kBorder.withValues(alpha: .6), width: 0.8)),
+            : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
       ),
       child: Row(children: [
         // 頭像 + 姓名
@@ -504,8 +429,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   name.isEmpty ? '未填寫' : name,
                   style: const TextStyle(
                     color: _kTextMain,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -514,7 +439,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   Text(
                     area,
                     style: const TextStyle(
-                        color: _kTextSub, fontSize: 13),
+                        color: _kTextSub, fontSize: 14),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -528,8 +453,8 @@ class _UserManagementPageState extends State<UserManagementPage> {
           child: Text(
             id.isEmpty ? '—' : id,
             style: const TextStyle(
-              color: _kTextSub,
-              fontSize: 14,
+              color: _kTextMain,
+              fontSize: 15,
               fontWeight: FontWeight.w500,
             ),
             maxLines: 1,
@@ -540,20 +465,12 @@ class _UserManagementPageState extends State<UserManagementPage> {
         Expanded(
           flex: 4,
           child: Row(children: [
-            Icon(Icons.phone_outlined,
-                size: 13,
-                color: phone.isEmpty
-                    ? _kTextSub.withValues(alpha: .35)
-                    : _kTextSub.withValues(alpha: .6)),
-            const SizedBox(width: 5),
             Flexible(
               child: Text(
                 phone.isEmpty ? '未填寫' : phone,
                 style: TextStyle(
-                  color: phone.isEmpty
-                      ? _kTextSub.withValues(alpha: .4)
-                      : _kTextSub,
-                  fontSize: 14,
+                  color: phone.isEmpty ? _kTextSub : _kTextMain,
+                  fontSize: 15,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -561,8 +478,13 @@ class _UserManagementPageState extends State<UserManagementPage> {
             ),
           ]),
         ),
-        const SizedBox(width: 8),
-        _actionBtn(() => _showUserDetail(user)),
+        SizedBox(
+          width: _actionWidth,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: _actionBtn(() => _showUserDetail(user)),
+          ),
+        ),
       ]),
     );
   }
@@ -571,19 +493,15 @@ class _UserManagementPageState extends State<UserManagementPage> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: _kBlue.withValues(alpha: .06),
+          color: _kCardBg,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: _kBlue.withValues(alpha: .2)),
+          border: Border.all(color: _kBlue.withValues(alpha: .4)),
         ),
-        child: const Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.visibility_outlined, color: _kBlue, size: 13),
-          SizedBox(width: 4),
-          Text('詳情',
-              style: TextStyle(
-                  color: _kBlue, fontSize: 13, fontWeight: FontWeight.w600)),
-        ]),
+        child: const Text('詳情',
+            style: TextStyle(
+                color: _kBlue, fontSize: 14, fontWeight: FontWeight.w700)),
       ),
     );
   }
@@ -784,15 +702,15 @@ class _UserManagementPageState extends State<UserManagementPage> {
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-        color: _kBlue.withValues(alpha: .10),
+        color: const Color(0xFFEFF4FF),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Center(
         child: Text(
           name.isNotEmpty ? name[0] : '?',
           style: const TextStyle(
-            color: _kBlue,
-            fontSize: 15,
+            color: Color(0xFF1E3A5F),
+            fontSize: 16,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -834,22 +752,18 @@ class _UserManagementPageState extends State<UserManagementPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: _kBorder.withValues(alpha: .8))),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(15),
-          bottomRight: Radius.circular(15),
-        ),
+        border: Border(top: BorderSide(color: _kBorder)),
       ),
       child: Row(children: [
         const Text('顯示',
-            style: TextStyle(color: _kTextSub, fontSize: 13)),
+            style: TextStyle(color: _kTextSub, fontSize: 14)),
         const SizedBox(width: 6),
         _pageSizeDropdown(),
         const SizedBox(width: 8),
         Flexible(
           child: Text(
             '共 ${_users.length} 位用戶',
-            style: const TextStyle(color: _kTextSub, fontSize: 13),
+            style: const TextStyle(color: _kTextSub, fontSize: 14),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -866,7 +780,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
                 padding: EdgeInsets.symmetric(horizontal: 3),
                 child: Text('…',
                     style:
-                        TextStyle(color: _kTextSub, fontSize: 13)),
+                        TextStyle(color: _kTextSub, fontSize: 14)),
               )
             : _pageNumBtn(p)),
         const SizedBox(width: 4),
@@ -891,7 +805,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
         child: DropdownButton<int>(
           value: _pageSize,
           isDense: true,
-          style: const TextStyle(color: _kTextMain, fontSize: 13),
+          style: const TextStyle(color: _kTextMain, fontSize: 14),
           icon: const Icon(Icons.keyboard_arrow_down_rounded,
               size: 14, color: _kTextSub),
           items: [10, 20, 50]
@@ -921,15 +835,6 @@ class _UserManagementPageState extends State<UserManagementPage> {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
               color: selected ? _kBlue : _kBorder),
-          boxShadow: selected
-              ? [
-                  BoxShadow(
-                    color: _kBlue.withValues(alpha: .25),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  )
-                ]
-              : [],
         ),
         child: Center(
           child: Text(
@@ -1037,8 +942,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
 
 // ── Shared styles ────────────────────────────────────────────────
 const TextStyle _headerStyle = TextStyle(
-  color: _kTextSub,
-  fontSize: 13,
+  color: Color(0xFF334155),
+  fontSize: 14,
   fontWeight: FontWeight.w700,
-  letterSpacing: 0.8,
 );
+
+/// 「操作」欄寬度（表頭與每列對齊）
+const double _actionWidth = 72;

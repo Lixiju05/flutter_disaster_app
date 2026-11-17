@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:flutter_disaster_app/core/models/supply.dart';
@@ -10,7 +11,9 @@ import 'package:flutter_disaster_app/core/api_config.dart';
 import 'package:flutter_disaster_app/admin_APP/widgets/page_header.dart';
 
 class SupplyPage extends StatefulWidget {
-  const SupplyPage({super.key});
+  /// 一進來顯示哪個分頁：0 庫存管理 / 1 據點管理 / 2 調度紀錄
+  final int initialTab;
+  const SupplyPage({super.key, this.initialTab = 0});
 
   @override
   State<SupplyPage> createState() => _SupplyPageState();
@@ -33,10 +36,7 @@ class _SupplyPageState extends State<SupplyPage>
     '全部', '食品飲水', '生活用品', '醫療衛生', '衣物',
   ];
 
-  List<AllocationItem> _allocations = [];
-  bool _isLoadingAllocations = false;
-  String? _allocationsError;
-
+  /// 舊流程（allocate → dispatch）留下的出貨紀錄，只讀
   List<AllocationItem> _dispatches = [];
   bool _isLoadingDispatches = false;
   String? _dispatchesError;
@@ -47,12 +47,14 @@ class _SupplyPageState extends State<SupplyPage>
   String _reqKeyword = '';
   final TextEditingController _reqSearchCtrl = TextEditingController();
   bool _isLoadingRequests = false;
-  String? _requestsError;
 
-  /// 收容中心據點（對應後端 stations 表；後端目前沒有取得據點清單的 API）
-  static const Map<String, String> _stations = {'S001': 'A收容中心', 'S002': 'B收容中心'};
+  /// 收容中心據點（後端 getStations，stationId → 名稱，不含物資中心）
+  Map<String, String> _stations = {};
+  /// 物資中心（總倉）：調度的來源據點
+  static const String _officeId = 'OFFICE001';
+  String _officeName = '物資中心';
   static const String _unassigned = '未標示據點';
-  String _selectedStation = 'A收容中心';
+  String _selectedStation = '';
   /// 目前打開的據點（null = 顯示據點卡片清單）
   String? _openStation;
 
@@ -60,8 +62,17 @@ class _SupplyPageState extends State<SupplyPage>
   final Map<String, List<Map<String, dynamic>>> _stationStock = {};
   final Set<String> _stationStockLoading = {};
 
-  /// requestId → 據點名稱（逐據點呼叫 getPendingSupplyRequests 查得）
-  Map<String, String> _requestStation = {};
+  /// 物資中心各物資可調度數量（itemId → availableQty，來自 getStationInventory OFFICE001）
+  Map<int, int> _officeAvailable = {};
+
+  /// 調度單（getStationTransfers，新到舊）
+  List<Map<String, dynamic>> _transfers = [];
+  bool _isLoadingTransfers = false;
+  String? _transfersError;
+  /// 調度紀錄分頁篩選：all / reserved / shipped / received / legacy（舊出貨紀錄）
+  String _transferFilter = 'all';
+  /// 正在出貨 / 收貨的調度單，避免重複按
+  final Set<String> _busyTransfers = {};
 
   Color get _blue   => const Color(0xFF2563EB);
   Color get _green  => const Color(0xFF16A34A);
@@ -73,20 +84,23 @@ class _SupplyPageState extends State<SupplyPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTab.clamp(0, 2));
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) return;
-      if (_tabController.index == 1) { loadAllocations(); loadSupplyRequests(); }
-      if (_tabController.index == 2) loadDispatches();
+      if (_tabController.index == 1) { loadSupplyRequests(); loadTransfers(silent: true); }
+      if (_tabController.index == 2) { loadTransfers(); loadDispatches(); }
     });
     loadSupplies();
-    loadSupplyRequests();
-    loadAllocations();
+    loadStations().then((_) => loadSupplyRequests());
+    loadOfficeStock();
+    loadTransfers();
     loadDispatches();
     _autoRefresh = Timer.periodic(const Duration(seconds: 10), (_) {
       if (!mounted) return;
       loadSupplies(silent: true);
+      loadOfficeStock();
       loadSupplyRequests(silent: true);
+      loadTransfers(silent: true);
     });
   }
 
@@ -177,62 +191,118 @@ class _SupplyPageState extends State<SupplyPage>
     }
   }
 
-  // ── 分配 API ──────────────────────────────────────────────
+  // ── 據點 API ──────────────────────────────────────────────
 
-  Future<void> loadAllocations() async {
-    setState(() { _isLoadingAllocations = true; _allocationsError = null; });
+  /// 據點清單（getStations）：物資中心當調度來源，其餘收容中心當目的地
+  Future<void> loadStations() async {
     try {
-      final data = await _post({'type': 'getAllocations'});
+      final data = await _post({'type': 'getStations'});
+      if (data['success'] != true) return;
+      final shelters = <String, String>{};
+      for (final s in data['data'] as List) {
+        final id = s['stationId']?.toString() ?? '';
+        final name = s['name']?.toString() ?? id;
+        if (id.isEmpty) continue;
+        if (id == _officeId) {
+          _officeName = name;
+        } else {
+          shelters[id] = name;
+        }
+      }
+      if (!mounted) return;
+      setState(() => _stations = shelters);
+    } catch (_) {}
+  }
+
+  /// 物資中心（OFFICE001）各物資的可調度數量
+  Future<void> loadOfficeStock() async {
+    try {
+      final data = await _post({'type': 'getStationInventory', 'stationId': _officeId});
+      if (data['success'] != true) return;
+      final map = <int, int>{};
+      for (final s in data['data'] as List) {
+        final id = (s['itemId'] as num?)?.toInt();
+        if (id == null) continue;
+        final stock = (s['stockQty'] as num?)?.toInt() ?? 0;
+        final reserved = (s['reservedQty'] as num?)?.toInt() ?? 0;
+        final avail = (s['availableQty'] as num?)?.toInt() ?? (stock - reserved);
+        map[id] = avail < 0 ? 0 : avail;
+      }
+      if (!mounted) return;
+      setState(() => _officeAvailable = map);
+    } catch (_) {}
+  }
+
+  // ── 調度 API（物資中心 → 收容中心：建立 → 出貨 → 收貨）──────────
+
+  Future<void> loadTransfers({bool silent = false}) async {
+    if (!silent) setState(() { _isLoadingTransfers = true; _transfersError = null; });
+    try {
+      final data = await _post({'type': 'getStationTransfers'});
+      if (!mounted) return;
       if (data['success'] == true) {
-        final list = data['data'] as List;
-        if (list.isNotEmpty) debugPrint('DEBUG first allocation raw: ${list.first}');
-        setState(() => _allocations = list
-            .map((e) => AllocationItem.fromJson(e))
-            .where((a) => a.status == 'reserved')
-            .toList());
-      } else {
-        setState(() => _allocationsError = data['message']?.toString() ?? '載入失敗');
+        setState(() {
+          _transfers = List<Map<String, dynamic>>.from(data['data'] ?? []);
+          _transfersError = null;
+        });
+      } else if (!silent) {
+        setState(() => _transfersError = data['message']?.toString() ?? '載入失敗');
       }
     } catch (e) {
-      setState(() => _allocationsError = 'API 連線失敗：$e');
+      if (!silent && mounted) setState(() => _transfersError = 'API 連線失敗：$e');
     } finally {
-      setState(() => _isLoadingAllocations = false);
+      if (mounted) setState(() => _isLoadingTransfers = false);
     }
   }
 
-  Future<({bool ok, String reason})> allocate({required int itemId, required String zoneId, required int qty}) async {
+  /// 建立調度單：物資中心預留庫存，目的據點庫存要等「確認收貨」才增加
+  Future<({bool ok, String reason})> createTransfer({
+    required int itemId, required String toStationId, required int qty,
+  }) async {
     try {
-      final data = await _post({'type': 'allocate', 'itemId': itemId, 'zoneId': zoneId, 'qty': qty});
+      String createdBy = '';
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        createdBy = prefs.getString('adminId') ?? '';
+      } catch (_) {}
+      final data = await _post({
+        'type': 'createStationTransfer',
+        'fromStationId': _officeId,
+        'toStationId': toStationId,
+        'itemId': itemId,
+        'qty': qty,
+        if (createdBy.isNotEmpty) 'createdBy': createdBy,
+      });
       if (data['success'] == true) {
-        // 分配後直接出貨：後端 allocate 不回傳 allocationId，
-        // 重新讀取後找出剛建立的那筆（同物資、同據點、同數量、編號最大）再呼叫 dispatch
-        await loadAllocations();
-        final created = _allocations
-            .where((a) => a.itemId == itemId && a.zoneId.trim() == zoneId.trim() && a.qty == qty)
-            .toList()
-          ..sort((a, b) => b.allocationId.compareTo(a.allocationId));
-        if (created.isEmpty) {
-          await loadSupplies();
-          return (ok: false, reason: '已分配，但找不到這筆分配可出貨，請重新整理');
-        }
-        return dispatch(created.first.allocationId);
+        await Future.wait([loadOfficeStock(), loadTransfers(silent: true)]);
+        return (ok: true, reason: '');
       }
-      return (ok: false, reason: _failReason(data, '可用庫存不足或資料有誤'));
+      return (ok: false, reason: _failReason(data, '建立調度失敗'));
     } catch (e) { return (ok: false, reason: '連線失敗'); }
   }
 
-  Future<bool> cancelAllocation(int allocationId) async {
+  /// 出貨（reserved → shipped）或收貨（shipped → received）
+  Future<({bool ok, String reason})> _transferStep(String type, String transferId) async {
+    setState(() => _busyTransfers.add(transferId));
     try {
-      final data = await _post({'type': 'cancelAllocation', 'allocationId': allocationId});
+      final data = await _post({'type': type, 'transferId': transferId});
       if (data['success'] == true) {
-        await Future.wait([loadSupplies(), loadAllocations()]);
-        return true;
+        await Future.wait([loadOfficeStock(), loadTransfers(silent: true)]);
+        // 收貨後目的據點庫存會增加，已打開的據點庫存重新讀取
+        for (final name in _stationStock.keys.toList()) {
+          _loadStationStock(name);
+        }
+        return (ok: true, reason: '');
       }
-      return false;
-    } catch (e) { return false; }
+      return (ok: false, reason: _failReason(data, '操作失敗，請重新整理後再試'));
+    } catch (e) {
+      return (ok: false, reason: '連線失敗');
+    } finally {
+      if (mounted) setState(() => _busyTransfers.remove(transferId));
+    }
   }
 
-  // ── 出貨 API ──────────────────────────────────────────────
+  // ── 舊出貨紀錄 API（只讀）──────────────────────────────────
 
   Future<void> loadDispatches() async {
     setState(() { _isLoadingDispatches = true; _dispatchesError = null; });
@@ -251,21 +321,10 @@ class _SupplyPageState extends State<SupplyPage>
     }
   }
 
-  Future<({bool ok, String reason})> dispatch(int allocationId) async {
-    try {
-      final data = await _post({'type': 'dispatch', 'allocationId': allocationId});
-      if (data['success'] == true) {
-        await Future.wait([loadSupplies(), loadAllocations(), loadDispatches()]);
-        return (ok: true, reason: '');
-      }
-      return (ok: false, reason: _failReason(data, '出貨失敗，請重新整理後再試'));
-    } catch (e) { return (ok: false, reason: '連線失敗'); }
-  }
-
   // ── 需求配送 API ──────────────────────────────────────────
 
   Future<void> loadSupplyRequests({bool silent = false}) async {
-    if (!silent) setState(() { _isLoadingRequests = true; _requestsError = null; });
+    if (!silent) setState(() => _isLoadingRequests = true);
     try {
       final data = await _post({'type': 'getSupplyRequestDetails'});
       if (data['success'] == true) {
@@ -273,49 +332,18 @@ class _SupplyPageState extends State<SupplyPage>
         // 待認領 → 已認領（義工）→ 已配送，依流程順序排列
         // reserved（已預留庫存）也視為待認領
         const order = {'pending': 0, 'reserved': 0, 'claimed': 1, 'dispatched': 2, 'completed': 2};
-
-        // 明細沒有 stationId，用各據點的待認領清單補上「哪一筆屬於哪個據點」
-        final stationMap = Map<String, String>.from(_requestStation);
-        await Future.wait(_stations.entries.map((st) async {
-          try {
-            final res = await _post({'type': 'getPendingSupplyRequests', 'stationId': st.key});
-            if (res['success'] == true) {
-              for (final r in (res['data'] ?? res['requests'] ?? []) as List) {
-                final id = r['requestId']?.toString();
-                if (id != null) stationMap[id] = st.value;
-              }
-            }
-          } catch (_) {}
-        }));
-
         if (!mounted) return;
         setState(() {
-          _requestStation = stationMap;
           _supplyRequests = all
               .where((r) => order.containsKey(r['status']))
               .toList()
             ..sort((a, b) => order[a['status']]!.compareTo(order[b['status']]!));
         });
-      } else {
-        setState(() => _requestsError = '載入失敗');
       }
-    } catch (e) {
-      setState(() => _requestsError = 'API 連線失敗：$e');
+    } catch (_) {
     } finally {
-      setState(() => _isLoadingRequests = false);
+      if (mounted) setState(() => _isLoadingRequests = false);
     }
-  }
-
-  Future<({bool ok, String reason})> dispatchRequest(Map<String, dynamic> req) async {
-    try {
-      final requestId = req['id']?.toString() ?? req['requestId']?.toString() ?? '';
-      final data = await _post({'type': 'dispatchSupplyRequest', 'requestId': requestId});
-      if (data['success'] == true) {
-        await Future.wait([loadSupplies(), loadAllocations(), loadDispatches(), loadSupplyRequests()]);
-        return (ok: true, reason: '');
-      }
-      return (ok: false, reason: _failReason(data, '配送失敗'));
-    } catch (e) { return (ok: false, reason: '連線失敗'); }
   }
 
   /// 依 itemId 找庫存資料（找不到回傳 null）
@@ -364,11 +392,14 @@ class _SupplyPageState extends State<SupplyPage>
               onPressed: () {
                 if (_tabController.index == 0) {
                   loadSupplies();
+                  loadOfficeStock();
                 } else if (_tabController.index == 1) {
-                  loadAllocations();
+                  loadStations();
                   loadSupplyRequests();
+                  loadTransfers(silent: true);
                   if (_openStation != null) _loadStationStock(_openStation!);
                 } else if (_tabController.index == 2) {
+                  loadTransfers();
                   loadDispatches();
                 }
               },
@@ -393,7 +424,7 @@ class _SupplyPageState extends State<SupplyPage>
               for (final (icon, text) in const [
                 (Icons.warehouse_outlined, '庫存管理'),
                 (Icons.assignment_outlined, '據點管理'),
-                (Icons.local_shipping_outlined, '出貨紀錄'),
+                (Icons.local_shipping_outlined, '調度紀錄'),
               ])
                 Tab(
                   height: 48,
@@ -675,10 +706,10 @@ class _SupplyPageState extends State<SupplyPage>
                 onTap: () => _showUpdateNeededDialog(item)),
               const SizedBox(width: 6),
               _rowIconBtn(
-                icon: Icons.assignment_turned_in_outlined,
-                color: item.availableQty > 0 ? _blue : const Color(0xFFCBD5E1),
-                tooltip: '分配',
-                onTap: item.availableQty > 0 ? () => _showAllocateDialog(item) : null,
+                icon: Icons.local_shipping_outlined,
+                color: (_officeAvailable[item.itemId] ?? 0) > 0 ? _blue : const Color(0xFFCBD5E1),
+                tooltip: '調度到據點',
+                onTap: (_officeAvailable[item.itemId] ?? 0) > 0 ? () => _showAllocateDialog(item) : null,
               ),
               const SizedBox(width: 6),
               _rowIconBtn(icon: Icons.delete_outline, color: _red, tooltip: '刪除',
@@ -736,20 +767,20 @@ class _SupplyPageState extends State<SupplyPage>
   int _groupCount(List<Map<String, dynamic>> list, String group) =>
       list.where((r) => _reqGroup(r['status']?.toString() ?? '') == group).length;
 
-  /// 這筆需求屬於哪個據點：後端有給就用後端的，否則用待認領清單查到的；都沒有 → 未標示
+  /// 這筆需求屬於哪個據點（後端 stationId / stationName）；沒有 → 未標示
   String _stationOf(Map<String, dynamic> r) {
-    final name = r['stationName']?.toString() ?? '';
-    if (name.isNotEmpty) return name;
     final id = r['stationId']?.toString() ?? '';
     if (_stations.containsKey(id)) return _stations[id]!;
-    return _requestStation[r['requestId']?.toString()] ?? _unassigned;
+    final name = r['stationName']?.toString() ?? '';
+    return name.isNotEmpty ? name : _unassigned;
   }
 
-  /// 據點清單：後端的收容中心 + 分配 / 出貨用過的據點；有未標示的需求才多一個「未標示據點」
+  /// 據點清單：後端的收容中心；有未標示的需求才多一個「未標示據點」
   List<String> get _stationNames {
     final names = <String>[..._stations.values];
-    for (final z in _knownZones) {
-      if (!names.contains(z)) names.add(z);
+    for (final r in _supplyRequests) {
+      final n = _stationOf(r);
+      if (n != _unassigned && !names.contains(n)) names.add(n);
     }
     if (_supplyRequests.any((r) => _stationOf(r) == _unassigned)) names.add(_unassigned);
     return names;
@@ -784,7 +815,7 @@ class _SupplyPageState extends State<SupplyPage>
   Widget _stationList() {
     final stations = _stationNames;
     return RefreshIndicator(
-      onRefresh: () async => Future.wait([loadSupplyRequests(), loadAllocations()]),
+      onRefresh: () async => Future.wait([loadSupplyRequests(), loadTransfers(silent: true)]),
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         itemCount: stations.length,
@@ -914,6 +945,7 @@ class _SupplyPageState extends State<SupplyPage>
         ]),
         const SizedBox(height: 10),
         // 訂單明細
+        if (_reqFilter == 'stock') _incomingTransfers(),
         Expanded(child: _reqFilter == 'stock' ? _stockTable() : _reqTable(rows)),
       ]),
     );
@@ -1016,7 +1048,9 @@ class _SupplyPageState extends State<SupplyPage>
                       final stock = (s['stockQty'] as num?)?.toInt() ?? 0;
                       final reservedRaw = (s['reservedQty'] as num?)?.toInt() ?? 0;
                       final reserved = reservedRaw < 0 ? 0 : reservedRaw;
-                      final available = stock - reserved < 0 ? 0 : stock - reserved;
+                      // 可用量以後端 availableQty 為準；沒給才自己算（實際庫存 − 預留量）
+                      final availableRaw = (s['availableQty'] as num?)?.toInt() ?? (stock - reserved);
+                      final available = availableRaw < 0 ? 0 : availableRaw;
                       final need = demand[itemId] ?? 0;
                       final shortage = need - available;
 
@@ -1247,135 +1281,277 @@ class _SupplyPageState extends State<SupplyPage>
     }
   }
 
-  Widget _allocationCard(AllocationItem item) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _card,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _blue.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Text('單號：#${item.allocationId}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _green)),
-            const Spacer(),
-            _statusBadge('待出貨', _blue),
-          ]),
-          const SizedBox(height: 4),
-          Text('物資名稱：${_itemNameById(item.itemId, item.itemName)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
-          const SizedBox(height: 10),
-          Row(children: [
-            CircleAvatar(
-              backgroundColor: _blue.withValues(alpha: 0.1),
-              child: Icon(Icons.assignment_outlined, color: _blue),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 4),
-                Text('分配區域：${item.zoneId}・數量：${item.qty} ${item.unit}',
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF475569))),
-              ],
-            )),
-          ]),
-          const SizedBox(height: 8),
-          Text('建立時間：${_formatDate(item.createdAt)}',
-            style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
-          const SizedBox(height: 14),
-          Row(children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _confirmDispatch(item),
-                style: ElevatedButton.styleFrom(backgroundColor: _green, foregroundColor: Colors.white),
-                icon: const Icon(Icons.local_shipping, size: 16),
-                label: const Text('確認出貨'),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _confirmCancelAllocation(item),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _red,
-                  side: BorderSide(color: _red.withValues(alpha: 0.4)),
-                ),
-                icon: const Icon(Icons.cancel_outlined, size: 16),
-                label: const Text('取消分配'),
-              ),
-            ),
-          ]),
-        ],
-      ),
-    );
-  }
+  // ══════════════════════════════════════════════════════════
+  // Tab 2：調度紀錄（物資中心 → 收容中心）
+  // ══════════════════════════════════════════════════════════
 
-  // ══════════════════════════════════════════════════════════
-  // Tab 2：出貨紀錄
-  // ══════════════════════════════════════════════════════════
+  ({String label, Color color}) _transferStyle(String status) => switch (status) {
+        'reserved' => (label: '待出貨', color: _blue),
+        'shipped'  => (label: '運送中', color: const Color(0xFFD97706)),
+        'received' => (label: '已收貨', color: _green),
+        _          => (label: status, color: const Color(0xFF64748B)),
+      };
+
+  int _transferCount(String status) => _transfers.where((t) => t['status'] == status).length;
 
   Widget _dispatchTab() {
-    if (_isLoadingDispatches) return const Center(child: CircularProgressIndicator());
-    if (_dispatchesError != null) return _errorBox(_dispatchesError!, loadDispatches);
+    if (_isLoadingTransfers && _transfers.isEmpty) return const Center(child: CircularProgressIndicator());
+    if (_transfersError != null && _transfers.isEmpty) return _errorBox(_transfersError!, loadTransfers);
 
-    return RefreshIndicator(
-      onRefresh: loadDispatches,
-      child: _dispatches.isEmpty
-          ? ListView(children: [
-              const SizedBox(height: 60),
-              _emptyBox('目前沒有出貨紀錄', '出貨後的紀錄會顯示在這裡'),
-            ])
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _dispatches.length,
-              itemBuilder: (_, i) => _dispatchCard(_dispatches[i]),
-            ),
+    final legacy = _transferFilter == 'legacy';
+    final rows = legacy
+        ? const <Map<String, dynamic>>[]
+        : _transfers.where((t) => _transferFilter == 'all' || t['status'] == _transferFilter).toList();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          _transferChip('全部 ${_transfers.length}', 'all'),
+          _transferChip('待出貨 ${_transferCount('reserved')}', 'reserved'),
+          _transferChip('運送中 ${_transferCount('shipped')}', 'shipped'),
+          _transferChip('已收貨 ${_transferCount('received')}', 'received'),
+          _transferChip('舊出貨紀錄 ${_dispatches.length}', 'legacy'),
+        ]),
+        const SizedBox(height: 10),
+        Expanded(child: legacy ? _legacyTable() : _transferTable(rows)),
+      ]),
     );
   }
 
-  Widget _dispatchCard(AllocationItem item) {
+  Widget _transferChip(String label, String value) {
+    final sel = _transferFilter == value;
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => setState(() => _transferFilter = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: sel ? _blue : _card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: sel ? _blue : const Color(0xFFE5E7EB)),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                fontSize: 14,
+                color: sel ? Colors.white : const Color(0xFF475569),
+                fontWeight: sel ? FontWeight.w700 : FontWeight.w500)),
+      ),
+    );
+  }
+
+  // 欄位：物資 / 數量 / 調度到 / 狀態 / 時間 / 操作
+  static const _transferColFlex = [3, 2, 3, 2, 3];
+  static const double _transferActionWidth = 110;
+
+  Widget _transferHeader(List<String> labels) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: const BoxDecoration(
+          color: Color(0xFFF8FAFC),
+          border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
+        ),
+        child: Row(children: [
+          for (var i = 0; i < _transferColFlex.length; i++) _th(labels[i], flex: _transferColFlex[i]),
+          SizedBox(width: _transferActionWidth, child: Text(labels.last,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF475569)))),
+        ]),
+      );
+
+  Widget _transferCell(String text, int col, {Color? color, bool bold = false}) => Expanded(
+        flex: _transferColFlex[col],
+        child: Text(text,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                fontSize: 15,
+                color: color ?? const Color(0xFF0F172A),
+                fontWeight: bold ? FontWeight.w700 : FontWeight.w400)),
+      );
+
+  Widget _tableBox(Widget header, int count, IndexedWidgetBuilder itemBuilder, String emptyText) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _card,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            Text('單號：#${item.allocationId}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: _green)),
-            const Spacer(),
-            _statusBadge('已出貨', _green),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: [
+        header,
+        Expanded(
+          child: count == 0
+              ? Center(child: Text(emptyText, style: const TextStyle(fontSize: 15, color: Color(0xFF64748B))))
+              : RefreshIndicator(
+                  onRefresh: () async => Future.wait([loadTransfers(silent: true), loadDispatches()]),
+                  child: ListView.separated(
+                    itemCount: count,
+                    separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFF1F5F9)),
+                    itemBuilder: itemBuilder,
+                  ),
+                ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _transferTable(List<Map<String, dynamic>> rows) {
+    return _tableBox(
+      _transferHeader(const ['物資', '數量', '調度到', '狀態', '時間', '操作']),
+      rows.length,
+      (_, i) => _transferRow(rows[i]),
+      _transferFilter == 'all' ? '目前沒有調度紀錄' : '沒有「${_transferStyle(_transferFilter).label}」的調度單',
+    );
+  }
+
+  Widget _transferRow(Map<String, dynamic> t) {
+    final status = t['status']?.toString() ?? '';
+    final style = _transferStyle(status);
+    final id = t['transferId']?.toString() ?? '';
+    final itemId = (t['itemId'] as num?)?.toInt() ?? -1;
+    final toId = t['toStationId']?.toString() ?? '';
+    final itemName = (t['itemName'] ?? '').toString();
+    final unit = (t['unit'] ?? '').toString();
+    final to = (t['toStationName'] ?? _stations[toId] ?? toId).toString();
+    final time = switch (status) {
+      'received' => '收貨 ${_formatDate(t['receivedAt']?.toString() ?? '')}',
+      'shipped'  => '出貨 ${_formatDate(t['shippedAt']?.toString() ?? '')}',
+      _          => '建立 ${_formatDate(t['createdAt']?.toString() ?? '')}',
+    };
+    final busy = _busyTransfers.contains(id);
+
+    Widget action;
+    if (busy) {
+      action = const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2));
+    } else if (status == 'reserved') {
+      action = _filledBtn('出貨', _blue, () => _confirmTransferStep(t, ship: true));
+    } else if (status == 'shipped') {
+      action = _filledBtn('確認收貨', _green, () => _confirmTransferStep(t, ship: false));
+    } else {
+      action = const Text('—', style: TextStyle(color: Color(0xFF94A3B8)));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(children: [
+        _transferCell(itemName.isNotEmpty ? itemName : _itemNameById(itemId, ''), 0, bold: true),
+        _transferCell('${t['qty'] ?? ''} $unit', 1),
+        _transferCell(to, 2),
+        Expanded(flex: _transferColFlex[3], child: Align(
+            alignment: Alignment.centerLeft, child: _statusBadge(style.label, style.color))),
+        _transferCell(time, 4, color: const Color(0xFF475569)),
+        SizedBox(width: _transferActionWidth, child: Align(alignment: Alignment.centerLeft, child: action)),
+      ]),
+    );
+  }
+
+  /// 舊流程留下的出貨紀錄（只讀）
+  Widget _legacyTable() {
+    if (_isLoadingDispatches && _dispatches.isEmpty) return const Center(child: CircularProgressIndicator());
+    if (_dispatchesError != null && _dispatches.isEmpty) return _errorBox(_dispatchesError!, loadDispatches);
+    return _tableBox(
+      _transferHeader(const ['物資', '數量', '區域', '狀態', '時間', '']),
+      _dispatches.length,
+      (_, i) {
+        final d = _dispatches[i];
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(children: [
+            _transferCell(_itemNameById(d.itemId, d.itemName), 0, bold: true),
+            _transferCell('${d.qty} ${d.unit}', 1),
+            _transferCell(d.zoneId, 2),
+            Expanded(flex: _transferColFlex[3], child: Align(
+                alignment: Alignment.centerLeft, child: _statusBadge('已出貨', const Color(0xFF64748B)))),
+            _transferCell(_formatDate(d.createdAt), 4, color: const Color(0xFF475569)),
+            const SizedBox(width: _transferActionWidth),
           ]),
-          const SizedBox(height: 4),
-          Text('物資名稱：${_itemNameById(item.itemId, item.itemName)}', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF0F172A))),
-          const SizedBox(height: 10),
-          Row(children: [
-            CircleAvatar(
-              backgroundColor: _green.withValues(alpha: 0.1),
-              child: Icon(Icons.check_circle_outline, color: _green),
-            ),
-            const SizedBox(width: 12),
-            Expanded(child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 4),
-                Text('區域：${item.zoneId}・數量：${item.qty} ${item.unit}',
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF475569))),
-                const SizedBox(height: 2),
-                Text('出貨時間：${_formatDate(item.createdAt)}',
-                  style: const TextStyle(fontSize: 13, color: Color(0xFF64748B))),
-              ],
-            )),
-          ]),
+        );
+      },
+      '目前沒有舊出貨紀錄',
+    );
+  }
+
+  Widget _filledBtn(String text, Color color, VoidCallback onTap) => InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+          child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+        ),
+      );
+
+  /// 出貨 / 確認收貨前先確認
+  Future<void> _confirmTransferStep(Map<String, dynamic> t, {required bool ship}) async {
+    final id = t['transferId']?.toString() ?? '';
+    if (id.isEmpty) return;
+    final toId = t['toStationId']?.toString() ?? '';
+    final to = (t['toStationName'] ?? _stations[toId] ?? toId).toString();
+    final what = '「${t['itemName'] ?? ''}」${t['qty'] ?? ''} ${t['unit'] ?? ''}';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(ship ? '確認出貨' : '確認收貨'),
+        content: Text(ship
+            ? '確定要將 $what 從$_officeName出貨到 $to？'
+            : '確定 $to 已收到 $what？\n確認後 $to 的物資庫存會增加。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: ship ? _blue : _green, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(ship ? '確認出貨' : '確認收貨'),
+          ),
         ],
       ),
+    );
+    if (ok != true) return;
+    final r = await _transferStep(ship ? 'shipStationTransfer' : 'receiveStationTransfer', id);
+    _snack(r.ok
+        ? (ship ? '已出貨，等 $to 確認收貨' : '已收貨，$to 庫存已增加')
+        : '${ship ? '出貨' : '收貨'}失敗：${r.reason}', r.ok);
+  }
+
+  /// 據點庫存上方：正在送往這個據點、還沒收貨的調度單
+  Widget _incomingTransfers() {
+    final stationId = _stations.entries
+        .firstWhere((e) => e.value == _selectedStation, orElse: () => const MapEntry('', ''))
+        .key;
+    final incoming = _transfers
+        .where((t) => t['toStationId'] == stationId && t['status'] == 'shipped')
+        .toList();
+    if (incoming.isEmpty) return const SizedBox.shrink();
+    final color = const Color(0xFFD97706);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: _card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: .35)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          color: color.withValues(alpha: .08),
+          child: Text('運送中，待收貨 ${incoming.length} 筆',
+              style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.w800)),
+        ),
+        for (final t in incoming)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(children: [
+              Expanded(child: Text('${t['itemName'] ?? ''}　${t['qty'] ?? ''} ${t['unit'] ?? ''}',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Color(0xFF0F172A)))),
+              Text('出貨 ${_formatDate(t['shippedAt']?.toString() ?? '')}',
+                  style: const TextStyle(fontSize: 14, color: Color(0xFF475569))),
+              const SizedBox(width: 12),
+              _busyTransfers.contains(t['transferId'])
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : _filledBtn('確認收貨', _green, () => _confirmTransferStep(t, ship: false)),
+            ]),
+          ),
+      ]),
     );
   }
 
@@ -1529,133 +1705,79 @@ class _SupplyPageState extends State<SupplyPage>
     );
   }
 
-  /// 曾經用過的據點名稱（來自後端的分配 / 出貨紀錄），預設據點排第一
-  List<String> get _knownZones {
-    const defaultZone = 'A收容中心';
-    final zones = <String>{defaultZone};
-    for (final a in [..._allocations, ..._dispatches]) {
-      final z = a.zoneId.trim();
-      if (z.isNotEmpty) zones.add(z);
-    }
-    return zones.toList();
-  }
-
+  /// 調度物資：物資中心 → 收容中心（建立調度單，之後在「調度紀錄」出貨、據點確認收貨）
   void _showAllocateDialog(SupplyItem item) {
-    final zoneCtrl = TextEditingController(text: 'A收容中心');
-    final qtyCtrl  = TextEditingController();
+    final qtyCtrl = TextEditingController();
+    final available = _officeAvailable[item.itemId] ?? 0;
+    String? toStationId = _stations.keys.isNotEmpty ? _stations.keys.first : null;
+
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text('分配物資：${item.name}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: _green.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(children: [
-                Icon(Icons.inventory_2_outlined, color: _green, size: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '可用庫存：${item.availableQty} ${item.unit}（預留 ${item.safeReservedQty}）',
-                    style: TextStyle(color: _green, fontWeight: FontWeight.w600, fontSize: 14)),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          title: Text('調度物資：${item.name}'),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: (available > 0 ? _green : _red).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text('$_officeName可調度：$available ${item.unit}',
+                      style: TextStyle(
+                          color: available > 0 ? _green : _red,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15)),
                 ),
-              ]),
+                const SizedBox(height: 16),
+                const Text('調度到',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF475569))),
+                const SizedBox(height: 8),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final e in _stations.entries)
+                    ChoiceChip(
+                      label: Text(e.value, style: const TextStyle(fontSize: 14)),
+                      avatar: const Icon(Icons.home_work_outlined, size: 16),
+                      selected: toStationId == e.key,
+                      onSelected: (_) => setDlg(() => toStationId = e.key),
+                    ),
+                ]),
+                const SizedBox(height: 16),
+                _input('調度數量', qtyCtrl, isNumber: true),
+              ],
             ),
-            if (item.hasReservedError) ...[
-              const SizedBox(height: 6),
-              Text('⚠️ 預留資料異常（後端為 ${item.reservedQty}），已以 0 計算，請通知後端',
-                  style: TextStyle(color: _red, fontSize: 13, fontWeight: FontWeight.w600)),
-            ],
-            const SizedBox(height: 16),
-            _input('分配到哪個據點', zoneCtrl),
-            // 點選既有據點，避免打錯字導致義工端對不上
-            Wrap(spacing: 6, runSpacing: 6, children: [
-              for (final z in _knownZones)
-                ActionChip(
-                  label: Text(z, style: const TextStyle(fontSize: 13)),
-                  avatar: const Icon(Icons.home_work_outlined, size: 16),
-                  onPressed: () => zoneCtrl.text = z,
-                ),
-            ]),
-            const SizedBox(height: 6),
-            const Text('出貨後，該據點的義工會在「據點到貨」看到這批物資',
-                style: TextStyle(fontSize: 13, color: Color(0xFF475569))),
-            const SizedBox(height: 12),
-            _input('分配數量', qtyCtrl, isNumber: true),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+            ElevatedButton(
+              onPressed: () async {
+                final qty = int.tryParse(qtyCtrl.text.trim()) ?? 0;
+                final to = toStationId;
+                if (to == null) { _snack('請選擇據點', false); return; }
+                if (qty <= 0)   { _snack('請輸入有效數量', false); return; }
+                if (qty > available) {
+                  _snack('超過可調度數量：$_officeName可調度 $available ${item.unit}', false);
+                  return;
+                }
+                Navigator.pop(ctx);
+                final r = await createTransfer(itemId: item.itemId, toStationId: to, qty: qty);
+                final name = _stations[to] ?? to;
+                _snack(r.ok ? '已建立調度單（$name），請到「調度紀錄」出貨' : '調度失敗：${r.reason}', r.ok);
+                if (r.ok) {
+                  setState(() => _transferFilter = 'reserved');
+                  _tabController.animateTo(2);
+                }
+              },
+              child: const Text('建立調度'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
-          ElevatedButton(
-            onPressed: () async {
-              final qty = int.tryParse(qtyCtrl.text.trim()) ?? 0;
-              if (qty <= 0)                     { _snack('請輸入有效數量', false); return; }
-              if (zoneCtrl.text.trim().isEmpty) { _snack('請輸入分配區域', false); return; }
-              if (qty > item.availableQty) {
-                _snack('超過可用庫存：可用 ${item.availableQty} ${item.unit}，請先補貨或減少數量', false);
-                return;
-              }
-              Navigator.pop(context);
-              final r = await allocate(
-                itemId: item.itemId, zoneId: zoneCtrl.text.trim(), qty: qty);
-              _snack(r.ok ? '已分配並出貨到 ${zoneCtrl.text.trim()}' : '分配失敗：${r.reason}', r.ok);
-              // 直接出貨了，帶到「出貨紀錄」看結果
-              if (r.ok) _tabController.animateTo(2);
-            },
-            child: const Text('確認分配'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _confirmDispatch(AllocationItem item) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('確認出貨'),
-        content: Text('確定要將「${item.itemName}」${item.qty} ${item.unit} 出貨至 ${item.zoneId}？\n出貨後無法撤銷。'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _green),
-            onPressed: () async {
-              Navigator.pop(context);
-              final r = await dispatch(item.allocationId);
-              // 出貨後留在目前頁面，不自動跳到「出貨紀錄」
-              _snack(r.ok ? '出貨成功，可在「出貨紀錄」查看' : '出貨失敗：${r.reason}', r.ok);
-            },
-            child: const Text('確認出貨', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _confirmCancelAllocation(AllocationItem item) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('取消分配'),
-        content: Text('確定要取消「${item.itemName}」${item.qty} ${item.unit} 的分配單？\n庫存將會恢復。'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('返回')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _red),
-            onPressed: () async {
-              Navigator.pop(context);
-              final ok = await cancelAllocation(item.allocationId);
-              _snack(ok ? '已取消分配' : '取消失敗', ok);
-            },
-            child: const Text('確認取消', style: TextStyle(color: Colors.white)),
-          ),
-        ],
       ),
     );
   }
