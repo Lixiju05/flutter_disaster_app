@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_disaster_app/core/models/supply.dart';
 import 'package:flutter_disaster_app/core/repositories/admin_repository.dart';
+import 'package:flutter_disaster_app/core/offline_demo_data.dart';
 
 class AdminSupplyViewModel extends ChangeNotifier {
   final AdminRepository _repo = AdminRepository();
@@ -10,10 +11,12 @@ class AdminSupplyViewModel extends ChangeNotifier {
 
   bool _isLoading = false;
   String? _errorMessage;
+  bool _isOfflineDemo = false;
 
   List<SupplyItem> get supplies => _supplies;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
+  bool get isOfflineDemo => _isOfflineDemo;
 
   AdminSupplyViewModel() {
     loadSupplies();
@@ -27,10 +30,12 @@ class AdminSupplyViewModel extends ChangeNotifier {
       final data = await _repo.getAdminSupplies();
       _allSupplies = data;
       _supplies = data;
+      _isOfflineDemo = false;
     } catch (e) {
-      _errorMessage = '物資資料載入失敗：$e';
-      _supplies = [];
-      _allSupplies = [];
+      // 連不上後端時，先用示範資料讓畫面可以照常顯示、方便改 UI
+      _allSupplies = demoSupplies();
+      _supplies = List.from(_allSupplies);
+      _isOfflineDemo = true;
     }
 
     _setLoading(false);

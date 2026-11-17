@@ -3,15 +3,17 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_disaster_app/admin_APP/widgets/page_header.dart';
+import 'package:flutter_disaster_app/admin_APP/widgets/offline_demo_badge.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'admin_setup_page.dart' show kAreaList;
 import 'package:flutter_disaster_app/core/api_config.dart';
+import 'package:flutter_disaster_app/core/offline_demo_data.dart';
 
 // ── 色系 ────────────────────────────────────────────────────────
 const Color _kBg       = Color(0xFFF5F7FA);
 const Color _kCardBg   = Color(0xFFFFFFFF);
-const Color _kBorder   = Color(0xFFE2E8F0);
+const Color _kBorder   = Color(0xFFCBD5E1);
 const Color _kBlue     = Color(0xFF2563EB);
 const Color _kTextMain = Color(0xFF0F172A);
 const Color _kTextSub  = Color(0xFF475569);
@@ -41,6 +43,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
   String _searchKeyword = '';
   String _adminArea     = '暨大';
   bool   _showAll       = true;
+  bool   _isOfflineDemo = false;
 
   int _currentPage = 0;
   final ScrollController _listCtrl = ScrollController();
@@ -97,6 +100,7 @@ class _UserManagementPageState extends State<UserManagementPage> {
           _allUsers     = users;
           _isLoading    = false;
           _errorMessage = '';
+          _isOfflineDemo = false;
         });
         _applyFilters();
       } else {
@@ -108,7 +112,14 @@ class _UserManagementPageState extends State<UserManagementPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      setState(() { _errorMessage = '連線錯誤：$e'; _isLoading = false; });
+      // 連不上後端時，先用示範資料讓畫面可以照常顯示、方便改 UI
+      setState(() {
+        _allUsers      = demoUserMaps();
+        _errorMessage  = '';
+        _isLoading     = false;
+        _isOfflineDemo = true;
+      });
+      _applyFilters();
     }
   }
 
@@ -231,56 +242,48 @@ class _UserManagementPageState extends State<UserManagementPage> {
             child: Text('共 $_areaTotal 位',
                 style: const TextStyle(color: _kBlue, fontSize: 13, fontWeight: FontWeight.w700)),
           ),
+        if (_isOfflineDemo) const OfflineDemoBadge(),
       ],
       actions: [
-          // 本區 / 全部 toggle
-          InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: () {
-              setState(() => _showAll = !_showAll);
-              _applyFilters();
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: BoxDecoration(
-                color: _showAll
-                    ? _kBlue.withValues(alpha: .08)
-                    : _kCardBg,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                    color: _showAll
-                        ? _kBlue.withValues(alpha: .35)
-                        : _kBorder),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    _showAll
-                        ? Icons.public_rounded
-                        : Icons.filter_alt_outlined,
-                    color: _showAll ? _kBlue : _kTextSub,
-                    size: 14,
-                  ),
-                  const SizedBox(width: 5),
-                  Text(
-                    _showAll ? '全部' : '本區',
-                    style: TextStyle(
-                      color: _showAll ? _kBlue : _kTextSub,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          // 地區篩選：全部區域 / kAreaList 各區
+          _areaDropdown(),
+          const SizedBox(width: 8),
           // 刷新
           PageHeaderButton(
               icon: Icons.refresh_rounded, tooltip: '重新整理', onPressed: _loadUsers),
       ],
+    );
+  }
+
+  Widget _areaDropdown() {
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      decoration: BoxDecoration(
+        color: _showAll ? _kBlue.withValues(alpha: .08) : _kCardBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _showAll ? _kBlue.withValues(alpha: .35) : _kBorder),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _showAll ? '全部區域' : _adminArea,
+          isDense: true,
+          icon: Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: _showAll ? _kBlue : _kTextSub),
+          style: TextStyle(color: _showAll ? _kBlue : _kTextMain, fontSize: 13, fontWeight: FontWeight.w700),
+          items: [
+            const DropdownMenuItem(value: '全部區域', child: Text('全部區域')),
+            for (final a in kAreaList) DropdownMenuItem(value: a['name'], child: Text(a['name']!)),
+          ],
+          onChanged: (v) {
+            if (v == null) return;
+            setState(() {
+              _showAll = v == '全部區域';
+              if (!_showAll) _adminArea = v;
+            });
+            _applyFilters();
+          },
+        ),
+      ),
     );
   }
 
@@ -350,6 +353,10 @@ class _UserManagementPageState extends State<UserManagementPage> {
         color: _kCardBg,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _kBorder),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: .10), blurRadius: 24, offset: const Offset(0, 8)),
+          BoxShadow(color: Colors.black.withValues(alpha: .04), blurRadius: 4, offset: const Offset(0, 1)),
+        ],
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -410,16 +417,17 @@ class _UserManagementPageState extends State<UserManagementPage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
+        color: globalIndex.isEven ? _kCardBg : const Color(0xFFF8FAFC),
         border: isLast
             ? null
-            : const Border(bottom: BorderSide(color: Color(0xFFF1F5F9))),
+            : const Border(bottom: BorderSide(color: Color(0xFFCBD5E1), width: 1.2)),
       ),
       child: Row(children: [
         // 頭像 + 姓名
         Expanded(
           flex: 5,
           child: Row(children: [
-            _buildAvatar(name),
+            _buildAvatar(name, globalIndex),
             const SizedBox(width: 12),
             Flexible(
               child: Column(
@@ -436,13 +444,18 @@ class _UserManagementPageState extends State<UserManagementPage> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (area.isNotEmpty)
-                  Text(
-                    area,
-                    style: const TextStyle(
-                        color: _kTextSub, fontSize: 14),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  Row(children: [
+                    const Icon(Icons.location_on, size: 12, color: Color(0xFF94A3B8)),
+                    const SizedBox(width: 2),
+                    Flexible(
+                      child: Text(
+                        area,
+                        style: const TextStyle(color: _kTextSub, fontSize: 14),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ]),
               ]),
             ),
           ]),
@@ -489,13 +502,15 @@ class _UserManagementPageState extends State<UserManagementPage> {
     );
   }
 
+  /// 白底外框按鈕（同緊急事件、健康回報、物資管理的「詳情」）
   Widget _actionBtn(VoidCallback onTap) {
-    return GestureDetector(
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: _kCardBg,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: _kBlue.withValues(alpha: .4)),
         ),
@@ -632,10 +647,11 @@ class _UserManagementPageState extends State<UserManagementPage> {
           Container(
             width: 28, height: 28,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: .10),
+              color: color,
               borderRadius: BorderRadius.circular(8),
+              boxShadow: [BoxShadow(color: color.withValues(alpha: .32), blurRadius: 6, offset: const Offset(0, 2))],
             ),
-            child: Icon(icon, color: color, size: 14),
+            child: Icon(icon, color: Colors.white, size: 14),
           ),
           const SizedBox(width: 8),
           Text(
@@ -697,19 +713,27 @@ class _UserManagementPageState extends State<UserManagementPage> {
   }
 
 
-  Widget _buildAvatar(String name) {
+  static const _avatarColors = [
+    Color(0xFFDC2626), Color(0xFFD97706), Color(0xFF16A34A),
+    Color(0xFF2563EB), Color(0xFF7C3AED), Color(0xFFDB2777),
+  ];
+
+  Widget _buildAvatar(String name, int index) {
+    final color = name.isEmpty
+        ? const Color(0xFF64748B)
+        : _avatarColors[index % _avatarColors.length];
     return Container(
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-        color: const Color(0xFFEFF4FF),
-        borderRadius: BorderRadius.circular(10),
+        color: color.withValues(alpha: .20),
+        shape: BoxShape.circle,
       ),
       child: Center(
         child: Text(
           name.isNotEmpty ? name[0] : '?',
-          style: const TextStyle(
-            color: Color(0xFF1E3A5F),
+          style: TextStyle(
+            color: color,
             fontSize: 16,
             fontWeight: FontWeight.w700,
           ),
@@ -755,11 +779,14 @@ class _UserManagementPageState extends State<UserManagementPage> {
         border: Border(top: BorderSide(color: _kBorder)),
       ),
       child: Row(children: [
-        const Text('顯示',
+        const Text('每頁顯示',
             style: TextStyle(color: _kTextSub, fontSize: 14)),
         const SizedBox(width: 6),
         _pageSizeDropdown(),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
+        const Text('筆',
+            style: TextStyle(color: _kTextSub, fontSize: 14)),
+        const SizedBox(width: 10),
         Flexible(
           child: Text(
             '共 ${_users.length} 位用戶',
@@ -948,4 +975,4 @@ const TextStyle _headerStyle = TextStyle(
 );
 
 /// 「操作」欄寬度（表頭與每列對齊）
-const double _actionWidth = 72;
+const double _actionWidth = 96;

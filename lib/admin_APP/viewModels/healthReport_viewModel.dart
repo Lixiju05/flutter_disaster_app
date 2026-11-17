@@ -14,7 +14,7 @@ class HealthReportViewModel extends ChangeNotifier {
     loadReports();
   }
 
-  /// 初始加载
+  /// 初始載入
   void loadReports() {
     _reports = List.from(_repository.getReports());
     _filteredReports = List.from(_reports);
@@ -27,14 +27,14 @@ class HealthReportViewModel extends ChangeNotifier {
     loadReports();
   }
 
-  /// 总人数
+  /// 總人數
   int get totalCount => _reports.length;
 
-  /// 安全人数
+  /// 安全人數
   int get safeCount =>
       _reports.where((report) => report.status == 'safe').length;
 
-  /// 等待救援人数
+  /// 等待救援人數
   int get waitingCount =>
       _reports.where((report) => report.status != 'safe').length;
 

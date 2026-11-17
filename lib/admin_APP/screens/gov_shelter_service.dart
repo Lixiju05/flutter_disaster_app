@@ -3,8 +3,8 @@ import 'package:http/http.dart' as http;
 
 class GovShelterService {
   static const Map<String, String> urls = {
-    // 先放一个测试，之后再补政府 JSON URL
-    // '南投縣': '这里放政府开放资料 JSON URL',
+    // 先放一個測試，之後再補政府 JSON URL
+    // '南投縣': '這裡放政府開放資料 JSON URL',
   };
 
   static Future<List<Map<String, dynamic>>> fetchShelters(String area) async {
