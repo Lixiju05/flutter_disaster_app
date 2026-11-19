@@ -53,13 +53,17 @@ class DatabaseService {
 
   /// 初始化資料庫
 
-  static Future<void> init() async {
+  static Future<void> init({String? databasePath, bool seedDemo = true,
+    bool createDefaultAdmin = true}) async {
+    if (databasePath != null && !File(databasePath).isAbsolute) {
+      throw ArgumentError('Explicit databasePath must be absolute');
+    }
 
     print('Initializing database...');
 
 
 
-    final dataDir = Directory('data');
+    final dataDir = databasePath == null ? Directory('data') : File(databasePath).parent;
 
     if (!dataDir.existsSync()) {
 
@@ -69,7 +73,7 @@ class DatabaseService {
 
 
 
-    final rawDb = sqlite3.open('data/admin.db');
+    final rawDb = sqlite3.open(databasePath ?? 'data/admin.db');
 
     instance = DatabaseService(rawDb);
 
@@ -100,15 +104,17 @@ class DatabaseService {
 
 
 
-    instance._initDefaultAdmin();
+    if (createDefaultAdmin) await instance._initDefaultAdmin();
 
-    instance.seedAll();
+    if (seedDemo) await instance.seedAll();
 
 
 
     print('Database ready');
 
   }
+
+  void close() => _db.dispose();
 
 
 

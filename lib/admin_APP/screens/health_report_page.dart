@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_disaster_app/admin_APP/widgets/page_header.dart';
+import 'package:flutter_disaster_app/admin_APP/widgets/firebase_reports_panel.dart';
 import 'package:http/http.dart' as http;
 
 import '../../core/models/healthReport.dart';
@@ -21,15 +22,23 @@ const Color _kRed      = Color(0xFFDC2626);   // 錯誤 / 緊急警示
 const Color _kTextMain = Color(0xFF0F172A);
 const Color _kTextSub  = Color(0xFF475569);
 
-class HealthReportPage extends StatefulWidget {
+class HealthReportPage extends StatelessWidget {
   const HealthReportPage({super.key, this.showSearch = false});
+  final bool showSearch;
+  @override
+  Widget build(BuildContext context) => ReportSourcePage(sosOnly: false,
+      sqliteBuilder: (_) => SqliteHealthReportPage(showSearch: showSearch));
+}
+
+class SqliteHealthReportPage extends StatefulWidget {
+  const SqliteHealthReportPage({super.key, this.showSearch = false});
   final bool showSearch;
 
   @override
-  State<HealthReportPage> createState() => _HealthReportPageState();
+  State<SqliteHealthReportPage> createState() => _HealthReportPageState();
 }
 
-class _HealthReportPageState extends State<HealthReportPage> {
+class _HealthReportPageState extends State<SqliteHealthReportPage> {
   Timer? _refreshTimer;
 
   List<HealthReport> _allReports = [];

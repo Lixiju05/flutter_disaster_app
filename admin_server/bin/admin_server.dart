@@ -3,6 +3,8 @@ import 'package:admin_server/services/firebase/firebase_config.dart';
 import 'package:admin_server/services/firebase/firebase_connection.dart';
 import 'package:admin_server/services/firebase/firebase_users_bootstrap.dart';
 import 'package:admin_server/services/firebase/firebase_users_service.dart';
+import 'package:admin_server/services/firebase/firebase_reports_bootstrap.dart';
+import 'package:admin_server/services/firebase/firestore_health_report_reader.dart';
 import 'package:admin_server/services/isolated_request_pool.dart';
 import 'package:admin_server/core/models/report_location.dart';
 import 'dart:io';
@@ -32,6 +34,8 @@ NotificationService? notificationService;
 ReverseGeocodingService? reverseGeocodingService;
 FirebaseUsersService? firebaseUsersService;
 IsolatedRequestPool firebaseUsersRequests = IsolatedRequestPool();
+FirestoreHealthReportReader? firebaseReportsReader;
+IsolatedRequestPool firebaseReportsRequests = IsolatedRequestPool(maxConcurrent: 4);
 
 
 
@@ -83,16 +87,26 @@ Future<void> main() async {
   } catch (_) {
     stderr.writeln('Firebase user queries disabled: initialization failed.');
   }
+  try {
+    firebaseReportsReader = await createFirebaseReportsReaderFromEnvironment();
+  } on FirebaseConfigurationException catch (error) {
+    stderr.writeln('Firebase report queries disabled: ${error.code}');
+  } on FirebaseConnectionException catch (error) {
+    stderr.writeln('Firebase report queries disabled: ${error.code}');
+  } catch (_) {
+    stderr.writeln('Firebase report queries disabled: initialization failed.');
+  }
     await serveRequests(server);
   } finally {
     firebaseUsersService?.close();
+    firebaseReportsReader?.close();
     await server.close(force: true);
   }
 
 }
 
-/// Production dispatch is also exercised by isolated HTTP tests. Only the two
-/// Firebase user routes detach after JSON parsing; SQLite writers stay ordered.
+/// Only explicitly selected Firebase reads detach after JSON parsing;
+/// SQLite writers stay ordered. Shutdown drains reads before closing resources.
 Future<void> serveRequests(HttpServer server, {Set<String>? allowedTypes}) async {
   try {
     await for (final request in server) {
@@ -100,6 +114,7 @@ Future<void> serveRequests(HttpServer server, {Set<String>? allowedTypes}) async
     }
   } finally {
     await firebaseUsersRequests.close();
+    await firebaseReportsRequests.close();
   }
 }
 
@@ -241,6 +256,20 @@ Future<void> handleRequest(HttpRequest request, {Set<String>? allowedTypes}) asy
     final jsonData = jsonDecode(body);
 
     final type = jsonData['type'];
+    // Non-sensitive capability check: no paths, identities, credentials or cloud IO.
+    if (type == 'getServiceStatus') {
+      var sqlite = allowedTypes == null;
+      if (sqlite) {
+        try { await DatabaseService.instance.select('SELECT 1 FROM users LIMIT 1'); }
+        catch (_) { sqlite = false; }
+      }
+      await sendJson(request, 200, {'success': true, 'data': {
+        'http': true, 'sqlite': sqlite,
+        'firestoreReports': firebaseReportsReader != null,
+        'firestoreReportsState': firebaseReportsReader == null ? 'disabled' : 'configured_not_verified',
+      }});
+      return;
+    }
     if (allowedTypes != null && !allowedTypes.contains(type)) {
       await sendJson(request, 404, {'success': false,
         'code': 'ROUTE_NOT_AVAILABLE', 'message': 'Route is unavailable in this test server'});
@@ -263,6 +292,28 @@ Future<void> handleRequest(HttpRequest request, {Set<String>? allowedTypes}) asy
     /// API 分流
 
     switch (type) {
+      case 'getFirebaseHealthReports':
+      case 'getFirebaseSosReports':
+        await firebaseReportsRequests.dispatch(
+          () => handleFirebaseReports(jsonData, request),
+          onUnavailable: (closing) async {
+            request.response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+            await sendJson(request, closing ? 503 : 429, {
+              'success': false, 'source': 'firestore',
+              'code': closing ? 'FIREBASE_REPORTS_SHUTTING_DOWN' : 'FIREBASE_REPORTS_BUSY',
+              'message': 'Firebase report queries temporarily unavailable',
+            });
+          },
+          onFailure: () async {
+            try {
+              await sendJson(request, 503, {'success': false, 'source': 'firestore',
+                'code': 'FIREBASE_REPORTS_UNAVAILABLE', 'message': 'Report query unavailable'});
+            } catch (_) {
+              try { await request.response.close(); } catch (_) { /* Disconnected. */ }
+            }
+          },
+        );
+        break;
       case 'getFirebaseUsers':
       case 'getFirebaseUserById':
         await firebaseUsersRequests.dispatch(
@@ -2539,5 +2590,37 @@ Future<void> handleFirebaseUsers(Map<String,dynamic> data, HttpRequest request) 
   } catch (_) {
     await sendJson(request,503,{'success':false,'source':'firestore',
       'code':'FIREBASE_USERS_UNAVAILABLE','message':'User query unavailable'});
+  }
+}
+
+Future<void> handleFirebaseReports(Map<String, dynamic> data, HttpRequest request) async {
+  try {
+    request.response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
+    // Reuse the existing Session/account existence check without changing it.
+    final adminId = await authenticateFirebaseUsersAdmin(request);
+    final reader = firebaseReportsReader;
+    if (reader == null) {
+      throw const FirebaseReportsException(503, 'FIREBASE_REPORTS_DISABLED',
+        'Firebase report queries are disabled or not configured');
+    }
+    final result = await reader.list(adminId, data,
+      sosOnly: data['type'] == 'getFirebaseSosReports');
+    await authenticateFirebaseUsersAdmin(request);
+    reader.authorize(adminId);
+    await sendJson(request, 200, {'success': true, 'source': 'firestore',
+      'collection': 'health_reports', 'data': result});
+  } on FirebaseUsersException catch (error) {
+    await sendJson(request, error.statusCode, {'success': false, 'source': 'firestore',
+      'code': error.code, 'message': error.message});
+  } on FirebaseReportsException catch (error) {
+    await sendJson(request, error.statusCode, {'success': false, 'source': 'firestore',
+      'code': error.code, 'message': error.message});
+  } on FirebaseConnectionException catch (error) {
+    await sendJson(request, error.code == 'NETWORK_TIMEOUT' ? 504 : 503, {
+      'success': false, 'source': 'firestore', 'code': 'FIRESTORE_${error.code}',
+      'message': 'Firestore report query could not be completed'});
+  } catch (_) {
+    await sendJson(request, 503, {'success': false, 'source': 'firestore',
+      'code': 'FIREBASE_REPORTS_UNAVAILABLE', 'message': 'Report query unavailable'});
   }
 }

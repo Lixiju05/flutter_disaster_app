@@ -61,3 +61,45 @@ app.*.map.json
 # Local credentials
 /admin_server/.env
 /admin_server/.env.*
+
+# Local databases, SQLite sidecars and backup variants (any directory)
+*.db
+*.db-*
+*.db.*
+*.sqlite
+*.sqlite-*
+*.sqlite.*
+*.sqlite3
+*.sqlite3-*
+*.sqlite3.*
+*.sqbpro
+*.bak
+*.backup
+/admin_server/data/*.zip
+/admin_server/data/*.7z
+/admin_server/data/*.gz
+/admin_server/data/*.tar
+.hucares-test-database
+
+# Local secrets; public firebase_options.dart/google-services.json are not keys
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+application_default_credentials.json
+credentials.json
+adc.json
+adc-*.json
+*service-account*.json
+*service_account*.json
+*serviceAccount*.json
+*-firebase-adminsdk-*.json
+*.token
+oauth-token*.json
+
+# Preserve explicitly reviewed templates, including admin.db.example/.env.example
+!*.example
