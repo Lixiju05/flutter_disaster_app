@@ -1,3 +1,8 @@
+import 'dart:convert';
+import '../widgets/dashboard_firestore_sos.dart';
+import '../viewModels/firebase_reports_view_model.dart';
+import '../services/firebase_reports_client.dart';
+import '../../core/repositories/firebase_reports_repository.dart';
 import 'dart:async';
 import 'dart:math' as Math;
 import 'package:flutter/material.dart';
@@ -151,9 +156,15 @@ class DashboardPage extends StatefulWidget {
   State<DashboardPage> createState() => _DashboardPageState();
 }
 
-class _DashboardPageState extends State<DashboardPage> {
+class _DashboardPageState extends State<DashboardPage> with WidgetsBindingObserver {
   static const String _cwaKey = 'CWA-AFE44442-4E97-4836-A31F-0D743B56732B';
 
+  late final FirebaseReportsViewModel _firestoreSos;
+  FirebaseReportsRefreshLoop? _sosLoop;
+  bool _foreground = true;
+  bool _useFirestore = true;
+  bool _emergencyFirestore = true;
+  String _capabilityLabel = '服務能力檢查中';
   int selectedIndex = 0;
   String _adminArea = '南投縣';
 
@@ -173,6 +184,12 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _foreground = WidgetsBinding.instance.lifecycleState == null || WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    _firestoreSos = FirebaseReportsViewModel(FirebaseReportsRepository(FirebaseReportsClient(http.Client())), sosOnly: true)..addListener(_sosChanged);
+    unawaited(_firestoreSos.refresh());
+    _sosLoop = FirebaseReportsRefreshLoop(_firestoreSos,
+      isActive: () => _foreground && mounted && ((selectedIndex == 0 && _useFirestore) || selectedIndex == 3));
     _loadAdminInfo();
     _loadCounts();
     _startClock();
@@ -187,8 +204,18 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   void dispose() {
+    _sosLoop?.close();
+    WidgetsBinding.instance.removeObserver(this);
+    _firestoreSos.removeListener(_sosChanged);
+    _firestoreSos.dispose();
     _clockTimer.cancel(); _alertTimer.cancel(); _envTimer.cancel(); _backendTimer.cancel(); _vCtrl.dispose();
     super.dispose();
+  }
+
+  void _sosChanged() { if (mounted) setState(() {}); }
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
   }
 
   void _startClock() {
@@ -219,26 +246,26 @@ class _DashboardPageState extends State<DashboardPage> {
 
   /// 實際呼叫後端，量測連線是否正常與回應時間
   Future<void> _checkBackend() async {
-    final sw = Stopwatch()..start();
-    bool ok;
+    bool reachable = false;
+    String capabilities = 'SQLite：未知；Firestore：未知';
     try {
-      final res = await http.post(
-        Uri.parse(ApiConfig.baseUrl),
+      final response = await http.post(Uri.parse(ApiConfig.baseUrl),
         headers: {'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true'},
-        body: '{"type":"getInventory"}',
-      ).timeout(const Duration(seconds: 8));
-      ok = res.statusCode == 200;
-    } catch (_) {
-      ok = false;
-    }
-    sw.stop();
-    if (!mounted) return;
-    setState(() => _backendOk = ok);
+        body: jsonEncode({'type': 'getServiceStatus'})).timeout(const Duration(seconds: 8));
+      reachable = true; // HTTP response is not proof that every service is ready.
+      if (response.statusCode == 200) {
+        final payload = jsonDecode(response.body);
+        if (payload is Map && payload['success'] == true && payload['data'] is Map) {
+          final data = payload['data'] as Map;
+          capabilities = 'SQLite：${data['sqlite'] == true ? '可用' : '未提供'}；Firestore：${data['firestoreReports'] == true ? '已設定（查詢狀態見 SOS）' : '停用'}';
+        }
+      } else { capabilities = '此版本未提供能力查詢；Firestore 狀態見 SOS'; }
+    } catch (_) { capabilities = 'HTTP 無法確認連線；既有 SOS 資料不因此清空'; }
+    if (mounted) setState(() { _backendOk = reachable; _capabilityLabel = capabilities; });
   }
 
-  String get _backendLabel => _backendOk == null
-      ? '連線檢查中'
-      : (_backendOk! ? '後端連線正常' : '後端未連線');
+  String get _backendLabel => _backendOk == null ? 'HTTP 檢查中'
+      : (_backendOk! ? 'HTTP 可連線' : 'HTTP 連線失敗');
 
   void _loadCounts() {
     context.read<CitizenViewmodel>().loadCitizens();
@@ -270,7 +297,8 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
 
-  void _go(int i) => setState(() { selectedIndex = i; _supplyTab = 0; });
+  void _go(int i) => setState(() { if (i == 3) _emergencyFirestore = _useFirestore; selectedIndex = i; _supplyTab = 0; });
+  void _goSqliteEvents() => setState(() { _emergencyFirestore = false; selectedIndex = 3; });
 
   /// 物資管理要打開哪個分頁（0 庫存管理 / 1 據點管理 / 2 調度紀錄）
   int _supplyTab = 0;
@@ -333,7 +361,7 @@ class _DashboardPageState extends State<DashboardPage> {
     switch (selectedIndex) {
       case 1: return const UserManagementPage();
       case 2: return const CitizenPage();
-      case 3: return EmergencyPage();
+      case 3: return EmergencyPage(key: ValueKey('sos-$_emergencyFirestore'), initialFirestore: _emergencyFirestore);
       case 4: return SupplyPage(key: ValueKey('supply-$_supplyTab'), initialTab: _supplyTab);
       case 5: return const HealthReportPage(showSearch: true);
       default: return _buildDashboard();
@@ -341,7 +369,9 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => FirebaseSosScope(model: _firestoreSos, child: _buildPage(context));
+
+  Widget _buildPage(BuildContext context) {
     final vm = context.watch<WeatherViewModel>();
     return Scaffold(
       backgroundColor: kBg,
@@ -472,12 +502,21 @@ class _DashboardPageState extends State<DashboardPage> {
           controller: _vCtrl,
           padding: const EdgeInsets.fromLTRB(22, 12, 22, 24),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Wrap(spacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
+              const Text('SOS 資料來源'),
+              DropdownButton<bool>(value: _useFirestore, items: const [
+                DropdownMenuItem(value: true, child: Text('Firestore 居民回報（唯讀）')),
+                DropdownMenuItem(value: false, child: Text('SQLite 原有事件')),
+              ], onChanged: (value) { if (value != null) setState(() => _useFirestore = value); }),
+              Text(_capabilityLabel, style: const TextStyle(fontSize: 12)),
+            ]),
             _buildStatsRow(),
             const SizedBox(height: 16),
             // GPS 即時地圖佔滿整排（拿掉雷達圖）
             SizedBox(
               height: 420,
-              child: _GpsEmergencyMapCard(adminArea: _adminArea, onViewAll: () => _go(3)),
+              child: DashboardSosContent(firestore: _useFirestore, model: _firestoreSos, onViewAll: () => _go(3),
+                sqliteBuilder: (_) => _GpsEmergencyMapCard(adminArea: _adminArea, onViewAll: () => _go(3))),
             ),
             const SizedBox(height: 16),
             Row(children: [
@@ -486,7 +525,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 onRefresh: _loadAlerts, onAlertTap: _showAlertDetail))),
               const SizedBox(width: 16),
               // 右邊：管理員現在要處理的事（全部是後端真實資料）
-              Expanded(child: SizedBox(height: 420, child: _TodoCard(onGo: _go, onGoSupply: _goSupply))),
+              Expanded(child: SizedBox(height: 420, child: _TodoCard(onGo: _go, onGoSupply: _goSupply, firestoreSos: _useFirestore ? _firestoreSos : null))),
             ]),
           ]),
         ),
@@ -543,18 +582,15 @@ class _DashboardPageState extends State<DashboardPage> {
     final citizenVm   = context.watch<CitizenViewmodel>();
     final supplyVm    = context.watch<AdminSupplyViewModel>();
     final emergencyVm = context.watch<EmergencyViewModel>();
-    if (citizenVm.isLoading || supplyVm.isLoading || emergencyVm.isLoading) {
-      return _card(height: 68, child: const Center(child: CircularProgressIndicator(color: kBlue)));
-    }
     final pendingSos = emergencyVm.emergencies.where((e) => e.status != 'resolved').length;
 return Row(children: [
-  Expanded(child: _statCard(Icons.people_alt_outlined, '${citizenVm.citizens.length}', '用戶總數', kBlue, '查看', () => _go(1))),
+  Expanded(child: _statCard(Icons.people_alt_outlined, citizenVm.isLoading ? '載入中' : '${citizenVm.citizens.length}', '用戶總數（SQLite）', kBlue, '查看', () => _go(1))),
   const SizedBox(width: 12),
-  Expanded(child: _statCard(Icons.sos_rounded, '$pendingSos', 'SOS 求救中', kRed, '處理中', () => _go(3))),
+  Expanded(child: _statCard(Icons.sos_rounded, dashboardSosCount(_useFirestore, _firestoreSos, pendingSos), 'SOS 求救中', kRed, _useFirestore ? 'Firestore 唯讀' : 'SQLite', () => _go(3))),
   const SizedBox(width: 12),
-  Expanded(child: _statCard(Icons.task_alt_rounded, '${emergencyVm.emergencies.where((e) => e.status == 'resolved').length}', '已處理事件', kGreen, '今日', () => _go(3))),
+  Expanded(child: _statCard(Icons.task_alt_rounded, '${emergencyVm.emergencies.where((e) => e.status == 'resolved').length}', '已處理事件（SQLite）', kGreen, 'SQLite', _goSqliteEvents)),
   const SizedBox(width: 12),
-  Expanded(child: _statCard(Icons.inventory_2_outlined, '${supplyVm.supplies.length}', '物資項目', kOrange, '庫存', () => _go(4))),
+  Expanded(child: _statCard(Icons.inventory_2_outlined, supplyVm.isLoading ? '載入中' : '${supplyVm.supplies.length}', '物資項目（SQLite）', kOrange, '庫存', () => _go(4))),
 ]);
   }
 
@@ -575,7 +611,7 @@ return Row(children: [
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value, style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.w800, height: 1.1)),
+                FittedBox(fit: BoxFit.scaleDown, child: Text(value, style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.w800, height: 1.1))),
                 Text(label, style: const TextStyle(color: kTextSub, fontSize: 13), overflow: TextOverflow.ellipsis, maxLines: 1),
               ],
             ),
@@ -742,7 +778,7 @@ class _GpsMapCanvasState extends State<_GpsMapCanvas> {
   maxZoom: 18,
 ),
             // ★ 只有未處理 SOS 紅點
-            MarkerLayer(markers: widget.events.map((e) {
+            MarkerLayer(markers: widget.events.where((e) => e.lat.isFinite && e.lng.isFinite && e.lat.abs() <= 90 && e.lng.abs() <= 180 && !(e.lat == 0 && e.lng == 0)).map((e) {
               final name = e.userName.isNotEmpty ? e.userName : '用戶 ${e.userId}';
               return Marker(
                 point: ll.LatLng(e.lat, e.lng),
@@ -1071,11 +1107,12 @@ class _EventListCard extends StatelessWidget {
 //  全部來自後端真實資料，點一下跳到對應頁面
 // ══════════════════════════════════════════════════════════
 class _TodoCard extends StatefulWidget {
+  final FirebaseReportsViewModel? firestoreSos;
   /// 跳頁：1 用戶 / 2 災民 / 3 緊急事件 / 4 物資管理
   final ValueChanged<int> onGo;
   /// 跳到物資管理的指定分頁：0 庫存管理 / 1 據點管理
   final ValueChanged<int> onGoSupply;
-  const _TodoCard({required this.onGo, required this.onGoSupply});
+  const _TodoCard({required this.onGo, required this.onGoSupply, this.firestoreSos});
 
   @override
   State<_TodoCard> createState() => _TodoCardState();
@@ -1114,7 +1151,9 @@ class _TodoCardState extends State<_TodoCard> {
   }
 
   Future<void> _refreshAll() async {
-    context.read<EmergencyViewModel>().loadEmergencies();
+    if (widget.firestoreSos != null) { await widget.firestoreSos!.refresh(); }
+    else { context.read<EmergencyViewModel>().loadEmergencies(); }
+    if (!mounted) return;
     context.read<AdminSupplyViewModel>().loadSupplies();
     await _loadRequests();
   }
@@ -1136,14 +1175,14 @@ class _TodoCardState extends State<_TodoCard> {
       return l.length <= max ? l.join('・') : '${l.take(max).join('・')} 等 ${l.length} $unit';
     }
 
-    final total = sos.length + waiting.length + delivering.length + lowStock.length;
+    final total = (widget.firestoreSos == null ? sos.length : widget.firestoreSos!.reports.where((r) => r.sos == true).length) + waiting.length + delivering.length + lowStock.length;
 
     return _card(padding: const EdgeInsets.all(16), child: Column(children: [
       Row(children: [
         const Icon(Icons.checklist_rounded, color: kTextMain, size: 18),
         const SizedBox(width: 6),
         const Expanded(child: Text('待處理事項', style: TextStyle(color: kTextMain, fontSize: 16, fontWeight: FontWeight.w800))),
-        _smallBadge(total == 0 ? '目前無待辦' : '共 $total 項', total == 0 ? kGreen : kOrange),
+        _smallBadge(widget.firestoreSos != null && !widget.firestoreSos!.hasLoaded ? 'SOS 尚未取得資料' : total == 0 ? '目前無待辦' : '共 $total 項', total == 0 ? kGreen : kOrange),
         IconButton(onPressed: _refreshAll, icon: const Icon(Icons.refresh, color: kBlue, size: 18)),
       ]),
       const SizedBox(height: 8),
@@ -1152,8 +1191,9 @@ class _TodoCardState extends State<_TodoCard> {
           : ListView(children: [
               _todoRow(
                 icon: Icons.sos_rounded, color: kRed,
-                title: 'SOS 求救中', count: sos.length, unit: '件',
-                detail: names(sos.map((e) => e.userName), unit: '件'),
+                title: widget.firestoreSos == null ? 'SOS 求救中（SQLite）' : 'SOS（Firestore 唯讀）', count: widget.firestoreSos == null ? sos.length : widget.firestoreSos!.reports.where((r) => r.sos == true).length, unit: '件',
+                unknown: widget.firestoreSos != null && !widget.firestoreSos!.hasLoaded,
+                detail: widget.firestoreSos == null ? names(sos.map((e) => e.userName), unit: '件') : !widget.firestoreSos!.hasLoaded ? '尚未取得資料，請查看 SOS 區塊' : widget.firestoreSos!.error != null ? '更新失敗，資料可能過期' : '整個專案最新 SOS；僅供檢視',
                 onTap: () => widget.onGo(3),
               ),
               _todoRow(
@@ -1185,7 +1225,7 @@ class _TodoCardState extends State<_TodoCard> {
   Widget _todoRow({
     required IconData icon, required Color color,
     required String title, required int count, required String unit,
-    required String detail, required VoidCallback onTap,
+    required String detail, required VoidCallback onTap, bool unknown = false,
   }) {
     final active = count > 0;
     final c = active ? color : const Color(0xFF94A3B8);
@@ -1207,14 +1247,14 @@ class _TodoCardState extends State<_TodoCard> {
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(title, style: TextStyle(color: active ? kTextMain : kTextSub, fontWeight: FontWeight.w800, fontSize: 15)),
-              if (active && detail.isNotEmpty) ...[
+              if ((active || unknown) && detail.isNotEmpty) ...[
                 const SizedBox(height: 3),
                 Text(detail, maxLines: 1, overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: kTextSub, fontSize: 13)),
               ],
             ])),
             const SizedBox(width: 8),
-            Text(active ? '$count $unit' : '無',
+            Text(unknown ? '未知' : active ? '$count $unit' : '無',
                 style: TextStyle(color: c, fontSize: active ? 18 : 15, fontWeight: FontWeight.w800)),
             Icon(Icons.chevron_right_rounded, color: c, size: 20),
           ]),

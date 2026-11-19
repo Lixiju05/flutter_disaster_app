@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_disaster_app/admin_APP/widgets/page_header.dart';
+import 'package:flutter_disaster_app/admin_APP/widgets/firebase_reports_panel.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_disaster_app/core/models/emergency_request.dart';
@@ -18,14 +19,22 @@ const Color _kTextSub  = Color(0xFF475569);
 // ══════════════════════════════════════════════════════════
 //  EMERGENCY PAGE
 // ══════════════════════════════════════════════════════════
-class EmergencyPage extends StatefulWidget {
-  const EmergencyPage({super.key});
-
+class EmergencyPage extends StatelessWidget {
+  final bool initialFirestore;
+  const EmergencyPage({super.key, this.initialFirestore = true});
   @override
-  State<EmergencyPage> createState() => _EmergencyPageState();
+  Widget build(BuildContext context) => ReportSourcePage(sosOnly: true, initialFirestore: initialFirestore,
+      sqliteBuilder: (_) => const SqliteEmergencyPage());
 }
 
-class _EmergencyPageState extends State<EmergencyPage> {
+class SqliteEmergencyPage extends StatefulWidget {
+  const SqliteEmergencyPage({super.key});
+
+  @override
+  State<SqliteEmergencyPage> createState() => _EmergencyPageState();
+}
+
+class _EmergencyPageState extends State<SqliteEmergencyPage> {
   String _filter      = '全部';
   String _searchQuery = '';
   final  TextEditingController _searchCtrl = TextEditingController();

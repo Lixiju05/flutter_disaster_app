@@ -8,6 +8,7 @@ class FullMapPage extends StatelessWidget {
   final double lng;
   final String title;
   final String subtitle;
+  final bool showReferenceCircle;
 
   const FullMapPage({
     super.key,
@@ -15,6 +16,7 @@ class FullMapPage extends StatelessWidget {
     required this.lng,
     this.title = '地圖位置',
     this.subtitle = '目標位置',
+    this.showReferenceCircle = true,
   });
 
   Future<void> _openGoogleNavigation() async {
@@ -63,7 +65,7 @@ class FullMapPage extends StatelessWidget {
                 maxNativeZoom: 16,  // 此區圖資只到第 16 層，超過就放大第 16 層
                 userAgentPackageName: 'com.example.flutter_disaster_app',
               ),
-              CircleLayer(
+              if (showReferenceCircle) CircleLayer(
                 circles: [
                   CircleMarker(
                     point: point,
